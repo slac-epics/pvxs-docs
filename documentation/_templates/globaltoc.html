@@ -1,0 +1,5 @@
+<h3><a href="{{ pathto(master_doc) }}">Table of Contents</a></h3>
+<ul>
+  <li class="toctree-l1{% if pagename == master_doc %} current{% endif %}"><a class="reference internal" href="{{ pathto(master_doc) }}"><i class="material-symbols-outlined" style="vertical-align: middle;">security</i> Overview</a></li>
+</ul>
+{{ toctree(maxdepth=theme_globaltoc_maxdepth|default(3), collapse=theme_globaltoc_collapse|tobool|default(False), includehidden=theme_globaltoc_includehidden|tobool|default(False)) }}

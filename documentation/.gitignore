@@ -1,0 +1,6 @@
+/html/
+/_build/
+/_image/
+*.tmp
+*.inv
+.DS_Store

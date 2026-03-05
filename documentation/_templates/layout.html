@@ -1,0 +1,46 @@
+{# _templates/layout.html #}
+{% extends "!layout.html" %}
+
+{% block extrahead %}
+{{ super() }}
+<!-- Material Icons -->
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="{{ pathto('_static/style.css', 1) }}" />
+{% endblock %}
+
+{% block footer %}
+{{ super() }}
+<script>
+// Fix search results: Sphinx's _escapeHTML strips Material Icon <i> tags from titles.
+// We strip the icon tags from search index titles so results show clean text.
+(function() {
+  var ICON_TAG = /<i\s+class="(?:material-icons|material-symbols-outlined)"[^>]*>[^<]*<\/i>\s*/g;
+
+  // Patch Search.setIndex to clean icon HTML from titles before indexing
+  if (typeof Search !== 'undefined') {
+    var origSetIndex = Search.setIndex;
+    Search.setIndex = function(index) {
+      // Clean titles array (page-level titles)
+      if (index.titles) {
+        for (var i = 0; i < index.titles.length; i++) {
+          index.titles[i] = index.titles[i].replace(ICON_TAG, '');
+        }
+      }
+      // Clean alltitles object (section headings)
+      if (index.alltitles) {
+        var cleaned = {};
+        for (var key in index.alltitles) {
+          if (index.alltitles.hasOwnProperty(key)) {
+            cleaned[key.replace(ICON_TAG, '')] = index.alltitles[key];
+          }
+        }
+        index.alltitles = cleaned;
+      }
+      return origSetIndex.call(this, index);
+    };
+  }
+})();
+</script>
+{% endblock %}
