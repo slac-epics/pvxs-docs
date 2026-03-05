@@ -26,7 +26,7 @@ Other Quick Start Guides:
 - :ref:`quick_start_std`
 - :ref:`quick_start_krb`
 - :ref:`quick_start_ldap`
-- :ref:`quick_start_jwt`
+
 
 |learn| You will learn:
 ******************************
@@ -710,9 +710,8 @@ Simulate an external client with a valid certificate:
     Certificate identifier  : bd537d5b:5631421150061257157
 
 
-- |terminal|\²
-- admin shell
-– approve the external user’s certificate
+- |terminal|\u00b2 admin shell
+- approve the external user’s certificate
 
 .. code-block:: shell
 
@@ -1330,7 +1329,7 @@ configuration can be controlled.
 |6| PVACMS Build Note
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-*Normally you will run* ``gw_build_images`` *to create the* ``pvacms:latest`` *image from
+*Normally you will run* ``gw_build_images`` *to create the* ``pvacms:latest`` *image from*
 ``example/kubernetes/docker/pvacms/Dockerfile``
 
 - Note: You can use the helper function ``gw_build_images`` to build this image.  Make sure $PVXS is set to your

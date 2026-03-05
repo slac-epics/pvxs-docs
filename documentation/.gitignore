@@ -4,3 +4,9 @@
 *.tmp
 *.inv
 .DS_Store
+/spva_client_tls_context.png
+/spva_peer_certificate_status.png
+/spva_seq.png
+/pva_seq.png
+/tls_seq.png
+/spva_simple_seq.png

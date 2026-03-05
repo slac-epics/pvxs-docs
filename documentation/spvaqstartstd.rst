@@ -73,6 +73,7 @@ If you want a prepackaged environment, try the following.  You will need four te
     docker exec -it --user softioc spva_std /bin/bash
 
 - create a server certificate using the Standard Authenticator
+
 .. code-block:: shell
 
     authnstd -u server
@@ -92,6 +93,7 @@ If you want a prepackaged environment, try the following.  You will need four te
     docker exec -it --user client spva_std /bin/bash
 
 - create a client certificate using the Standard Authenticator
+
 .. code-block:: shell
 
     authnstd
@@ -116,6 +118,7 @@ If you want a prepackaged environment, try the following.  You will need four te
     Approve ==> CERT:STATUS:47530d89:15756710596521133410 ==> Completed Successfully
 
 - approve the client certificate
+
 .. code-block:: shell
 
     pvxcert --approve 47530d89:7450074183745406049

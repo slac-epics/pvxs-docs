@@ -47,7 +47,7 @@ Other Quick Start Guides:
 |learn| You will learn:
 ******************************
 
-- :ref:`Creating a containerised LDAP Service <spva_qs_ldap_ldap>`,
+- :ref:`Creating a containerised LDAP Service <spva_qs_ldap_srv>`,
 - :ref:`Building PVXS with LDAP Authenticator support <spva_qs_ldap_build>`,
 - :ref:`Configuring the LDAP schema to support the LDAP Authenticator <spva_qs_ldap_pvacms>`,
 - :ref:`Creating certificates using the LDAP Authenticator<spva_qs_ldap_server>` and
@@ -290,7 +290,7 @@ create a server certificate using the LDAP Authenticator, enter ``secret`` when 
 
     docker run -it --name spva_ldap georgeleveln/spva_std:latest /bin/bash
 
-.. _spva_qs_ldap_kdc:
+.. _spva_qs_ldap_srv:
 
 |step| LDAP Service
 ------------------------------------------

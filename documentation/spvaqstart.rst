@@ -481,8 +481,8 @@ For MacOS
 - *optionally*
 
   - Configure root certificate authority keychain file location
-  - Place your certificate authority's certificate and key in this file if you have one
-otherwise the certificate authority certificate will be created here
+  - Place your certificate authority's certificate and key in this file if you have one,
+    otherwise the certificate authority certificate will be created here
 
 .. code-block:: shell
 
