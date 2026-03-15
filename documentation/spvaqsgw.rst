@@ -55,7 +55,7 @@ Create helper functions first
 
 .. code-block:: shell
 
-    source ${PROJECT_HOME}/pvxs/example/kubernetes/helpers.sh
+    source ${PROJECT_HOME}/pvxs-cms/example/kubernetes/helpers.sh
 
 
 |2| Deploy Helm Chart
@@ -883,7 +883,7 @@ Create helper functions
 
 .. code-block:: shell
 
-    source ${PROJECT_HOME}/pvxs/example/kubernetes/helpers.sh
+    source ${PROJECT_HOME}/pvxs-cms/example/kubernetes/helpers.sh
 
 **gw_build_images**
 - usage: gw_build_images [image] [docker_build_options]
@@ -2106,16 +2106,16 @@ Gateway Build Note
 
 .. code-block:: console
 
-    ~/Projects/com/slac/pvxs/example/kubernetes/docker ~
+    ~/Projects/com/slac/pvxs-cms/example/kubernetes/docker ~
     --- Building lab_base Docker image ---
     [+] Building 11.5s (10/10) FINISHED                                                                      docker:desktop-linux
      => [internal] load build definition from Dockerfile                                                                     0.0s
      => => transferring dockerfile: 735B                                                                                     0.0s
-     => [internal] load metadata for docker.io/georgeleveln/pvxs:local                                                       0.0s
+     => [internal] load metadata for ghcr.io/slac-epics/pvxs:local                                                       0.0s
      => [internal] load .dockerignore                                                                                        0.0s
      => => transferring context: 2B                                                                                          0.0s
-     => CACHED [1/5] FROM docker.io/georgeleveln/pvxs:local@sha256:a103a4d94588531b5218f9134ea08e5d755ecdfd3adb95b8d83f941a  0.0s
-     => => resolve docker.io/georgeleveln/pvxs:local@sha256:a103a4d94588531b5218f9134ea08e5d755ecdfd3adb95b8d83f941a8398083  0.0s
+     => CACHED [1/5] FROM ghcr.io/slac-epics/pvxs:local@sha256:a103a4d94588531b5218f9134ea08e5d755ecdfd3adb95b8d83f941a  0.0s
+     => => resolve ghcr.io/slac-epics/pvxs:local@sha256:a103a4d94588531b5218f9134ea08e5d755ecdfd3adb95b8d83f941a8398083  0.0s
      => [internal] load build context                                                                                        0.0s
      => => transferring context: 38B                                                                                         0.0s
      => [2/5] RUN apt-get update &&     apt-get install -y             adduser             sudo             supervisor       9.1s
@@ -2128,8 +2128,8 @@ Gateway Build Note
      => => exporting config sha256:4f258b032790f4123a1b46952e53a43594afa580af12d533242f7652f29579a7                          0.0s
      => => exporting attestation manifest sha256:e353776192f1b0351bb3cd4fc20b1e7aa04efd91d6f651076707727494d021d7            0.0s
      => => exporting manifest list sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e6392d                   0.0s
-     => => naming to docker.io/georgeleveln/lab_base:local                                                                   0.0s
-     => => unpacking to docker.io/georgeleveln/lab_base:local                                                                0.3s
+     => => naming to ghcr.io/slac-epics/lab_base:local                                                                   0.0s
+     => => unpacking to ghcr.io/slac-epics/lab_base:local                                                                0.3s
 
     View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/dss0bxt962xi960zditqtkamx
     --- Successfully built lab_base:local ---
@@ -2137,11 +2137,11 @@ Gateway Build Note
     [+] Building 1.4s (13/13) FINISHED                                                                       docker:desktop-linux
      => [internal] load build definition from Dockerfile                                                                     0.0s
      => => transferring dockerfile: 1.04kB                                                                                   0.0s
-     => [internal] load metadata for docker.io/georgeleveln/lab_base:local                                                   0.0s
+     => [internal] load metadata for ghcr.io/slac-epics/lab_base:local                                                   0.0s
      => [internal] load .dockerignore                                                                                        0.0s
      => => transferring context: 2B                                                                                          0.0s
-     => [1/8] FROM docker.io/georgeleveln/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.1s
-     => => resolve docker.io/georgeleveln/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.0s
+     => [1/8] FROM ghcr.io/slac-epics/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.1s
+     => => resolve ghcr.io/slac-epics/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.0s
      => [internal] load build context                                                                                        0.0s
      => => transferring context: 69B                                                                                         0.0s
      => [2/8] RUN useradd -m -s /bin/bash operator -g operator && echo "operator:secret" | chpasswd                          0.2s
@@ -2157,8 +2157,8 @@ Gateway Build Note
      => => exporting config sha256:2bd25d5cbfd0a461d81ad6d6c45f8e57163ea88a0c803adf057006967f42494c                          0.0s
      => => exporting attestation manifest sha256:634911735d2c797eec05d1a2aee640653e1508b0aa3bfefe8961c9aae0443bc0            0.0s
      => => exporting manifest list sha256:9186501b8d4585569d079c34123a13e5066acd9872b1744935363663fed84b19                   0.0s
-     => => naming to docker.io/georgeleveln/lab:local                                                                        0.0s
-     => => unpacking to docker.io/georgeleveln/lab:local                                                                     0.0s
+     => => naming to ghcr.io/slac-epics/lab:local                                                                        0.0s
+     => => unpacking to ghcr.io/slac-epics/lab:local                                                                     0.0s
 
     View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ujvteu8tgg9yol6riod8jlcwu
     --- Successfully built lab:local ---
@@ -2166,11 +2166,11 @@ Gateway Build Note
     [+] Building 1.1s (13/13) FINISHED                                                                       docker:desktop-linux
      => [internal] load build definition from Dockerfile                                                                     0.0s
      => => transferring dockerfile: 1.27kB                                                                                   0.0s
-     => [internal] load metadata for docker.io/georgeleveln/lab_base:local                                                   0.0s
+     => [internal] load metadata for ghcr.io/slac-epics/lab_base:local                                                   0.0s
      => [internal] load .dockerignore                                                                                        0.0s
      => => transferring context: 2B                                                                                          0.0s
-     => CACHED [1/8] FROM docker.io/georgeleveln/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c  0.0s
-     => => resolve docker.io/georgeleveln/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.0s
+     => CACHED [1/8] FROM ghcr.io/slac-epics/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c  0.0s
+     => => resolve ghcr.io/slac-epics/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.0s
      => [internal] load build context                                                                                        0.0s
      => => transferring context: 110B                                                                                        0.0s
      => [2/8] RUN useradd -m -s /bin/bash testioc && echo "testioc:secret" | chpasswd                                        0.2s
@@ -2186,8 +2186,8 @@ Gateway Build Note
      => => exporting config sha256:2bf704065e7b020abb96f33ced5398ef6d81dcfb233443791020cee8f5dd13a3                          0.0s
      => => exporting attestation manifest sha256:719ba040858bfc293f842600714ef2f0c5ace31e57a1fa5e45c3685a32b6b5d1            0.0s
      => => exporting manifest list sha256:127af21fd863a5e6f10ba942ee1f52c116b74f230e2bede139c756fe6bace38a                   0.0s
-     => => naming to docker.io/georgeleveln/testioc:local                                                                    0.0s
-     => => unpacking to docker.io/georgeleveln/testioc:local                                                                 0.1s
+     => => naming to ghcr.io/slac-epics/testioc:local                                                                    0.0s
+     => => unpacking to ghcr.io/slac-epics/testioc:local                                                                 0.1s
 
     View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/iie4xays61gbwyjr43pmo1sfm
     --- Successfully built testioc:local ---
@@ -2195,11 +2195,11 @@ Gateway Build Note
     [+] Building 1.1s (13/13) FINISHED                                                                       docker:desktop-linux
      => [internal] load build definition from Dockerfile                                                                     0.0s
      => => transferring dockerfile: 1.24kB                                                                                   0.0s
-     => [internal] load metadata for docker.io/georgeleveln/lab_base:local                                                   0.0s
+     => [internal] load metadata for ghcr.io/slac-epics/lab_base:local                                                   0.0s
      => [internal] load .dockerignore                                                                                        0.0s
      => => transferring context: 2B                                                                                          0.0s
-     => CACHED [1/8] FROM docker.io/georgeleveln/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c  0.0s
-     => => resolve docker.io/georgeleveln/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.0s
+     => CACHED [1/8] FROM ghcr.io/slac-epics/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c  0.0s
+     => => resolve ghcr.io/slac-epics/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.0s
      => [internal] load build context                                                                                        0.0s
      => => transferring context: 107B                                                                                        0.0s
      => [2/8] RUN useradd -m -s /bin/bash tstioc && echo "tstioc:secret" | chpasswd                                          0.2s
@@ -2215,8 +2215,8 @@ Gateway Build Note
      => => exporting config sha256:275dd15f99f105b350f47c5cfd51e5674cdb7f17575f60ad037e20fd735fbfb9                          0.0s
      => => exporting attestation manifest sha256:b57e5d795187fe032f2cae4504ab6351a46dc942677e28852231e1f08ec60346            0.0s
      => => exporting manifest list sha256:8c6fbfdd03c7e2ebf51be96264db631365a7cb5a80c1a4ab509d35b88b959045                   0.0s
-     => => naming to docker.io/georgeleveln/tstioc:local                                                                     0.0s
-     => => unpacking to docker.io/georgeleveln/tstioc:local                                                                  0.1s
+     => => naming to ghcr.io/slac-epics/tstioc:local                                                                     0.0s
+     => => unpacking to ghcr.io/slac-epics/tstioc:local                                                                  0.1s
 
     View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ip2ng0txcpkq3vtezwtwenga2
     --- Successfully built tstioc:local ---
@@ -2224,11 +2224,11 @@ Gateway Build Note
     [+] Building 1.4s (15/15) FINISHED                                                                       docker:desktop-linux
      => [internal] load build definition from Dockerfile                                                                     0.0s
      => => transferring dockerfile: 1.35kB                                                                                   0.0s
-     => [internal] load metadata for docker.io/georgeleveln/lab_base:local                                                   0.0s
+     => [internal] load metadata for ghcr.io/slac-epics/lab_base:local                                                   0.0s
      => [internal] load .dockerignore                                                                                        0.0s
      => => transferring context: 2B                                                                                          0.0s
-     => CACHED [ 1/10] FROM docker.io/georgeleveln/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b896490511  0.0s
-     => => resolve docker.io/georgeleveln/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.0s
+     => CACHED [ 1/10] FROM ghcr.io/slac-epics/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b896490511  0.0s
+     => => resolve ghcr.io/slac-epics/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.0s
      => [internal] load build context                                                                                        0.0s
      => => transferring context: 109B                                                                                        0.0s
      => [ 2/10] RUN useradd -m -s /bin/bash pvacms && echo "pvacms:secret" | chpasswd                                        0.2s
@@ -2246,8 +2246,8 @@ Gateway Build Note
      => => exporting config sha256:138c1f95d94ee6926f31d528c23dc1aa3ef77a50e8852613a6fbcc7768dc32d1                          0.0s
      => => exporting attestation manifest sha256:672d403610fcc662c2d5d11a4b5e712496d5648a0eb4140210dafe352ff480b0            0.0s
      => => exporting manifest list sha256:4547ce8cbb85472088cc60160960873c738e1c823ed80193948b153f6643eaf2                   0.0s
-     => => naming to docker.io/georgeleveln/pvacms:local                                                                     0.0s
-     => => unpacking to docker.io/georgeleveln/pvacms:local                                                                  0.1s
+     => => naming to ghcr.io/slac-epics/pvacms:local                                                                     0.0s
+     => => unpacking to ghcr.io/slac-epics/pvacms:local                                                                  0.1s
 
     View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yfpfcy0wj39x1nwyjlyuydubm
     --- Successfully built pvacms:local ---
@@ -2255,11 +2255,11 @@ Gateway Build Note
     [+] Building 25.9s (23/23) FINISHED                                                                      docker:desktop-linux
      => [internal] load build definition from Dockerfile                                                                     0.0s
      => => transferring dockerfile: 1.93kB                                                                                   0.0s
-     => [internal] load metadata for docker.io/georgeleveln/lab_base:local                                                   0.0s
+     => [internal] load metadata for ghcr.io/slac-epics/lab_base:local                                                   0.0s
      => [internal] load .dockerignore                                                                                        0.0s
      => => transferring context: 2B                                                                                          0.0s
-     => CACHED [ 1/18] FROM docker.io/georgeleveln/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b896490511  0.0s
-     => => resolve docker.io/georgeleveln/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.0s
+     => CACHED [ 1/18] FROM ghcr.io/slac-epics/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b896490511  0.0s
+     => => resolve ghcr.io/slac-epics/lab_base:local@sha256:3bcdd56b34f2c6f32e42dfbe0d2f87df40461741b8964905112c6a97b8e  0.0s
      => [internal] load build context                                                                                        0.0s
      => => transferring context: 34.99kB                                                                                     0.0s
      => [ 2/18] RUN apt-get update &&     apt-get install -y       ca-certificates       python3-dev       python3-numpy     8.1s
@@ -2285,8 +2285,8 @@ Gateway Build Note
      => => exporting config sha256:f6dd4db669742e7f9adca3f6c6ed7c712c5c8efc7ed1d95d1a40c9cf9d4ff040                          0.0s
      => => exporting attestation manifest sha256:bba60ac079d8bac463ccdc3c625b13ef4442c489c0268294987cc551aa4e8011            0.0s
      => => exporting manifest list sha256:7e82861729f0a33ebb309c6ddf7fe74e98961339ce7ccc9a175421cec9881aa7                   0.0s
-     => => naming to docker.io/georgeleveln/gateway:local                                                                    0.0s
-     => => unpacking to docker.io/georgeleveln/gateway:local                                                                 1.3s
+     => => naming to ghcr.io/slac-epics/gateway:local                                                                    0.0s
+     => => unpacking to ghcr.io/slac-epics/gateway:local                                                                 1.3s
 
     View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/2a0ftrpayym0wjx2btwiioxf1
     --- Successfully built gateway:local ---

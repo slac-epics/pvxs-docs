@@ -40,7 +40,6 @@ For PVXS library documentation see `PVXS Docs <https://slac-epics.github.io/pvxs
    spvaqstartldap
    spvaqsgw
    spvaglossary
-   building
    appendix
 
 
