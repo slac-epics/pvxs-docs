@@ -150,20 +150,20 @@ Protocol Modes
      - No
    * - ``PVXS_PVA``
      - pvxs ``reExecGet()`` expert API
-     - In-process ``BenchmarkSource``
-     - ``PVXPERF:PVXS_PVA:BENCH``
+     - In-process ``BenchmarkSource`` (default) or ``softIocPVX`` child (``--pvxs-server external``)
+     - ``PVXPERF:PVXS_PVA:BENCH`` (in-process) / ``PVXPERF:PVXS:BENCH`` (external)
      - No
      - No
    * - ``SPVA``
      - pvxs ``reExecGet()`` over TLS
-     - In-process ``BenchmarkSource``
-     - ``PVXPERF:SPVA:BENCH``
+     - In-process ``BenchmarkSource`` (default) or ``softIocPVX`` child (``--pvxs-server external``)
+     - ``PVXPERF:SPVA:BENCH`` (in-process) / ``PVXPERF:PVXS:BENCH`` (external)
      - Yes
      - ``disableStatusCheck(true)``
    * - ``SPVA_CERTMON``
      - pvxs ``reExecGet()`` over TLS
-     - In-process ``BenchmarkSource``
-     - ``PVXPERF:SPVA_CERTMON:BENCH``
+     - In-process ``BenchmarkSource`` (default) or ``softIocPVX`` child (``--pvxs-server external``)
+     - ``PVXPERF:SPVA_CERTMON:BENCH`` (in-process) / ``PVXPERF:PVXS:BENCH`` (external)
      - Yes
      - Real PVACMS
 
@@ -174,11 +174,12 @@ Server Implementations
 a waveform record. This ensures real TCP loopback communication, not in-process shortcuts. The IOC
 executables are located via compile-time paths (``PVXPERF_EPICS_BASE`` and ``PVXPERF_PVXS``).
 
-**PVXS_PVA, SPVA, and SPVA_CERTMON** use an in-process ``BenchmarkSource``, a custom
+**PVXS_PVA, SPVA, and SPVA_CERTMON** default to an in-process ``BenchmarkSource``, a custom
 ``server::Source`` subclass that stamps each GET response with a ``benchCounter`` (monotonically
 incrementing ``UInt64``) and ``benchTimestampNs`` (``Int64``, steady_clock nanoseconds). Unlike
 ``SharedPV::buildReadonly()`` which clones a cached value, ``BenchmarkSource`` creates a fresh
-response for every GET.
+response for every GET. Use ``--pvxs-server external`` to switch to a ``softIocPVX`` child process
+(pvxs-based IOC, supports TLS) for an apples-to-apples comparison with CA/EPICS_PVA.
 
 Payload Structure
 ^^^^^^^^^^^^^^^^^
@@ -218,7 +219,7 @@ CLI Options
      - ``1,10,100,1000,10000,100000``
    * - ``--parallelism`` ``<list>``
      - Comma-separated parallelism values
-     - ``1,1000``
+     - ``1,10,100,1000``
    * - ``--samples`` ``<N>``
      - Number of measured GETs per data point
      - ``1000``
@@ -228,6 +229,9 @@ CLI Options
    * - ``--output`` ``<file>``
      - CSV output file
      - stdout
+   * - ``--pvxs-server`` ``<mode>``
+     - PVXS server: ``in-process`` (BenchmarkSource) or ``external`` (softIocPVX child)
+     - ``in-process``
    * - ``--keychain`` ``<path>``
      - TLS keychain file for SPVA modes
      -
@@ -617,3 +621,37 @@ Each data point measures wall-clock time of individual GET operations (or batche
 - **Measurement Phase** — 1000 timed GET samples; measures from when sent to when received
 - **Statistics** — median, mean, P25/P75/P99, min/max, coefficient of variation (CV%),
   throughput (gets/sec derived from median latency)
+
+Build-Time IOC Paths
+^^^^^^^^^^^^^^^^^^^^
+
+The external IOC executables (used by CA, EPICS_PVA, and ``--pvxs-server external`` modes) are
+located via paths compiled into the binary at build time.  These are set in the ``Makefile`` from
+EPICS build system variables, which must be defined in ``configure/RELEASE.local``:
+
+.. list-table::
+   :widths: 45 20 15
+   :header-rows: 1
+
+   * - Makefile Variable
+     - IOC Binary
+     - Used By
+   * - ``$(EPICS_BASE)/bin/$(EPICS_HOST_ARCH)/softIoc``
+     - ``softIoc``
+     - CA
+   * - ``$(EPICS_BASE)/bin/$(EPICS_HOST_ARCH)/softIocPVA``
+     - ``softIocPVA``
+     - EPICS_PVA
+   * - ``$(PVXS)/bin/$(EPICS_HOST_ARCH)/softIocPVX``
+     - ``softIocPVX``
+     - PVXS_PVA, SPVA, SPVA_CERTMON (external mode)
+
+Run ``pvxperf --help`` to see the actual compiled-in paths.
+
+Out of Scope
+^^^^^^^^^^^^
+
+- Network-level benchmarking (application-layer only)
+- Automated chart generation (CSV feeds external tools like Excel)
+- Distributed/multi-host testing
+- Gateway topology benchmarking

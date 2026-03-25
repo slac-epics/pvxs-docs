@@ -344,8 +344,9 @@ Architecture
 
 .. code-block:: text
 
-    CERT:CLUSTER:CTRL:<issuer_id>           - Cluster control (shared)
-    CERT:CLUSTER:SYNC:<issuer_id>:<node_id> - Per-node sync
+    CERT:CLUSTER:CTRL:<issuer_id>                    - Cluster control (monitoring)
+    CERT:CLUSTER:CTRL:<issuer_id>:<joiner_node_id>   - Cluster join discovery
+    CERT:CLUSTER:SYNC:<issuer_id>:<node_id>          - Per-node sync
 
 The prefix ``CERT:CLUSTER`` is configurable via ``--cluster-pv-prefix``.
 
@@ -364,15 +365,16 @@ Protocol
 1. The node initialises its CA, database, and server certificate.
 2. It creates a ``ClusterSyncPublisher`` (its own SYNC PV) and a
    ``ClusterController`` (the shared CTRL PV).
-3. It sends a join request via RPC to the CTRL PV, with a configurable
+3. It starts the PVAccess server, initialises itself as a sole-node cluster
+   (``initAsSoleNode()``), and publishes an initial SYNC snapshot.
+4. It sends a **join request** via RPC to the discovery CTRL PV variant
+   (``CERT:CLUSTER:CTRL:<issuer_id>:<own_node_id>``), with a configurable
    timeout (default 10 seconds, ``--cluster-discovery-timeout``).  This single
    RPC both discovers whether a cluster exists and joins it in one step.
 
 If the join RPC times out (no existing cluster is serving the CTRL PV):
 
-- The node bootstraps as a sole-node cluster.
-- It initialises the CTRL PV with itself as the only member.
-- It publishes an initial sync snapshot containing its cert database.
+- The node remains the sole cluster member it already bootstrapped as.
 
 If the join RPC succeeds (an existing node responds):
 
@@ -476,8 +478,9 @@ When a node receives a sync update from a peer, it applies a 6-step verification
    - If the cert does not exist locally: insert it.
    - This logic is the same for both incremental and full snapshot updates.
 
-   After cert application, the update's membership view is reconciled: the receiver
-   subscribes to any peers it is not yet tracking.
+7. **Membership reconciliation** — the update includes the publisher's
+   membership view.  The receiver subscribes to any peers it is not yet
+   tracking.
 
 **Disconnect and Removal**
 
@@ -502,10 +505,7 @@ If a previously-disconnected node comes back:
    membership list and publishes a sync snapshot.
 3. The ``on_membership_changed`` callback fires on all nodes, and they subscribe
    to the rejoining node's SYNC PV.
-
-.. note::
-
-   The ``on_membership_changed`` callback fires even if the node is already in
+4. The ``on_membership_changed`` callback fires even if the node is already in
    the membership list.  This covers the case where a rejoin arrives before the
    disconnect was processed.
 
@@ -749,3 +749,293 @@ Cluster Configuration
      - ``EPICS_PVACMS_CLUSTER_DISCOVERY_TIMEOUT``
      - ``10``
      - Seconds to wait for cluster discovery before bootstrapping
+
+.. _pvacms_clustering_design_decisions:
+
+Design Decisions
+~~~~~~~~~~~~~~~~
+
+**Always-on Clustering**
+
+Clustering is not opt-in.  A single-node deployment is simply a cluster of one.
+This eliminates conditional code paths and ensures the CTRL/SYNC PVs are always
+available.
+
+**Protocol Versioning**
+
+All cluster messages (CTRL PV, JoinRequest, JoinResponse) carry a semver-style
+version as three ``uint32`` fields: ``version_major``, ``version_minor``,
+``version_patch``.  Currently version ``1.0.0``.
+
+The existing node rejects join requests where ``version_major`` does not equal
+1.  Minor and patch versions are informational and do not affect acceptance --
+this allows rolling upgrades where nodes at different minor/patch versions
+coexist freely, while a major version bump signals a breaking protocol change
+that requires a coordinated upgrade.
+
+**Timestamps**
+
+All cluster messages that carry a timestamp use the EPICS NT ``time_t`` struct
+(``timeStamp``) instead of a flat ``Int64``.  The struct has three fields:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 10 68
+
+   * - Field
+     - Type
+     - Description
+   * - ``secondsPastEpoch``
+     - Int64
+     - Seconds since the EPICS epoch (1990-01-01 UTC)
+   * - ``nanoseconds``
+     - Int32
+     - Sub-second nanoseconds
+   * - ``userTag``
+     - Int32
+     - Reserved (always 0)
+
+Helper functions in ``clustertypes.{h,cpp}`` work directly in the EPICS epoch:
+
+- ``setTimeStamp(val)`` -- writes the current wall-clock time as an EPICS-epoch
+  NT ``time_t`` struct via ``epicsTimeGetCurrent()``.
+- ``getTimeStamp(val)`` -- reads the ``secondsPastEpoch`` field and returns an
+  EPICS-epoch ``int64_t``.
+
+Using NT types ensures interoperability with standard EPICS tooling (e.g.
+``pvget``, ``pvmonitor``, CSS) which recognise and display ``time_t`` structs
+natively.
+
+.. _pvacms_clustering_time_based_transitions:
+
+**No Sync for Time-Based Status Transitions**
+
+Certificate status transitions that are deterministic functions of time are
+**not** synced between nodes.  Each node computes them independently from the
+same certificate dates stored in its local database:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 35 10
+
+   * - Transition
+     - Trigger
+     - Synced?
+   * - PENDING -> VALID
+     - ``now >= not_before``
+     - No
+   * - VALID -> PENDING_RENEWAL
+     - ``now >= renew_by``
+     - No
+   * - VALID -> EXPIRED
+     - ``now >= not_after``
+     - No
+   * - PENDING_RENEWAL -> EXPIRED
+     - ``now >= not_after``
+     - No
+   * - VALID (renewal_due flag)
+     - ``now >= midpoint(status_date, renew_by)``
+     - No
+   * - New cert created
+     - CCR processed
+     - **Yes**
+   * - Any -> REVOKED
+     - Admin action
+     - **Yes**
+   * - PENDING_APPROVAL -> VALID/PENDING
+     - Admin approval
+     - **Yes**
+   * - PENDING_RENEWAL -> VALID
+     - Renewal CCR processed
+     - **Yes**
+   * - VALID -> VALID
+     - Renewal updates ``renew_by``
+     - **Yes**
+
+This is safe because:
+
+- All nodes have the same ``not_before``, ``not_after``, and ``renew_by`` values.
+- Small timing differences between nodes are harmless -- a client connecting to
+  a node that hasn't yet flipped PENDING -> VALID will simply retry.
+- The ``renewal_due`` flag is a notification hint, not a status change.
+
+**VALID -> VALID Sync for Renewals**
+
+When a renewal is processed on one node, the cert status may remain VALID but
+the ``renew_by`` date changes.  The sync snapshot includes all fields, so when a
+peer receives a VALID -> VALID update, it overwrites ``renew_by`` and
+``status_date``.  This prevents the peer's status monitor from incorrectly
+transitioning the cert to PENDING_RENEWAL based on stale dates.
+
+.. _pvacms_clustering_cms_cert_revocation:
+
+**CMS Node Certificate Revocation**
+
+CMS server certificates intentionally omit the certificate status extension to
+avoid a circular dependency (the CMS cannot verify its own certificate status
+without itself running).  Instead, CMS node certificate revocation is handled
+as a special case of the normal certificate status transition machinery.
+
+*Detection*: The ``ClusterController`` maintains a set of node SKIDs derived
+from the cluster membership list.  When any certificate transitions to REVOKED
+status in the local database -- whether from an admin action on this node or
+from sync ingestion of a peer's snapshot -- the revoked certificate's SKID is
+checked against this set.  There is one check, not separate code paths per
+origin.
+
+*Peer revocation*: If the revoked certificate's SKID matches a peer CMS
+node, that peer's SYNC PV subscription is cancelled, the peer is removed from
+the cluster membership, and an error is logged.
+
+*Self revocation*: If the revoked certificate's SKID matches this node's own
+SKID, a critical message is logged and graceful shutdown is initiated via
+``ServerEv::interrupt()``.
+
+*Startup check*: On startup, after loading the server certificate and
+initialising the database, the node queries its own certificate status.  If the
+status is REVOKED, the node logs a critical error and refuses to start.
+
+.. note::
+
+   Revoking a CMS node certificate is an irreversible action that causes the
+   affected node to shut down.  The node cannot rejoin the cluster without a
+   new, valid certificate.
+
+**Startup Ordering: Self-Join Prevention**
+
+The CTRL channel is served by a custom ``server::Source`` (``ClusterCtrlSource``).
+It always claims the base monitoring PV name
+(``CERT:CLUSTER:CTRL:<issuer_id>``).  Join discovery searches a node-specific
+variant instead (``CERT:CLUSTER:CTRL:<issuer_id>:<joiner_node_id>``).
+
+The source inspects the trailing ``joiner_node_id`` and refuses to claim names
+whose suffix equals its own node ID.  Each node declines its own join-discovery
+search key while still serving every other node's key:
+
+.. code-block:: text
+
+   Instance A: start() -> initAsSoleNode() -> joinCluster(search ...:A)
+   Instance B: start() -> initAsSoleNode() -> joinCluster(search ...:B)
+
+- A never claims ``...:A``, so A cannot join itself.
+- B never claims ``...:B``, so B cannot join itself.
+- A can claim ``...:B``, and B can claim ``...:A``, so both can discover each
+  other even when they start simultaneously.
+
+The base CTRL PV remains claimable by any node for backward-compatible
+monitoring via tools such as ``pvget``.
+
+.. _pvacms_clustering_design_patterns:
+
+Design Patterns
+~~~~~~~~~~~~~~~
+
+The PVACMS clustering implementation follows well-established, industry-standard
+patterns used in production distributed systems.  Each design choice maps
+directly to patterns found in systems such as HashiCorp Consul, Apache
+Cassandra, Redis Cluster, CockroachDB, etcd, and Kubernetes.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 28 28 44
+
+   * - Pattern
+     - PVACMS Mechanism
+     - Industry Precedent
+   * - Protocol-native discovery
+     - PVAccess beacon + RPC join
+     - Redis Cluster bus, Cassandra gossip
+   * - Peer-to-peer membership
+     - Signed CTRL PV with membership list
+     - SWIM protocol (Consul/Serf), Redis gossip
+   * - Subscription-based failure detection
+     - PVA monitor disconnect events
+     - ZooKeeper ephemeral nodes, etcd lease expiry
+   * - Per-subscriber incremental sync
+     - Bounded update log with sequence tracking
+     - Cassandra hinted handoff, Kafka consumer offsets
+   * - Deterministic conflict resolution
+     - Convergent state machine (sync rules + time-based transitions)
+     - CRDTs (Riak), LWW-Register (Cassandra), Cassandra TTL expiration
+   * - Cryptographic message authentication
+     - CA-signed cluster messages with anti-replay
+     - Consul mTLS, Vault transit encryption, SPIFFE identity
+
+**Why Not Raft?**
+
+PVACMS uses eventual consistency rather than Raft consensus.  For a certificate
+authority, **availability** is more important than strong consistency.  A client
+that cannot reach the majority partition should still be able to obtain a
+certificate from a reachable node.  The deterministic conflict resolution rules
+ensure that all nodes converge to the same state once the partition heals.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 28 36 36
+
+   * - Property
+     - Raft (etcd, CockroachDB)
+     - PVACMS Eventual Consistency
+   * - Write availability during partition
+     - Requires quorum (unavailable in minority)
+     - All nodes continue independently
+   * - Consistency model
+     - Linearizable (strong)
+     - Eventually consistent with deterministic merge
+   * - Leader requirement
+     - Yes (single writer)
+     - No (any node can issue certificates)
+   * - Certificate issuance during partition
+     - Only on majority side
+     - On any reachable node
+   * - Convergence guarantee
+     - Immediate (after commit)
+     - Eventual (after sync propagation)
+
+**Conflict Resolution**
+
+PVACMS resolves conflicts through a convergent status transition state machine:
+
+- **Revocation is a terminal absorber** -- REVOKED and EXPIRED accept no incoming
+  transitions.  Once a certificate reaches either state, it stays there
+  permanently, regardless of what updates arrive from peers.
+- **Sync transitions are idempotent and commutative for revocation** -- if node A
+  revokes a certificate while node B performs any other operation, both nodes
+  converge to REVOKED regardless of message ordering.
+- **Non-revocation divergence is temporary and safe** -- when two nodes diverge due
+  to clock differences (e.g. one sees VALID while the other sees PENDING), the
+  divergence resolves naturally via time-based transitions.
+- **The renewal cycle is bounded by field propagation** -- the VALID <->
+  PENDING_RENEWAL cycle is the only cycle in the graph, and sync updates carry
+  the updated ``renew_by`` field to prevent re-transitions.
+
+**Comparison with CA Clustering Solutions**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 26 26 26
+
+   * - Aspect
+     - Vault PKI
+     - EJBCA
+     - PVACMS
+   * - Architecture
+     - Active-standby (single writer)
+     - Shared database
+     - Peer-to-peer (any node issues certs)
+   * - Consistency
+     - Strong (Raft)
+     - Strong (database transactions)
+     - Eventual (deterministic merge)
+   * - External dependencies
+     - None (integrated Raft)
+     - Galera cluster / database HA
+     - None (integrated PVA)
+   * - Write availability
+     - Majority required
+     - Database must be reachable
+     - Any reachable node
+   * - Auto-discovery
+     - No
+     - No
+     - Yes (PVA beacon-based)
