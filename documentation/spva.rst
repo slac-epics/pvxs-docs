@@ -90,12 +90,20 @@ State Machines
 
 *Server TLS Context State Machine:*
 
-States: ``Init``, ``TcpReady``, ``TlsReady``, ``DegradedMode``.
+States: ``Init``, ``TcpOnly``, ``TcpReady``, ``TlsReady``, ``DegradedMode``.
 
-- ``Init``: loads and validates certificates.
-- ``TcpReady``: responds to TCP protocol requests only.
-- ``TlsReady``: responds to both TCP and TLS protocol requests.
-- ``DegradedMode``: fallback when certificates are invalid, TLS is unconfigured, or a certificate is revoked.
+- ``Init``: initial state; loads and validates certificates.
+- ``TcpOnly``: certificate exists but is not yet operationally usable (e.g. ``PENDING``,
+  ``PENDING_APPROVAL``, ``SCHEDULED_OFFLINE``, or ``PENDING_RENEWAL`` before TLS was ever
+  established). Plain TCP only; TLS is not advertised or accepted. The certificate status
+  monitor remains active so the context upgrades automatically to ``TlsReady`` when
+  the certificate becomes ``VALID``.
+- ``TcpReady``: certificate was previously ``GOOD`` (``TlsReady``) but the most recent status
+  update returned ``UNKNOWN``. TCP connections still accepted while monitoring waits for
+  status to recover.
+- ``TlsReady``: certificate status is ``GOOD``; both TCP and TLS protocol requests are served.
+- ``DegradedMode``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Only TCP
+  is permitted. The certificate monitor is stopped.
 
 Transitions are driven by certificate validity, status monitoring results, and :ref:`configuration` options.
 
@@ -105,8 +113,9 @@ Transitions are driven by certificate validity, status monitoring results, and :
 
 *Client TLS Context State Machine:*
 
-States are identical to the server (``Init``, ``TcpReady``, ``TlsReady``, ``DegradedMode``).
-The client never exits on TLS configuration issues; trust anchor validation governs initial transitions.
+States are the same as the server (``Init``, ``TcpOnly``, ``TcpReady``, ``TlsReady``,
+``DegradedMode``). The client never exits on TLS configuration issues; trust anchor validation
+and certificate status govern initial transitions.
 
 .. image:: spva_client_tls_context.png
    :alt: SPVA Client TLS Context State Machine
@@ -116,22 +125,35 @@ The client never exits on TLS configuration issues; trust anchor validation gove
 
 Applies to both clients and servers.
 
-States:
+Status classes (internal grouping of PVACMS status values):
 
-- ``UNKNOWN``: initial state before status is determined.
-- ``GOOD``: certificate is valid and trusted.
-- ``NOT GOOD``: certificate is not currently trusted.
+- ``UNKNOWN``: status not yet received or indeterminate. Connections wait; operations are
+  not yet permitted.
+- ``GOOD``: certificate status is ``VALID``. TLS proceeds normally.
+- ``SUSPENDED``: certificate is temporarily non-operational but expected to recover.
+  Covers ``SCHEDULED_OFFLINE`` (certificate is in a scheduled offline window) and
+  ``PENDING_RENEWAL`` (certificate has passed its renewal date and a renewal is in flight).
+  Existing connections are maintained; new connections wait for recovery. See
+  :ref:`suspended_cert_status`.
+- ``BAD``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Connection is
+  torn down immediately; no recovery.
 
 Pseudo-states (terminal or immediate):
 
-- ``STALE``: status is outdated; transitions immediately to ``UNKNOWN``.
-- ``REVOKED``: certificate permanently revoked; no recovery.
-- ``EXPIRED``: certificate past its validity period; no recovery.
+- ``STALE``: status validity period has elapsed; transitions immediately to ``UNKNOWN``.
 
-Transitions are driven by status updates from :ref:`pvacms` (expiration, revocation) and PVACMS availability.
+Transitions are driven by status updates from :ref:`pvacms` and PVACMS availability.
+
+.. note::
+
+   Subscription to permanent-terminal statuses (``REVOKED`` / ``EXPIRED``) is suppressed:
+   once a peer status is confirmed as ``BAD`` and the connection has been torn down, pvxs
+   does not re-subscribe to that certificate's status PV on subsequent connections to the same
+   peer. This avoids burning PVACMS channels on certificates that cannot recover.
 
 Certificate status values from PVACMS: ``UNKNOWN``, ``VALID``, ``PENDING``, ``PENDING_APPROVAL``,
-``PENDING_RENEWAL``, ``EXPIRED``, ``REVOKED``. OCSP status values: ``GOOD``, ``REVOKED``, ``UNKNOWN``.
+``PENDING_RENEWAL``, ``SCHEDULED_OFFLINE``, ``EXPIRED``, ``REVOKED``.
+OCSP status values: ``GOOD``, ``REVOKED``, ``UNKNOWN``.
 
 .. image:: spva_peer_certificate_status.png
    :alt: SPVA Peer Certificate Status State Machine
@@ -174,18 +196,85 @@ monitor their own entity certificate and their peer's entity certificate.
 
 Status response handling:
 
-- Status not yet received: search requests are ignored; the client retries later.
-- Status not ``GOOD``: the server offers only TCP; the client fails connection validation.
-- Status ``GOOD``: the server offers both TCP and TLS; the connection proceeds.
+- Status not yet received (``UNKNOWN``): search requests are ignored; the client retries later.
+- Status ``BAD`` (``REVOKED`` / ``EXPIRED``): the server offers only TCP; the client tears down
+  the connection immediately.
+- Status ``SUSPENDED`` (``SCHEDULED_OFFLINE`` / ``PENDING_RENEWAL``): the connection layer
+  enters a holding state — see :ref:`suspended_cert_status`.
+- Status ``GOOD`` (``VALID``): the server offers both TCP and TLS; the connection proceeds.
+
+.. _suspended_cert_status:
+
+SUSPENDED Certificate Status
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``SUSPENDED`` status class covers two certificate states that are temporarily
+non-operational but are expected to become ``VALID`` again automatically:
+
+- **``SCHEDULED_OFFLINE``**: the certificate is within a configured offline schedule window
+  (see :ref:`validity_schedules`). The certificate will return to ``VALID`` when the window ends.
+- **``PENDING_RENEWAL``**: the certificate has passed its ``renew_by`` date and a renewal is
+  in flight. The certificate will return to ``VALID`` once the renewed certificate is issued.
+
+Unlike ``BAD`` (which causes immediate disconnection), ``SUSPENDED`` puts the connection layer
+into a holding state:
+
+- **If TLS was already established** (``TlsReady`` context): the TLS socket stays open.
+  Existing ``GET``/``PUT``/``RPC`` operations receive a ``SUSPENDED`` error; monitors are
+  paused. When the certificate transitions back to ``VALID``, operations resume automatically
+  with no reconnect and no new TLS handshake.
+- **If TLS was not yet established** (``Init`` / ``TcpOnly`` / ``TcpReady`` context): the
+  context enters ``TcpOnly`` so plain-TCP connections are not blocked, but TLS is not
+  advertised. When the certificate returns to ``VALID``, the context upgrades to ``TlsReady``
+  and TLS advertising resumes.
+
+``SUSPENDED`` is distinct from ``BAD`` because the offline state is time-bounded and
+operator-intended. TCP fallback is not offered for ``SCHEDULED_OFFLINE``: a peer that
+knows a certificate will be back online should wait for it rather than silently downgrade
+to an unauthenticated connection.
 
 .. _status_caching:
 
 Status Caching
 ^^^^^^^^^^^^^^
 
-Agents subscribe to peer certificate status. Status transitions trigger connection re-evaluation.
-Cached status is reused within its validity period to reduce :ref:`pvacms` requests. Servers staple
-cached status in the handshake; clients may skip the initial :ref:`pvacms` request using stapled status.
+Certificate status is cached at two levels: in-memory and on disk.
+
+**In-memory caching** — Agents subscribe to peer certificate status via :ref:`pvacms`.  Status
+transitions trigger connection re-evaluation.  The most recent status is held in memory for the
+lifetime of the subscription and reused within its validity period.  Servers staple their cached
+status during the TLS handshake; clients may consume stapled status in lieu of an initial
+:ref:`pvacms` request.
+
+**Disk caching** — Signed OCSP responses are persisted to disk so that certificate status is
+available immediately on process restart, eliminating the cold-start window where status would
+otherwise be ``UNKNOWN`` until the first PV subscription update arrives from :ref:`pvacms`.
+
+On ``subscribe()``, the ``CertStatusManager`` checks for a cached OCSP response file.  If one
+exists, the signed response is loaded, verified against the trusted store, and — if still
+current — delivered to the callback immediately.  The PV subscription is still established to
+receive future updates.  On each subscription update, the new signed OCSP response bytes are
+written to the cache file using atomic write (temp file + ``rename()``) to prevent partial reads.
+
+Cache files are stored as individual ``<cert_id>.ocsp`` files (one per certificate, ~2 KB each)
+under the XDG data directory:
+
+.. code-block:: text
+
+    ${XDG_DATA_HOME}/pva/1.5/status_cache/
+    (typically ~/.local/share/pva/1.5/status_cache/)
+
+Cache files are cryptographically self-validating — a corrupted or tampered file simply fails
+OCSP verification and is discarded.  Expired cache files are deleted on load.  The cache
+directory is created with owner-only permissions (``0700``) on first write.  Advisory file
+locking ensures safe concurrent access from multiple processes sharing the same directory.
+
+Configuration (see :ref:`environment_variables`):
+
+- ``EPICS_PVA_STATUS_CACHE_DIR`` — override the default cache directory path.
+- ``EPICS_PVA_NO_STATUS_CACHE=YES`` — disable disk caching entirely.
+
+In non-OpenSSL builds, all cache operations are no-ops.
 
 Beacons
 ^^^^^^^
@@ -221,6 +310,7 @@ Debug Logging
 Debug log categories:
 
 - ``pvxs.certs.auth``          - Authenticators
+- ``pvxs.certs.cache``         - OCSP Status Disk Cache
 - ``pvxs.auth.cfg``            - Authn configuration
 - ``pvxs.auth.cms``            - CMS
 - ``pvxs.auth.krb``            - Kerberos Authenticator

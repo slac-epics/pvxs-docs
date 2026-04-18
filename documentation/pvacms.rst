@@ -58,9 +58,35 @@ PVACMS Usage
                                                   server by default. Can be overridden in each CCR
             --status-validity-mins                Set Status Validity Time in Minutes
             --cluster-pv-prefix <prefix>          Prefix for cluster PV names. Default ``CERT:CLUSTER``.
-                                                  Env var: EPICS_PVACMS_CLUSTER_PV_PREFIX
+                                                   Env var: EPICS_PVACMS_CLUSTER_PV_PREFIX
             --cluster-discovery-timeout <seconds> Seconds to wait for cluster discovery before bootstrapping.
-                                                  Default ``10``. Env var: EPICS_PVACMS_CLUSTER_DISCOVERY_TIMEOUT
+                                                   Default ``10``. Env var: EPICS_PVACMS_CLUSTER_DISCOVERY_TIMEOUT
+            --cluster-mode <mode>                 Cluster topology. ``partial-mesh`` enables partial-mesh mode
+                                                   where not all nodes need direct connectivity to each other.
+            --cluster-bidi-timeout <seconds>      Timeout for bidirectional connectivity validation in
+                                                   partial-mesh mode.
+            --cluster-skip-peer-identity-check    Skip issuer_id verification on incoming SYNC connections.
+                                                   Useful for test environments sharing a common CA across zones.
+            --health-pv-prefix <prefix>           PV name for the operational health channel.
+                                                   Default ``CERT:HEALTH``. Env var: EPICS_PVACMS_HEALTH_PV_PREFIX
+            --metrics-pv-prefix <prefix>          PV name for the operational metrics channel.
+                                                   Default ``CERT:METRICS``. Env var: EPICS_PVACMS_METRICS_PV_PREFIX
+            --monitor-interval-min <seconds>      Minimum sleep between status-monitor iterations.
+                                                   Default ``5``. Env var: EPICS_PVACMS_MONITOR_INTERVAL_MIN
+            --monitor-interval-max <seconds>      Maximum sleep between status-monitor iterations.
+                                                   Default ``60``. Env var: EPICS_PVACMS_MONITOR_INTERVAL_MAX
+            --audit-retention-days <days>         Days to retain audit log entries before pruning.
+                                                   Default ``365``. Env var: EPICS_PVACMS_AUDIT_RETENTION_DAYS
+            --backup <path>                       Perform a one-shot database backup to <path> and exit.
+                                                   The ``.db`` extension is appended automatically if omitted.
+                                                   The source database is opened read-only; no migrations are run.
+            --backup-interval <seconds>           Enable periodic backups; ``0`` disables (default).
+                                                   Env var: EPICS_PVACMS_BACKUP_INTERVAL
+            --backup-dir <directory>              Directory for periodic backup files.
+                                                   Default: same directory as the database.
+                                                   Env var: EPICS_PVACMS_BACKUP_DIR
+            --backup-retention <count>            Number of periodic backup files to retain. Default ``7``.
+                                                   Env var: EPICS_PVACMS_BACKUP_RETENTION
       (-v | --verbose)                            Verbose mode
 
     admin options:
@@ -172,6 +198,30 @@ The environment variables in the following table configure the PVACMS at runtime
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_CLUSTER_DISCOVERY_TIMEOUT       || <number of seconds>                       || Seconds to wait for cluster discovery before bootstrapping as a          |
 ||                                              || e.g. ``10``                               || sole-node cluster.  default: ``10``                                     |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_HEALTH_PV_PREFIX                || <PV name string>                          || PV name for the operational health channel.                             |
+||                                              || e.g. ``CERT:HEALTH:LAB``                  || default: ``CERT:HEALTH``                                                |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_METRICS_PV_PREFIX               || <PV name string>                          || PV name for the operational metrics channel.                            |
+||                                              || e.g. ``CERT:METRICS:LAB``                 || default: ``CERT:METRICS``                                               |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_MONITOR_INTERVAL_MIN            || <number of seconds>                       || Minimum sleep between adaptive status-monitor iterations.               |
+||                                              || e.g. ``5``                                || default: ``5``                                                          |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_MONITOR_INTERVAL_MAX            || <number of seconds>                       || Maximum sleep between adaptive status-monitor iterations.               |
+||                                              || e.g. ``60``                               || default: ``60``                                                         |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_AUDIT_RETENTION_DAYS            || <number of days>                          || Days to retain audit log entries before pruning.                        |
+||                                              || e.g. ``365``                              || default: ``365``                                                        |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_BACKUP_INTERVAL                 || <number of seconds, 0 to disable>         || Enable periodic database backups; ``0`` disables.                       |
+||                                              || e.g. ``86400``                            || default: ``0`` (disabled)                                               |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_BACKUP_DIR                      || <directory path>                          || Directory for periodic backup files.                                    |
+||                                              || e.g. ``/backups/pvacms``                  || default: same directory as the database                                 |
++-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
+|| EPICS_PVACMS_BACKUP_RETENTION                || <count>                                   || Number of periodic backup files to retain.                              |
+||                                              || e.g. ``7``                                || default: ``7``                                                          |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 
 Extensions to Config for PVACMS
@@ -1039,3 +1089,520 @@ PVACMS resolves conflicts through a convergent status transition state machine:
      - No
      - No
      - Yes (PVA beacon-based)
+
+.. _pvacms_operational_pvs:
+
+Operational PVs
+---------------
+
+PVACMS exposes several SharedPVs that provide real-time operational visibility over
+PVAccess. These can be monitored by Phoebus displays, EPICS alarm handlers, Kubernetes
+probes, or any PVA client.
+
+.. _pvacms_health_pv:
+
+CERT:HEALTH — Operational Health
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``CERT:HEALTH`` PV publishes a composite health signal and sub-status fields that
+monitoring systems can subscribe to. It is updated on every status-monitor cycle (up to
+``--monitor-interval-max``, default 60 s). The maximum staleness of the health PV at
+any time equals the configured ``--monitor-interval-max``.
+
+.. code-block:: text
+
+   pvxget CERT:HEALTH
+
+PV structure:
+
+.. list-table::
+   :widths: 20 12 68
+   :header-rows: 1
+
+   * - Field
+     - Type
+     - Description
+   * - ``ok``
+     - bool
+     - Composite health: ``db_ok AND ca_valid``. Primary signal for automated liveness checks.
+   * - ``db_ok``
+     - bool
+     - ``true`` if the last SQLite ``PRAGMA integrity_check`` returned ``"ok"``.
+       Retained between checks (default: every 24 hours).
+   * - ``ca_valid``
+     - bool
+     - ``true`` if the CA certificate has not expired. Re-evaluated every cycle.
+   * - ``cert_count``
+     - uint64
+     - Total number of certificates in the database.
+   * - ``cluster_members``
+     - uint32
+     - Number of connected cluster peers (0 on a single-node cluster).
+   * - ``uptime_secs``
+     - uint64
+     - Seconds since the status monitor was started.
+   * - ``timestamp``
+     - string
+     - ISO 8601 UTC timestamp of the last update.
+
+A Kubernetes liveness probe can use ``pvxget CERT:HEALTH`` and exit non-zero if ``ok``
+is ``false``.
+
+Configure with ``--health-pv-prefix`` / ``EPICS_PVACMS_HEALTH_PV_PREFIX`` (default: ``CERT:HEALTH``).
+Run multiple PVACMS instances with distinct prefixes (e.g. ``CERT:HEALTH:LAB``,
+``CERT:HEALTH:ML``) to avoid name collisions.
+
+.. _pvacms_metrics_pv:
+
+CERT:METRICS — Operational Metrics
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``CERT:METRICS`` PV publishes counters and gauges describing PVACMS operational
+activity since startup. Updated on every status-monitor cycle (same cadence as
+``CERT:HEALTH``). During quiet periods the interval is at its maximum (default 60 s), so
+successive ``pvxget CERT:METRICS`` calls within that window will return the same values —
+this is expected behaviour, not a bug.
+
+.. code-block:: text
+
+   pvxget CERT:METRICS
+
+PV structure:
+
+.. list-table::
+   :widths: 25 12 10 53
+   :header-rows: 1
+
+   * - Field
+     - Type
+     - Kind
+     - Description
+   * - ``certs_created``
+     - uint64
+     - Counter
+     - Monotonic count of certificates successfully created since startup.
+   * - ``certs_revoked``
+     - uint64
+     - Counter
+     - Monotonic count of certificates revoked since startup.
+   * - ``certs_active``
+     - uint64
+     - Gauge
+     - Current count of certificates in ``VALID`` status.
+   * - ``avg_ccr_time_ms``
+     - double
+     - Gauge
+     - Exponential moving average CCR processing time in milliseconds (α=0.1 ≈ last 10 samples).
+   * - ``db_size_bytes``
+     - uint64
+     - Gauge
+     - Combined size of ``certs.db`` and ``certs.db-wal`` in bytes.
+   * - ``uptime_secs``
+     - uint64
+     - Counter
+     - Seconds since the status monitor was started.
+
+Counters (``certs_created``, ``certs_revoked``, ``uptime_secs``) are monotonically
+increasing; compute rates as ``(v_now - v_prev) / (t_now - t_prev)``.
+
+Configure with ``--metrics-pv-prefix`` / ``EPICS_PVACMS_METRICS_PV_PREFIX``
+(default: ``CERT:METRICS``).
+
+.. _pvacms_cert_status_pv:
+
+CERT:STATUS — Certificate Status with Node ID
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``CERT:STATUS:<issuer>:<serial>`` PV now includes a ``pvacms_node_id`` field that
+identifies which PVACMS cluster node served the status response:
+
+.. code-block:: text
+
+   pvacms_node_id : "<issuer_id>:<node_id>"  # e.g. "2dc74177:a3f2..."
+
+This field is populated when the serving PVACMS instance is in a cluster. In ``pvxcert``
+output it appears as ``PVACMS Node ID`` in the metadata block (alongside the existing
+``PVACMS Node Address``). The field is empty (``""``) for single-node deployments.
+
+.. _validity_schedules:
+
+Validity Schedules
+------------------
+
+Validity schedules allow operators to define recurring time windows during which a
+certificate is trusted. Outside those windows PVACMS automatically transitions the
+certificate's status to ``SCHEDULED_OFFLINE``; when a window opens it transitions back to
+``VALID`` — with no certificate re-issuance and no manual intervention required.
+
+Typical use cases:
+
+- Client certificate trusted only during business hours (e.g. 08:00–17:00 UTC weekdays).
+- IOC certificate offline during a scheduled weekly maintenance window.
+- Restricting a gateway certificate to operational hours.
+
+Schedules require status monitoring to be active on the certificate. They cannot be used
+with ``--no-status`` certificates, because clients must subscribe to the ``CERT:STATUS``
+PV to react to ``SCHEDULED_OFFLINE`` transitions.
+
+.. _validity_schedules_creating:
+
+Creating Certificates with Schedules
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use the ``--schedule`` flag (repeatable) when requesting a certificate:
+
+.. code-block:: shell
+
+   # Every day 08:00–17:00 UTC, plus Saturday mornings
+   authnstd --schedule '*,08:00,17:00' --schedule '6,08:00,12:00'
+
+The ``day,HH:MM,HH:MM`` format:
+
+- ``day``: ``0``–``6`` (Sun–Sat) or ``*`` (every day). All times are UTC.
+- ``start_time``, ``end_time``: ``HH:MM`` in 24-hour UTC. Cross-midnight windows
+  (e.g. ``22:00,06:00``) are supported.
+
+.. _validity_schedules_managing:
+
+Managing Schedules with pvxcert
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``pvxcert --schedule`` (or ``-S``) to show, clear, or replace schedule windows for
+an existing certificate (admin only):
+
+.. code-block:: shell
+
+   # Show current windows
+   pvxcert -S show 27975e6b:7246297371190731775
+
+   # Remove all windows (certificate remains VALID permanently)
+   pvxcert -S none 27975e6b:7246297371190731775
+
+   # Set two windows (replaces any existing windows)
+   pvxcert -S '*,08:00,17:00' -S '6,08:00,12:00' 27975e6b:7246297371190731775
+
+Example output:
+
+.. code-block:: text
+
+   Set Schedule ==> 27975e6b:7246297371190731775
+
+   Schedule      :
+   ============================================
+     Every day  08:00 - 17:00 UTC
+     Sat        08:00 - 12:00 UTC
+   --------------------------------------------
+
+Certificate owners may view their own schedule windows without admin rights using
+``pvxcert -S show <cert_id>`` (the same self-read permission applies as for
+self-revocation).
+
+.. _validity_schedules_rpc:
+
+CERT:SCHEDULE RPC
+~~~~~~~~~~~~~~~~~~
+
+Schedule windows can also be managed programmatically via the ``CERT:SCHEDULE`` PV RPC:
+
+.. code-block:: text
+
+   Request:
+       query.serial    : uint64    certificate serial number (required)
+       query.read_only : bool      true = show only, no writes
+       query.schedule  : StructA   new windows (empty array clears all; omit if read_only)
+           day_of_week : String    "0"–"6" or "*"
+           start_time  : String    "HH:MM" UTC
+           end_time    : String    "HH:MM" UTC
+
+   Response:
+       result   : String    "ok"
+       schedule : StructA   current windows after the operation
+
+Write operations are audited (action ``SCHEDULE``) and replicated to cluster peers.
+
+.. _validity_schedules_behaviour:
+
+Runtime Behaviour
+~~~~~~~~~~~~~~~~~~
+
+- PVACMS evaluates scheduled certificates on every status-monitor cycle.
+- When no window is active, the certificate transitions to ``SCHEDULED_OFFLINE``; the
+  ``CERT:STATUS`` PV is updated immediately.
+- When a window opens, the certificate transitions back to ``VALID`` and the status PV
+  is updated immediately without waiting for the next monitor cycle.
+- The adaptive monitor (see :ref:`pvacms_adaptive_monitor`) shortens its sleep interval
+  when certificates have schedule boundaries approaching within the look-ahead window.
+- ``SCHEDULED_OFFLINE`` is **not** a security revocation. A revoked certificate is
+  permanently invalid; a ``SCHEDULED_OFFLINE`` certificate will become valid again when
+  the next window opens. Use revocation for security-motivated invalidation.
+
+.. _pvacms_adaptive_monitor:
+
+Adaptive Status Monitor
+-----------------------
+
+The PVACMS status monitor uses an adaptive sleep interval between iterations rather than a
+fixed interval. The sleep duration scales with the number of certificates approaching a
+state transition:
+
+- **Zero approaching transitions** → sleep for ``--monitor-interval-max`` (default 60 s).
+- **100 or more approaching transitions** → sleep for ``--monitor-interval-min`` (default 5 s).
+- **Between 0 and 100** → linear interpolation.
+
+A certificate is counted as "approaching" if any of its ``validity_start``,
+``validity_end``, ``renewal_date``, or schedule boundary is within
+``2 × monitor-interval-max`` seconds of the current time.
+
+On each cycle the monitor also scans for ``VALID`` certificates that have passed their
+midpoint between the last status-date and their ``renew_by`` deadline, and posts a
+:ref:`renewal_due_hint` on their ``CERT:STATUS`` PV to prompt proactive renewal by
+authenticators. At most one such certificate is processed per cycle.
+
+This keeps PVACMS responsive during transition-dense periods (e.g. a batch deployment
+with many certificates starting simultaneously) while consuming minimal resources during
+quiet periods. The ``CERT:HEALTH`` and ``CERT:METRICS`` PVs are updated on the same
+cadence.
+
+Configuration:
+
+.. list-table::
+   :widths: 35 40 10 15
+   :header-rows: 1
+
+   * - CLI Flag
+     - Env Var
+     - Default
+     - Description
+   * - ``--monitor-interval-min``
+     - ``EPICS_PVACMS_MONITOR_INTERVAL_MIN``
+     - ``5``
+     - Minimum seconds between monitor iterations
+   * - ``--monitor-interval-max``
+     - ``EPICS_PVACMS_MONITOR_INTERVAL_MAX``
+     - ``60``
+     - Maximum seconds between monitor iterations
+
+.. note::
+
+   If the query fails (e.g. due to a transient SQLite lock), the interval falls back to a
+   fixed 15-second default so the monitor continues functioning.
+
+.. _pvacms_audit_logging:
+
+Audit Logging
+-------------
+
+PVACMS writes a persistent audit trail to a dedicated SQLite table (``audit``) for every
+certificate lifecycle event. Each audit record is written atomically within the same
+database transaction as the certificate operation — if the operation fails and rolls back,
+the audit record is also rolled back.
+
+Audit events:
+
+.. list-table::
+   :widths: 20 80
+   :header-rows: 1
+
+   * - Action
+     - Trigger
+   * - ``CREATE``
+     - Certificate successfully issued (``CERT:CREATE`` RPC)
+   * - ``APPROVE``
+     - Certificate approved from ``PENDING_APPROVAL`` state (admin)
+   * - ``DENY``
+     - Certificate denied from ``PENDING_APPROVAL`` state (admin)
+   * - ``REVOKE``
+     - Certificate revoked (admin)
+   * - ``SCHEDULE``
+     - Schedule windows set or cleared via ``CERT:SCHEDULE`` RPC (admin)
+   * - ``SYNC``
+     - Certificate state change received from a cluster peer via SYNC protocol
+
+The ``SYNC`` event records the originating node's issuer ID in the ``details`` field,
+creating a node-local record of cluster convergence.
+
+Audit records are retained for ``--audit-retention-days`` (default: 365 days) and pruned
+automatically during the status-monitor maintenance cycle.
+
+Configuration:
+
+.. list-table::
+   :widths: 35 40 10 15
+   :header-rows: 1
+
+   * - CLI Flag
+     - Env Var
+     - Default
+     - Description
+   * - ``--audit-retention-days``
+     - ``EPICS_PVACMS_AUDIT_RETENTION_DAYS``
+     - ``365``
+     - Days to retain audit records before pruning
+
+Querying the audit log directly with SQLite:
+
+.. code-block:: shell
+
+   sqlite3 ~/.local/share/pva/1.5/certs.db \
+     "SELECT ts, action, serial, operator, details FROM audit ORDER BY ts DESC LIMIT 20;"
+
+.. note::
+
+   A ``CERT:AUDIT`` SharedPV for live PVA-based audit queries is planned as a future
+   extension.
+
+.. _pvacms_startup_self_tests:
+
+Startup Self-Tests
+------------------
+
+On startup, before accepting any PVAccess connections, PVACMS runs four prerequisite
+validation checks. If any check fails, PVACMS exits immediately with a descriptive
+error message and exit code 1:
+
+1. **CA certificate chain validity** — loads the CA keychain, builds the verification
+   chain, and calls ``X509_verify_cert()``. Fails if the keychain is missing, the
+   password is wrong, the CA certificate has expired, or the chain cannot be verified.
+   The OpenSSL ``X509_V_ERR_*`` code is included in the error message.
+
+2. **CA private key consistency** — verifies that the private key in the CA keychain
+   corresponds to the public key in the CA certificate (detects keychain rotation
+   errors where certificate and key were replaced independently).
+
+3. **Database schema version** — queries ``MAX(version)`` from ``schema_version`` and
+   rejects startup if the database was created by a newer PVACMS binary (prevents silent
+   data corruption on rollback).
+
+4. **OpenSSL sign/verify round-trip** — signs a 32-byte random buffer with the CA key
+   and immediately verifies the signature. Confirms that the OpenSSL algorithms PVACMS
+   relies on are functional in the runtime environment.
+
+When all checks pass, ``"Startup self-tests passed"`` is logged at ``INFO`` level.
+
+.. _pvacms_database_backup:
+
+Database Backup
+---------------
+
+PVACMS supports online backups of the certificate database using the SQLite Online Backup
+API, which handles WAL-mode databases safely without requiring an exclusive lock.
+
+.. _pvacms_database_backup_oneshot:
+
+One-Shot Backup
+~~~~~~~~~~~~~~~~
+
+Perform a single backup and exit:
+
+.. code-block:: shell
+
+   pvacms --backup /backups/certs_$(date +%Y%m%d_%H%M%S)
+
+The ``.db`` extension is appended automatically if the path does not already end with it.
+The source database is opened read-only (``SQLITE_OPEN_READONLY``); no migrations are
+run and the live database cannot be modified. On success, the destination path is printed
+to stdout:
+
+.. code-block:: text
+
+   Database backup written: /backups/certs_20260415_200503.db
+
+This mode is suitable for cron jobs, deployment scripts, or Kubernetes ``CronJob``
+manifests.
+
+.. _pvacms_database_backup_periodic:
+
+Periodic Backup
+~~~~~~~~~~~~~~~~
+
+Enable automatic periodic backups integrated into the status-monitor cycle:
+
+.. code-block:: shell
+
+   pvacms --backup-interval 86400 --backup-dir /backups --backup-retention 7
+
+Backup files are named ``certs_backup_<YYYYMMDD_HHMMSS>.db`` (UTC timestamp). When the
+count of files matching ``certs_backup_*.db`` in the backup directory exceeds
+``--backup-retention``, the oldest files are deleted.
+
+Configuration:
+
+.. list-table::
+   :widths: 30 40 10 20
+   :header-rows: 1
+
+   * - CLI Flag
+     - Env Var
+     - Default
+     - Description
+   * - ``--backup-interval``
+     - ``EPICS_PVACMS_BACKUP_INTERVAL``
+     - ``0`` (disabled)
+     - Seconds between periodic backups; ``0`` disables
+   * - ``--backup-dir``
+     - ``EPICS_PVACMS_BACKUP_DIR``
+     - Same as database
+     - Directory for periodic backup files
+   * - ``--backup-retention``
+     - ``EPICS_PVACMS_BACKUP_RETENTION``
+     - ``7``
+     - Number of periodic backup files to retain
+
+.. note::
+
+   Backup files contain the full certificate database, including the audit trail and all
+   certificate metadata, but **not** private keys (which are stored in the CA keychain, not
+   the database). Store backup files with ``0600`` permissions.
+
+.. _pvacms_rate_limiting:
+
+Certificate Creation Rate Limiting
+-----------------------------------
+
+PVACMS applies rate limiting and overload protection to certificate creation requests
+(``CERT:CREATE`` RPC) to prevent a burst of simultaneous requests from overloading the
+service. When the creation rate exceeds the configured threshold, excess requests receive
+an error response with a ``RATE_LIMITED`` status rather than being queued indefinitely.
+
+This protects PVACMS availability during large-scale deployments where many IOCs or
+clients start simultaneously and each request a new certificate.
+
+.. _pvacms_sqlite_hardening:
+
+SQLite Hardening
+----------------
+
+PVACMS enables several SQLite hardening settings on every database connection:
+
+- **WAL mode** (``PRAGMA journal_mode=WAL``) — reduces write contention and improves
+  read concurrency. WAL checkpoints run on an independent timer separate from the
+  status-monitor cycle; the first checkpoint is deferred at startup to avoid startup
+  latency.
+- **Busy timeout** (``sqlite3_busy_timeout``) — prevents ``SQLITE_BUSY`` errors on
+  concurrent access from backup or cluster operations.
+- **Foreign keys** (``PRAGMA foreign_keys=ON``) — enforces referential integrity between
+  ``certs`` and ``cert_schedules``.
+- **Schema versioning** (``schema_version`` table) — tracks the migration level; used by
+  the startup self-tests to detect rollback against a newer schema.
+
+The database schema has evolved through several versions:
+
+.. list-table::
+   :widths: 15 85
+   :header-rows: 1
+
+   * - Version
+     - Changes
+   * - v1
+     - Initial schema: ``certs`` table.
+   * - v2
+     - Added ``audit`` table for persistent certificate lifecycle events.
+   * - v3
+     - Added ``cert_schedules`` table for validity schedule windows.
+   * - v4
+     - Added SANs storage for certificate Subject Alternative Names.
+   * - v5
+     - Reordered ``SCHEDULED_OFFLINE`` enum value (ordinal 5) to sit between
+       ``PENDING_RENEWAL`` and ``EXPIRED``; migrated existing rows using a sentinel value.
+
+Each migration runs automatically on first open of a database at an older schema version.

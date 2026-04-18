@@ -18,13 +18,35 @@ Usage
 
 .. code-block:: text
 
-   pvxcert [options] <cert_id>                          Get certificate status
-   pvxcert [file_options] [options] -f <cert_file>      Get certificate info from file
-   pvxcert [options] -A <cert_id>                       Approve pending request (admin)
-   pvxcert [options] -D <cert_id>                       Deny pending request (admin)
-   pvxcert [options] -R <cert_id>                       Revoke certificate (admin)
-   pvxcert -h                                           Show help
-   pvxcert -V                                           Print version
+ usage:
+   pvxcert [options] <cert_id>                Get certificate status
+   pvxcert [file_options] [options] (-f | --file) <cert_file>
+                                              Get certificate information from the specified cert file
+   pvxcert [options] (-A | --approve) <cert_id>
+                                              APPROVE pending certificate approval request (ADMIN ONLY)
+   pvxcert [options] (-D | --deny) <cert_id>  DENY pending certificate approval request (ADMIN ONLY)
+   pvxcert [options] (-R | --revoke) [<cert_id>]
+                                              REVOKE certificate; if cert_id omitted, reads from
+                                              -f <file> or $EPICS_PVA_TLS_KEYCHAIN
+   pvxcert [options] (-S | --schedule) show <cert_id>
+                                              SHOW current schedule windows (ADMIN ONLY)
+   pvxcert [options] (-S | --schedule) none <cert_id>
+                                              REMOVE all schedule windows (ADMIN ONLY)
+   pvxcert [options] (-S | --schedule) <day,HH:MM,HH:MM> [-S <day,HH:MM,HH:MM> ...] <cert_id>
+                                              SET validity schedule windows, replacing any existing (ADMIN ONLY)
+                                              day: 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat or * for every day
+                                              times are UTC, e.g. -S '1,08:00,17:00' for Mon 08:00-17:00
+   pvxcert (-h | --help)                      Show this help message and exit
+   pvxcert (-V | --version)                   Print version and exit
+
+ file_options:
+   (-p | --password)                          Prompt for password
+
+ options:
+   (-w | --timeout) <timout_secs>             Operation timeout in seconds.  Default 5.0s
+   (-d | --debug)                             Debug mode: Shorthand for $PVXS_LOG="pvxs.*=DEBUG"
+   (-v | --verbose)                           Verbose mode
+   (-X | --dump)                              Dump all available certificate and status details
 
 Certificate ID Format
 ^^^^^^^^^^^^^^^^^^^^^
@@ -32,20 +54,21 @@ Certificate ID Format
 Certificates are identified by a compound ``<issuer>:<serial>`` string:
 
 - ``<issuer>`` — first 8 hex digits of the issuer's Subject Key Identifier
-- ``<serial>`` — certificate serial number
+- ``<serial>`` — certificate serial number, zero-padded to 20 digits
 
 For example::
 
-   27975e6b:7246297371190731775
+   27975e6b:07246297371190731775
 
 This ID is displayed when certificates are created or can be found in the certificate details
-of PKCS#12 keychain files.
+of PKCS#12 keychain files. ``pvxcert`` normalises the issuer:serial string from user input
+before use as a PV name key, so unpadded input is accepted and canonicalised automatically.
 
 Options
 ^^^^^^^
 
 .. list-table::
-   :widths: 30 70
+   :widths: 35 65
    :header-rows: 1
 
    * - Option
@@ -60,8 +83,22 @@ Options
      - Approve a pending certificate request (**admin only**)
    * - ``-D``, ``--deny`` ``<cert_id>``
      - Deny a pending certificate request (**admin only**)
-   * - ``-R``, ``--revoke`` ``<cert_id>``
-     - Revoke an active certificate (**admin only**)
+   * - ``-R``, ``--revoke`` ``[<cert_id>]``
+     - Revoke an active certificate. Admin or certificate owner.
+       If ``<cert_id>`` is omitted, the certificate is read from ``-f <file>`` or
+       ``$EPICS_PVA_TLS_KEYCHAIN``.
+   * - ``-S``, ``--schedule`` ``<value>``
+     - Manage validity schedule windows (repeatable). Values:
+
+       - ``show`` — display current windows (owner or admin)
+       - ``none`` — clear all windows (**admin only**)
+       - ``'<day,HH:MM,HH:MM>'`` — add a window (``*`` or ``0``–``6`` for day; UTC times)
+
+       Multiple ``-S`` flags set multiple windows simultaneously. The last positional
+       argument is always the ``<cert_id>``.
+   * - ``-X``,``--dump``
+     - Print verbose X.509 certificate details, including all SANs, decoded extensions,
+       and the full certificate chain (end-entity + intermediate CAs). Use with ``-f``.
    * - ``-w``, ``--timeout`` ``<seconds>``
      - Operation timeout in seconds (default: 5.0)
    * - ``-d``, ``--debug``
@@ -81,7 +118,7 @@ Examples
 .. code-block:: shell
 
    # Query status by certificate ID
-   pvxcert 27975e6b:7246297371190731775
+   pvxcert 27975e6b:07246297371190731775
 
    # Query status from a keychain file
    pvxcert -f ~/.config/pva/1.5/client.p12
@@ -89,23 +126,89 @@ Examples
    # Query a password-protected keychain file
    pvxcert -p -f /path/to/server.p12
 
+   # Query with verbose X.509 dump (shows full chain and all extensions)
+   pvxcert --dump -f ~/.config/pva/1.5/client.p12
+
+Example status output:
+
+.. code-block:: text
+
+   Certificate Details:
+   ============================================
+   Subject        : CN=ioc01, O=SLAC, C=US
+   Issuer         : CN=EPICS Root Certificate Authority, O=certs.epics.org
+   Serial         : 07246297371190731775
+   Not Before     : Sat Feb  1 00:00:00 2026 UTC
+   Not After      : Mon Feb  1 00:00:00 2027 UTC
+   SAN            : dns=ioc01.slac.stanford.edu, ip=192.168.1.10
+   Config URI     : pva://CERT:CONFIG:27975e6b:07246297371190731775
+   --------------------------------------------
+
+   Online Certificate Status:
+   ============================================
+   Get Status ==> 27975e6b:07246297371190731775
+   ============================================
+   Status         : VALID
+   Status Date    : Sat Apr 19 12:00:00 2026 UTC
+   Valid Until    : Sun Apr 19 12:30:00 2026 UTC
+
+   Connection Details:
+   ============================================
+   PVACMS Node Address: 192.168.10.5:5076
+   PVACMS Node ID  : 2dc74177:a3f2e1b0c9d4...
+   Local Interface : 127.0.0.1
+   Response Size   : 842 bytes
+
 **Administrative operations:**
 
 .. code-block:: shell
 
-   # Approve a pending certificate request
-   pvxcert -A 27975e6b:7246297371190731775
+   # Approve a pending certificate request (admin)
+   pvxcert -A 27975e6b:07246297371190731775
 
-   # Deny a pending certificate request
-   pvxcert -D 27975e6b:7246297371190731775
+   # Deny a pending certificate request (admin)
+   pvxcert -D 27975e6b:07246297371190731775
 
-   # Revoke an active certificate
-   pvxcert -R 27975e6b:7246297371190731775
+   # Revoke by certificate ID (admin or owner)
+   pvxcert -R 27975e6b:07246297371190731775
+
+   # Revoke own certificate from keychain file (owner, no cert_id needed)
+   pvxcert -R -f ~/.config/pva/1.5/client.p12
+
+   # Revoke own certificate from $EPICS_PVA_TLS_KEYCHAIN (owner)
+   pvxcert -R
+
+**Schedule management:**
+
+.. code-block:: shell
+
+   # Show current schedule windows (owner or admin)
+   pvxcert -S show 27975e6b:07246297371190731775
+
+   # Set schedule: every weekday 08:00–17:00 UTC, plus Saturday mornings (admin)
+   pvxcert -S '*,08:00,17:00' -S '6,08:00,12:00' 27975e6b:07246297371190731775
+
+   # Clear all schedule windows (admin)
+   pvxcert -S none 27975e6b:07246297371190731775
+
+Example schedule output:
+
+.. code-block:: text
+
+   Set Schedule ==> 27975e6b:07246297371190731775
+
+   Schedule      :
+   ============================================
+     Every day  08:00 - 17:00 UTC
+     Sat        08:00 - 12:00 UTC
+   --------------------------------------------
 
 .. note::
 
-   Administrative operations (approve, deny, revoke) require appropriate access
-   control permissions configured in the :ref:`pvacms` ACF.
+   Administrative operations (approve, deny, revoke with cert_id, set/clear schedule)
+   require appropriate access control permissions configured in the :ref:`pvacms` ACF.
+   Certificate owners may revoke their own certificate (``-R`` without a cert_id) and
+   view their own schedule windows (``-S show``) without admin rights.
 
 Under the hood, ``pvxcert`` sends a ``PUT`` to the :ref:`pvacms` on the PV associated with the certificate:
 

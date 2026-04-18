@@ -168,6 +168,104 @@ Example:
 
 The above rule explicitly denies any client connecting over an unencrypted TCP connection.
 
+SAG (SAN Access Group)
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``SAG`` predicate restricts access based on Subject Alternative Name (SAN) entries
+from the client's TLS certificate. This is distinct from ``HAG`` (which matches the
+client's IP address or hostname at the network level) — ``SAG`` matches the
+cryptographically bound identity embedded in the X.509 certificate.
+
+**Defining a SAG**
+
+``SAG`` definitions appear at the top level of the ACF file, alongside ``UAG`` and
+``HAG``:
+
+.. code-block:: text
+
+   SAG(trusted_iocs) {
+       IP(192.168.10.0/24),
+       IP(172.16.0.1),
+       IP(2001:db8::1),
+       DNS(*.slac.stanford.edu),
+       DNS(ioc01.example.com)
+   }
+
+Each entry is qualified with a type:
+
+- ``IP(<address>)`` — matches an IP address SAN from the client certificate.
+  Supports:
+
+  - Exact IPv4 match: ``IP(192.168.10.5)``
+  - IPv4 CIDR subnet: ``IP(192.168.10.0/24)`` (prefix length 0–32)
+  - Exact IPv6 match: ``IP(2001:db8::1)`` (IPv6 CIDR is not supported)
+
+- ``DNS(<hostname>)`` — matches a DNS name SAN from the client certificate.
+  Supports:
+
+  - Exact match: ``DNS(ioc01.example.com)``
+  - Glob wildcard: ``DNS(*.slac.stanford.edu)`` (``*`` and ``?`` are supported)
+
+All entry values are lowercased at parse time for case-insensitive matching.
+Matching is type-aware: a client's IP SAN only matches ``IP(...)`` entries,
+and a client's DNS SAN only matches ``DNS(...)`` entries.
+
+Clients without SANs (e.g. non-TLS connections) automatically fail the SAG predicate.
+
+**Using SAG in a RULE**
+
+.. code-block:: text
+
+   RULE(1,WRITE) {
+       SAG(trusted_iocs)
+       METHOD("x509")
+       PROTOCOL("TLS")
+   }
+
+The above rule applies only to clients whose TLS certificate contains at least one SAN
+that matches an entry in the ``trusted_iocs`` SAG. A match on any entry in any listed
+SAG satisfies the predicate.
+
+Multiple SAGs may be listed:
+
+.. code-block:: text
+
+   RULE(1,READ) {
+       SAG(trusted_iocs, beamline_hosts)
+   }
+
+**Full example combining SAG, UAG, METHOD, AUTHORITY, and PROTOCOL**
+
+.. code-block:: text
+
+   AUTHORITY(AUTH_EPICS_ROOT, "EPICS Root Certificate Authority")
+
+   SAG(control_subnet) {
+       IP(192.168.0.0/16),
+       DNS(*.ctrl.facility.org)
+   }
+
+   UAG(operators) {alice, bob}
+
+   ASG(DEFAULT) {
+       RULE(0, NONE)
+
+       # Read access for operators on the control subnet using TLS
+       RULE(1, READ) {
+           UAG(operators)
+           SAG(control_subnet)
+           PROTOCOL("TLS")
+       }
+
+       # Write access requiring x509 auth from the facility CA
+       RULE(2, WRITE) {
+           UAG(operators)
+           METHOD("x509")
+           AUTHORITY(AUTH_EPICS_ROOT)
+           SAG(control_subnet)
+       }
+   }
+
 RPC Permission
 ~~~~~~~~~~~~~~~
 

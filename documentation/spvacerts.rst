@@ -72,8 +72,15 @@ Certificate States
 - ``PENDING_APPROVAL``: Awaiting administrative approval
 - ``PENDING``: Not yet valid (before ``notBefore`` date)
 - ``VALID``: Currently valid and usable
-- ``EXPIRED``: Past ``notAfter`` date
-- ``REVOKED``: Permanently revoked by an administrator
+- ``PENDING_RENEWAL``: Valid but past its ``renew_by`` date; a renewed certificate is
+  expected to be issued shortly. Treated as :ref:`SUSPENDED <suspended_cert_status>` by
+  pvxs clients. Before this state is entered, PVACMS posts a :ref:`renewal_due_hint`
+  to prompt authenticators to renew proactively.
+- ``SCHEDULED_OFFLINE``: Certificate is within a configured offline schedule window (see
+  :ref:`validity_schedules`). The certificate will return to ``VALID`` when the window
+  ends. Treated as :ref:`SUSPENDED <suspended_cert_status>` by pvxs clients.
+- ``EXPIRED``: Past ``notAfter`` date; permanently non-operational.
+- ``REVOKED``: Permanently revoked by an administrator.
 
 .. _certificate_status_message:
 
@@ -85,7 +92,8 @@ Status response structure:
 .. code-block:: console
 
     Structure
-        enum_t     status               # PENDING_APPROVAL, PENDING, VALID, EXPIRED, REVOKED
+        enum_t     status               # PENDING_APPROVAL, PENDING, VALID, PENDING_RENEWAL,
+                                        # SCHEDULED_OFFLINE, EXPIRED, REVOKED
         UInt64     serial               # Certificate serial number
         string     state                # String representation of status
         enum_t     ocsp_status          # GOOD, REVOKED, UNKNOWN
@@ -94,6 +102,86 @@ Status response structure:
         string     ocsp_certified_until # Validity period end
         string     ocsp_revocation_date # Revocation date if applicable
         UInt8A     ocsp_response        # Signed PKCS#7 encoded OCSP response
+        string     pvacms_node_id       # "<issuer_id>:<node_id>" of the serving PVACMS node
+                                        # (empty for single-node deployments)
+        UInt64     renew_by             # Epoch seconds: deadline by which a renewal CCR should
+                                        # be submitted to avoid entering PENDING_RENEWAL
+        bool       renewal_due          # true once now >= midpoint(last_status_date, renew_by);
+                                        # a hint to authenticators to submit a renewal CCR now
+        StructA    schedule             # Current validity schedule windows (if any)
+            string     day_of_week      # "0"–"6" (Sun–Sat) or "*" (every day)
+            string     start_time       # "HH:MM" UTC
+            string     end_time         # "HH:MM" UTC
+
+.. _renewal_due_hint:
+
+Renewal-Due Hint (``renewal_due``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``renewal_due`` is a proactive renewal signal published by PVACMS on the ``CERT:STATUS``
+PV while the certificate is still ``VALID``. Its purpose is to give authenticators
+(``authnstd``, ``authnkrb``, ``authnldap``) enough advance warning to submit a new
+Certificate Creation Request (CCR) *before* the certificate enters ``PENDING_RENEWAL``,
+keeping renewal transparent to end users.
+
+**Trigger condition**
+
+PVACMS sets ``renewal_due = true`` and re-posts the status PV when:
+
+.. code-block:: text
+
+    now  >=  midpoint(last_status_date, renew_by)
+    i.e. 2 × now  >=  last_status_date + renew_by
+
+In other words, once the current time is at least halfway between the timestamp of the
+last status update and the ``renew_by`` deadline. Only ``VALID`` certificates that have
+not yet had ``renewal_due`` set are considered. PVACMS processes at most one such
+certificate per status-monitor cycle to spread load. Once posted, the flag is cleared in
+the database so the same certificate is not re-posted on the next cycle.
+
+**Client behaviour**
+
+Authenticators subscribe to their own entity certificate's ``CERT:STATUS`` PV. When a
+status update arrives with ``renewal_due = true``, the authenticator automatically
+submits a CCR to PVACMS. PVACMS recognises the request as a renewal of the existing
+certificate (matched by subject CN/O/OU/C and the ``renewal_due`` flag in the database)
+and extends the ``renew_by`` deadline — **no new certificate is issued and the keychain
+file is not modified**. The updated ``renew_by`` date is broadcast on the
+``CERT:STATUS`` PV; the ``CERT:CONFIG`` PV is also updated. If the CCR fails, the
+authenticator logs an error and waits for the next status update before retrying. The
+certificate remains ``VALID`` throughout; ``PENDING_RENEWAL`` is only entered if
+``renew_by`` passes without a successful renewal CCR.
+
+**Timeline**
+
+.. code-block:: text
+
+    Certificate issued (keychain file written once)
+         │
+         ▼  [VALID]   renewal_due = false
+         │
+         │   ... time passes ...
+         │
+         ▼  now >= midpoint(last_status_date, renew_by)
+         │  [VALID]   renewal_due = true  ← posted on CERT:STATUS
+         │                ↑
+         │          authenticator sees renewal_due=true, submits CCR
+         │          PVACMS extends renew_by on the *existing* certificate
+         │          (no new cert issued, keychain file unchanged)
+         │
+         ├── CCR succeeds ──►  [VALID]  extended renew_by, renewal_due=false
+         │                     status broadcast on CERT:STATUS
+         │
+         └── renew_by passes without CCR ──►  [PENDING_RENEWAL]
+
+**pvxcert output**
+
+Both fields appear in the ``pvxcert`` certificate status block:
+
+.. code-block:: text
+
+    Renewal Due    : Yes
+    Renew By       : 2026-09-01 00:00:00 UTC
 
 .. _certificate_creation_request_CCR:
 

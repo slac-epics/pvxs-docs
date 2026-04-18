@@ -66,7 +66,22 @@ The following environment variables control SPVA behavior.
 |                          |                                                                  | to connect to (PVA). For servers, the local port to listen on |
 +--------------------------+ e.g. ``8076``                                                    | (PVAS).                                                       |
 | EPICS_PVAS_TLS_PORT      |                                                                  |                                                               |
-+--------------------------+----------------------------+-------------------------------------+---------------------------------------------------------------+
++--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
+| EPICS_PVA_STATUS         | {fully qualified path to status cache directory}                 | Override the default OCSP status cache directory.             |
+| _CACHE_DIR               |                                                                  | When TLS is enabled, pvxs caches signed OCSP responses to     |
+|                          | e.g. ``/var/cache/pva/status``                                   | disk so that certificate status is available immediately on   |
+|                          |                                                                  | process restart, eliminating the cold-start window where      |
+|                          |                                                                  | status is UNKNOWN.                                            |
+|                          |                                                                  |                                                               |
+|                          |                                                                  | default: ``${XDG_DATA_HOME}/pva/1.5/status_cache/``           |
+|                          |                                                                  | (typically ``~/.local/share/pva/1.5/status_cache/``)          |
++--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
+| EPICS_PVA_NO_STATUS      | ``yes``, ``true``, ``1``                                         | Disable OCSP status caching entirely.  When set, no cache     |
+| _CACHE                   |                                                                  | files are read or written and the process always waits for    |
+|                          |                                                                  | a live PV subscription to obtain certificate status.          |
+|                          |                                                                  |                                                               |
+|                          |                                                                  | default: caching is enabled                                   |
++--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | SSLKEYLOGFILE            | {fully qualified path to key log file}                           | Path to the SSL key log file. When defined and the library is |
 |                          |                                                                  | built with the ``PVXS_ENABLE_SSLKEYLOGFILE`` macro, TLS       |
 |                          | e.g. ``~/.config/keylog``                                        | session keys are written to this file.                        |
