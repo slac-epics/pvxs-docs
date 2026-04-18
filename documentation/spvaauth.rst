@@ -18,10 +18,19 @@ Secure PVAccess enhances :ref:`epics_security` with fine-grained control based o
 Authentication Modes
 ------------------------
 
-- ``Mutual``: Both client and server authenticated via certificates (spva: ``METHOD`` is ``x509``)
-- ``Server-only``: Only server authenticated via certificate (spva: ``METHOD`` is ``ca`` or ``anonymous``, ``PROTOCOL`` is ``tls``)
-- ``Un-authenticated``: Credentials supplied in ``AUTHZ`` message (legacy: ``METHOD`` is ``ca``)
-- ``Unknown``: No credentials (legacy: ``METHOD`` is ``anonymous``)
+- ``Mutual`` (mTLS — mutual TLS): Both client and server present X.509 certificates and
+  authenticate each other during the TLS 1.3 handshake. The connection is fully
+  encrypted and both identities are cryptographically verified. In SPVA access control,
+  ``METHOD`` is ``x509``. This is the recommended mode for all production deployments.
+- ``Server-only`` (TLS with anonymous client): Only the server presents a certificate;
+  the client verifies the server but sends no client certificate. The channel is
+  encrypted but only the server identity is authenticated. In SPVA, ``METHOD`` is
+  ``ca`` or ``anonymous`` with ``PROTOCOL`` set to ``tls``.
+- ``Un-authenticated`` (legacy channel): Credentials supplied in the PVAccess
+  ``AUTHZ`` message over a plain TCP connection (no TLS). In SPVA, ``METHOD`` is
+  ``ca``. Backward-compatible with Classic Channel Access / legacy PVA clients.
+- ``Unknown`` (anonymous legacy): No credentials and no TLS. In SPVA, ``METHOD``
+  is ``anonymous``.
 
 .. _determining_identity:
 
@@ -230,6 +239,8 @@ authstd Configuration and Usage
 - ``OU``: not set by default, overridden by ``--ou`` or ``EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT``/``EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT``
 - ``C``: local country code, overridden by ``-c``/``--country`` or ``EPICS_PVA_AUTH_COUNTRY``/``EPICS_PVAS_AUTH_COUNTRY``
 
+.. _authnstd_prior_approval:
+
 **Prior-approval inheritance**
 
 Because ``authnstd`` carries no cryptographic identity proof, PVACMS cannot verify the
@@ -339,9 +350,11 @@ Instead of requesting a certificate and exiting, the daemon:
 4. **Notifies PVACMS** when the hint arrives: submits a new CCR to PVACMS carrying
    fresh credentials (a new Kerberos service ticket, a new LDAP signature, etc.).
    **PVACMS performs the same full identity verification as on initial issuance** —
-   it does not renew blindly. Only after verification passes does PVACMS recognise
-   the request as a renewal of the existing certificate (matched by subject CN/O/OU/C
-   and the ``renewal_due`` flag in the database) and extend the ``renew_by`` deadline.
+   it does not renew blindly. Only after verification passes does PVACMS look up an
+   existing certificate with matching subject fields (CN, O, OU, C) that has
+   ``renewal_due`` set in the database, and extend its ``renew_by`` deadline. The
+   lookup is on subject fields, not on SKID or public key — the cryptographic
+   assurance comes solely from the authenticator's ``verify()`` step.
    **No new certificate is issued and the keychain file is not overwritten.** The
    updated ``renew_by`` date is broadcast on the ``CERT:STATUS`` PV and posted to
    the ``CERT:CONFIG`` PV (see below). If verification fails — e.g. the Kerberos
@@ -754,115 +767,143 @@ Source: ``/examples/docker/spva_ldap``
 
 .. _epics_security:
 
-Long Running Certificates
---------------------------
+Certificate Lifetime and Renewal
+----------------------------------
 
-TLS 1.3 (OpenSSL) removes session renegotiation entirely. Once a TLS connection is established with an IOC over Secure PVAccess, the certificate cannot be changed without breaking the connection. The solution is:
+TLS 1.3 removes session renegotiation entirely. Once a mTLS connection is established
+with an IOC over Secure PVAccess, the certificate cannot be swapped without breaking
+the connection. The SPVA design addresses this with two complementary mechanisms:
 
-- Creating very long running certificates (decades)
-- Allowing them to be ``REVOKED`` by administrators when necessary
-- Implementing a "soft-expiration" tied to authenticator configuration
-- Providing the ability to renew certificates without breaking existing connections
+- **Long certificate validity** (months to years) — so the X.509 hard expiry
+  (``not_after``) rarely forces a connection drop.
+- **Soft renewal via** ``renew_by`` — a separate deadline, set by the authenticator,
+  that triggers a proactive renewal CCR *before* the certificate's hard expiry. The
+  same certificate continues in use throughout; no reconnect is needed.
 
-Specifying long running certificates
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. _cert_duration:
 
-Common to all Authenticators - commandline parameters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Specifying Certificate Duration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Use the ``-t,--time`` flag to specify a duration using these components:
+All authenticators accept a ``-t`` / ``--time`` flag (or ``EPICS_AUTH_CERT_VALIDITY_MINS``
+environment variable) to request a specific validity period. Duration strings use
+combined components:
 
-- ``y`` - Years (e.g., ``2y`` for two years)
-- ``M`` - Months (e.g., ``6M`` for six months)
-- ``w`` - Weeks (e.g., ``1w`` for one week)
-- ``d`` - Days (e.g., ``15d`` for 15 days)
-- ``h`` - Hours (e.g., ``12h`` for 12 hours)
-- ``m`` - Minutes (e.g., ``30m`` for 30 minutes, or simply ``30``)
-- ``s`` - Seconds (e.g., ``45s`` for 45 seconds)
+- ``y`` — years, ``M`` — months, ``w`` — weeks, ``d`` — days,
+  ``h`` — hours, ``m`` — minutes, ``s`` — seconds
 
-Examples:
+Examples: ``30`` (minutes), ``1d``, ``6M``, ``1y6M``, ``2y3M15d``.
 
-- ``1y and 6M`` - one year and six months
-- ``2y3M15d`` - two years, three months, and 15 days
+Duration calculations account for daylight saving, leap years, and calendar
+boundaries. PVACMS may override the requested duration if a default or maximum
+is configured (see below).
 
-Duration calculations account for daylight savings, leap years, and calendar boundaries.
+PVACMS can set default validity and prevent clients from requesting custom
+durations:
 
-Common to all Authenticators - environment variables
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. list-table::
+   :widths: 50 50
+   :header-rows: 1
 
-``EPICS_AUTH_CERT_VALIDITY_MINS`` sets a global duration for any authenticator using the same format as the commandline parameter.
+   * - CLI flag
+     - Environment variable
+   * - ``--cert-validity <duration>``
+     - ``EPICS_PVACMS_CERT_VALIDITY``
+   * - ``--cert-validity-client <duration>``
+     - ``EPICS_PVACMS_CERT_VALIDITY_CLIENT``
+   * - ``--cert-validity-server <duration>``
+     - ``EPICS_PVACMS_CERT_VALIDITY_SERVER``
+   * - ``--cert-validity-ioc <duration>``
+     - ``EPICS_PVACMS_CERT_VALIDITY_IOC``
+   * - ``--disallow-custom-durations``
+     - ``EPICS_PVACMS_DISALLOW_CUSTOM_DURATION=YES``
+   * - ``--disallow-custom-durations-client``
+     - ``EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION=YES``
+   * - ``--disallow-custom-durations-server``
+     - ``EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION=YES``
+   * - ``--disallow-custom-durations-ioc``
+     - ``EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION=YES``
 
-PVACMS Defaults - Parameters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The PVACMS default is **6 months** for all certificate types.
 
-PVACMS defaults to 6 months for certificate duration unless overridden by:
+.. _cert_renewal_by:
 
-- ``--cert_validity <duration>`` - default duration for all certificates
-- ``--cert_validity-client <duration>`` - default for client certificates
-- ``--cert_validity-server <duration>`` - default for server certificates
-- ``--cert_validity-ioc <duration>`` - default for IOC certificates
-- ``--disallow-custom-durations`` - prevents clients from specifying durations for any certificates
-- ``--disallow-custom-durations-client`` - restricts custom durations for client certificates
-- ``--disallow-custom-durations-server`` - restricts custom durations for server certificates
-- ``--disallow-custom-durations-ioc`` - restricts custom durations for IOC certificates
+The ``renew_by`` Date — How It Is Set
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-PVACMS Defaults - Environment Variables
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Every authenticated CCR carries two dates: the requested ``not_after``
+(hard expiry) and an **authenticated expiration** set by the authenticator's
+``verify()`` call on the PVACMS side. PVACMS uses the authenticated expiration
+as the ``renew_by`` date (capped to ``not_after`` if it would otherwise exceed it):
 
-- ``EPICS_PVACMS_CERT_VALIDITY`` - default duration for all certificates
-- ``EPICS_PVACMS_CERT_VALIDITY_CLIENT`` - default for client certificates
-- ``EPICS_PVACMS_CERT_VALIDITY_SERVER`` - default for server certificates
-- ``EPICS_PVACMS_CERT_VALIDITY_IOC`` - default for IOC certificates
-- ``EPICS_PVACMS_DISALLOW_CUSTOM_DURATION`` - YES/NO to prevent custom durations for any certificates
-- ``EPICS_PVACMS_DISALLOW_CLIENT_CUSTOM_DURATION`` - YES/NO for client certificates
-- ``EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION`` - YES/NO for server certificates
-- ``EPICS_PVACMS_DISALLOW_IOC_CUSTOM_DURATION`` - YES/NO for IOC certificates
+- **Standard authenticator**: No independent identity proof, so ``renew_by`` is not
+  set by default (the certificate is valid until ``not_after``). If ``--time``
+  is specified and is shorter than ``not_after``, it becomes ``renew_by``.
+- **Kerberos** (``authnkrb``): PVACMS verifies the GSSAPI service ticket and sets
+  ``renew_by = now + remaining_ticket_lifetime``. A typical ticket lasts 8–24 hours,
+  so the certificate is renewed daily, but the underlying X.509 certificate (and all
+  mTLS connections using it) remains valid for the full PVACMS-configured duration
+  (e.g. 6 months). See :ref:`authnkrb_lifetime` for the full design rationale.
+- **LDAP** (``authnldap``): The ``renew_by`` date is taken from the requested
+  ``not_after``; LDAP does not impose an independent authenticated lifetime.
 
-The Authenticator Controls the Certificate Renewal Date
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. _cert_renewal_enforcement:
 
-The authenticator determines the actual renewal interval. This is the **Authenticated Expiration Date**:
+How ``renew_by`` Is Enforced
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- **Standard Authenticator**: Default 6 months, no upper limit (subject to admin approval)
-- **Kerberos**: Limited by service ticket lifetime (typically 1 day)
-- **LDAP**: Limited by server default (typically 1 day)
+All certificates with a ``renew_by`` date require certificate status monitoring
+(``--no-status`` and ``renew_by`` are mutually exclusive). The status monitor
+enforces the deadline as follows:
 
-Mapping requested duration to certificate expiration
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. While ``now < renew_by``: certificate status is ``VALID``.
+2. At the midpoint between the last status update and ``renew_by``: PVACMS posts
+   ``renewal_due = true`` on the ``CERT:STATUS`` PV as a proactive hint (see
+   :ref:`renewal_due_hint`). The certificate remains ``VALID``.
+3. If ``now >= renew_by`` and no renewal CCR has arrived: status transitions to
+   ``PENDING_RENEWAL``. The context enters ``TcpOnly``: no new TLS connections are
+   accepted/initiated, but **existing mTLS connections remain open**.
+4. When a valid renewal CCR arrives: PVACMS extends ``renew_by``, transitions back
+   to ``VALID``, and broadcasts the update on ``CERT:STATUS``. Existing and new TLS
+   connections resume immediately.
 
-Two critical dates govern certificate lifecycle:
+.. _cert_renewing:
 
-- **Requested Duration -> Certificate Expiration Date**: When the certificate becomes invalid
-- **Authenticated Expiration -> Certificate Renew-By Date**: When the certificate must be renewed
+Renewing a Certificate
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-PVACMS transitions a certificate's status from ``VALID`` to ``PENDING_RENEWAL`` at the renew-by date. Certificates in ``PENDING_RENEWAL`` cannot establish new connections, but existing connections remain active until renewal completes.
+To renew, repeat the same authenticator command used for initial issuance — or use
+the :ref:`authn_daemon_mode` (``-D`` flag) to have the renewal happen automatically.
+PVACMS recognises a renewal by matching on the certificate subject fields
+(CN, O, OU, C) combined with the ``renewal_due`` flag being set in the database.
+**No new X.509 certificate is issued and the keychain file is not modified.**
+The same certificate continues to be used by all active connections.
 
-How do we enforce Renew By dates
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. note::
 
-All certificates with renew-by dates require certificate status monitoring. If status monitoring is disabled on the PVACMS server, generating certificates with renew-by dates is forbidden.
+   The renewal lookup matches on **subject fields only** (CN/O/OU/C), not on the
+   SKID or public key. This means a CCR from a different key pair but with the same
+   subject would also match. The cryptographic assurance that only the legitimate
+   holder can renew comes from the **authenticator's identity verification** on the
+   CCR — the Kerberos GSSAPI token for ``authnkrb``, the LDAP public-key signature
+   for ``authnldap`` — not from a key-match check. For ``authnstd`` there is no
+   cryptographic proof; security relies on network-level access controls and the
+   requirement that ``renewal_due`` was set by PVACMS (not the client).
 
-Secure PVAccess monitors certificate status and reacts to state changes:
+Key properties of renewal:
 
-- ``VALID``: Certificate is operational
-- ``PENDING_RENEWAL``: Certificate needs renewal but is not revoked
-- ``REVOKED`` / ``EXPIRED``: Certificate is permanently invalidated
+- Identity is **re-verified** by PVACMS on every renewal CCR (see
+  :ref:`authn_daemon_verification`) — renewal is never blind.
+- The ``renew_by`` date is extended to ``now + new_authenticated_lifetime``.
+- For Kerberos, this tracks the new ticket's remaining lifetime.
+- For standard authenticator, prior-approval is inherited automatically (see
+  :ref:`authnstd_prior_approval`).
+- Multiple successive renewals are supported; there is no limit on renewal count.
 
-When a certificate transitions to ``PENDING_RENEWAL``:
+.. _authnkrb_lifetime:
 
-- IOCs/servers accept only TCP connections (no TLS)
-- Clients do not search for TLS protocol services
-- Monitoring consoles pause until certificate renewal
+.. rubric:: Kerberos: certificate lifetime longer than the ticket
 
-Renewing certificates
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-To renew a certificate, repeat the same action used to obtain the original. PVACMS will:
-
-1. Recognize that the certificate is for the same subject
-2. Automatically renew it
-3. Keep both the new certificate and the original one active
-
-Existing connections using the long-running certificate continue without interruption. New connections use the newer certificate. Multiple renewals are supported; the system retains the last obtained certificate alongside the original renewed one.
-
-Renewing before the certificate enters ``PENDING_RENEWAL`` state maintains uninterrupted service. If renewal occurs after the renew-by date, the certificate automatically transitions back to ``VALID`` upon successful renewal.
+See :ref:`the full explanation in the authnkrb section <authn_daemon_verification>`
+for how ``not_after`` (long PVACMS default) and ``renew_by`` (ticket lifetime) are
+deliberately decoupled to avoid connection disruption.

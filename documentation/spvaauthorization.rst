@@ -329,6 +329,55 @@ Full ACF Examples
        }
     }
 
+*Using SAG (SAN Access Groups) to restrict by certificate SAN*
+
+.. code-block:: text
+
+    SAG(control_subnet) {
+        IP(192.168.0.0/16),
+        IP(172.16.1.0/24),
+        DNS(*.ctrl.facility.org),
+        DNS(ioc01.example.com)
+    }
+
+    SAG(trusted_iocs) {
+        IP(10.0.10.0/24),
+        DNS(*.ioc.slac.stanford.edu)
+    }
+
+    UAG(operators) {alice, bob}
+    UAG(admins)   {aqeel, pierrick}
+
+    AUTHORITY(AUTH_FACILITY, "SLAC Certificate Authority")
+
+    ASG(DEFAULT) {
+        RULE(0, NONE)
+
+        # Read access for operators on the control subnet, x509-authenticated over TLS
+        RULE(1, READ) {
+            UAG(operators, admins)
+            SAG(control_subnet)
+            METHOD("x509")
+            PROTOCOL("tls")
+        }
+
+        # Write access only for IOCs on the trusted IOC subnet, from the facility CA
+        RULE(2, WRITE) {
+            SAG(trusted_iocs)
+            METHOD("x509")
+            AUTHORITY(AUTH_FACILITY)
+        }
+
+        # Admin RPC from any authenticated operator on the control subnet
+        RULE(3, RPC) {
+            UAG(admins)
+            SAG(control_subnet)
+            METHOD("x509")
+            AUTHORITY(AUTH_FACILITY)
+            PROTOCOL("tls")
+        }
+    }
+
 *Legacy compatible with Enhanced Security*
 
 .. code-block:: text
@@ -376,19 +425,31 @@ Legacy ``PeerInfo`` Structure
 
 .. _peer_credentials:
 
-New ``PeerCredentials`` Structure
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+``Credentials`` Structure (pvxsIoc API)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``pvxs::ioc::Credentials`` class provides the authenticated peer identity to
+IOC-side access security. It is constructed from the ``server::ClientCredentials``
+delivered by pvxs on each connection:
 
 .. code-block:: c++
 
-    struct PeerCredentials {
-        std::string peer;      // network address
-        std::string iface;     // network interface
-        std::string method;    // "anonymous", "ca", or "x509"
-        std::string authority; // Certificate Authority common name for x509 if mode is `Mutual` or blank
-        std::string account;   // User account if mode is `Mutual` or blank
-        bool isTLS;            // Secure transport status.  True is mode is `Mutual` or `Server-Only`
+    class Credentials {
+     public:
+        std::vector<std::string> cred; // credentials list: e.g. {"ca/username"}, {"x509/CN=greg"}
+        std::string method;            // "anonymous", "ca", or "x509"
+        std::string authority;         // CA common name (x509 mode); empty otherwise
+        std::string host;              // peer network address
+        std::string issuer_id;         // 8-hex-digit issuer SKID prefix (x509 mode)
+        std::string serial;            // zero-padded certificate serial number (x509 mode)
+        bool isTLS = false;            // true if the connection is over TLS (Mutual or Server-Only)
     };
+
+In mTLS (Mutual) mode, ``method`` is ``"x509"``, ``authority`` is the CA CN,
+``issuer_id`` and ``serial`` identify the specific certificate, and ``isTLS`` is
+``true``. In server-only TLS, ``isTLS`` is ``true`` but ``method`` is ``"ca"`` or
+``"anonymous"`` and the certificate fields are empty. In legacy TCP mode, ``isTLS``
+is ``false``.
 
 
 Enhanced Client Management
@@ -418,17 +479,37 @@ Enhanced Auditing
 Identity Structure for APIs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This unified structure replaces separate user/host parameters:
+The ``ASIDENTITY`` / ``ASGIDENTITY`` structure is passed to
+``asAddClientIdentity()`` and ``asChangeClientIdentity()`` for each connection.
+It carries the full authenticated peer identity including Subject Alternative Names:
 
 .. code-block:: c
 
+   /** Client SAN descriptor — caller retains ownership for session lifetime */
+   typedef struct {
+       enum asSanType type;   /* asSanIP or asSanDNS */
+       const char    *value;  /* e.g. "192.168.1.10" or "ioc01.example.com" */
+   } ASSAN;
+
    typedef struct asIdentity {
-       const char *user;         // User identifier (CN from certificate)
-       char *host;               // Host identifier (O from certificate)
-       const char *method;       // Authentication method ("ca", "x509", "anonymous")
-       const char *authority;    // Certificate authority
-       enum AsProtocol protocol; // Connection protocol (TCP/TLS)
-   } ASIDENTITY;
+       const char      *user;     /* CN from certificate (or username for legacy) */
+       char            *host;     /* O from certificate (hostname / realm / IP) */
+       const char      *method;   /* "anonymous", "ca", or "x509" */
+       const char      *authority;/* CA common name (x509 mode); empty otherwise */
+       enum AsProtocol  protocol; /* AS_PROTOCOL_TCP or AS_PROTOCOL_TLS */
+       const ASSAN     *sans;     /* array of SAN entries from the client certificate */
+       int              nsans;    /* number of entries in sans[] */
+   } ASGIDENTITY;
+
+   enum AsProtocol {
+       AS_PROTOCOL_NOT_SET = -1,
+       AS_PROTOCOL_TCP     =  0,  /* unencrypted plain-TCP connection */
+       AS_PROTOCOL_TLS     =  1   /* TLS (server-only or mTLS) */
+   };
+
+The ``sans`` / ``nsans`` fields expose the client certificate's Subject Alternative
+Names to the access security layer, enabling ``SAG`` rules (see :ref:`spvaauthorization`)
+to be evaluated against the IP address and DNS name SANs in the certificate.
 
 Protocol Enumeration
 ~~~~~~~~~~~~~~~~~~~~~

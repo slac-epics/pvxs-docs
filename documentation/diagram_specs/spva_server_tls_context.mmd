@@ -1,4 +1,4 @@
-%%{init: {
+ %%{init: {
     'theme': 'forest',
     'themeVariables': {
         'noteBkgColor': '#fff6e9',
@@ -23,14 +23,17 @@ stateDiagram-v2
     direction TB
     [*] --> Init
 
-    Init --> [*] : No Cert<br>OR Cert INVALID
-    Init --> DegradedMode: No Cert<br>OR Cert INVALID
-    Init --> TcpReady: Cert VALID<br>AND Monitoring Required
+    Init --> DegradedMode: No Cert<br>OR Cert REVOKED/EXPIRED
+    Init --> TcpOnly: Cert PENDING/PENDING_APPROVAL<br>OR SCHEDULED_OFFLINE<br>(TLS never yet established)
+    Init --> TcpReady: Cert VALID<br>AND Monitoring Required<br>(awaiting first GOOD)
     Init --> TlsReady: Cert VALID<br>AND Monitoring NOT Required
 
-    TcpReady --> DegradedMode: Cert Status NOT_GOOD<br>OR Stale
+    TcpOnly --> TlsReady: Cert Status GOOD<br>(monitoring confirmed VALID)
+    TcpOnly --> DegradedMode: Cert REVOKED or EXPIRED
+
     TcpReady --> TlsReady: Cert Status GOOD
+    TcpReady --> DegradedMode: Cert Status BAD (REVOKED/EXPIRED)<br>OR persistent STALE
 
-    DegradedMode --> TlsReady: Cert Status GOOD
-
-    TlsReady --> DegradedMode: Cert Status NOT_GOOD<br>OR Stale
+    TlsReady --> TcpOnly: Cert Status SUSPENDED<br>(SCHEDULED_OFFLINE or PENDING_RENEWAL)
+    TlsReady --> TcpReady: Cert Status UNKNOWN<br>(PVACMS momentarily unreachable)
+    TlsReady --> DegradedMode: Cert Status BAD (REVOKED/EXPIRED)

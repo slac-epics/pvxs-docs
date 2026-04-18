@@ -1,4 +1,4 @@
-%%{init: {
+ %%{init: {
     'theme': 'forest',
     'themeVariables': {
         'noteBkgColor': '#fff6e9',
@@ -22,18 +22,17 @@
 stateDiagram-v2
     direction TB
     [*] --> UNKNOWN
-    
-    UNKNOWN --> GOOD: Status GOOD
-    UNKNOWN --> NOT_GOOD: Status NOT_GOOD
-    UNKNOWN --> [*]: REVOKED
-    UNKNOWN --> [*]: EXPIRED
 
-    GOOD --> UNKNOWN: PVACMS Unreachable
-    GOOD --> [*]: REVOKED
-    GOOD --> [*]: EXPIRED
-    GOOD --> NOT_GOOD: Status NOT_GOOD
+    UNKNOWN --> GOOD: Status VALID
+    UNKNOWN --> SUSPENDED: Status SCHEDULED_OFFLINE<br>or PENDING_RENEWAL
+    UNKNOWN --> BAD: Status REVOKED or EXPIRED
 
-    NOT_GOOD --> GOOD: Status GOOD
-    NOT_GOOD --> UNKNOWN: PVACMS Unreachable
-    NOT_GOOD --> [*]: REVOKED
-    NOT_GOOD --> [*]: EXPIRED
+    GOOD --> UNKNOWN: PVACMS Unreachable<br>(status stale)
+    GOOD --> SUSPENDED: Status SCHEDULED_OFFLINE<br>or PENDING_RENEWAL
+    GOOD --> BAD: Status REVOKED or EXPIRED
+
+    SUSPENDED --> GOOD: Status VALID (window opened<br>or renewal completed)
+    SUSPENDED --> UNKNOWN: PVACMS Unreachable<br>(status stale)
+    SUSPENDED --> BAD: Status REVOKED or EXPIRED
+
+    BAD --> [*]: Connection torn down<br>(terminal — no recovery)

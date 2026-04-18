@@ -143,10 +143,13 @@ the database so the same certificate is not re-posted on the next cycle.
 
 Authenticators subscribe to their own entity certificate's ``CERT:STATUS`` PV. When a
 status update arrives with ``renewal_due = true``, the authenticator automatically
-submits a CCR to PVACMS. PVACMS recognises the request as a renewal of the existing
-certificate (matched by subject CN/O/OU/C and the ``renewal_due`` flag in the database)
-and extends the ``renew_by`` deadline — **no new certificate is issued and the keychain
-file is not modified**. The updated ``renew_by`` date is broadcast on the
+submits a CCR to PVACMS. PVACMS first performs full identity verification on the CCR
+(Kerberos ticket, LDAP signature, etc.), then looks up an existing certificate with
+matching subject fields (CN, O, OU, C) that has ``renewal_due`` set in the database.
+When found, it extends the ``renew_by`` deadline — **no new certificate is issued and
+the keychain file is not modified**. The match is on subject fields, not on the SKID
+or public key; the cryptographic assurance comes entirely from the authenticator's
+``verify()`` step. The updated ``renew_by`` date is broadcast on the
 ``CERT:STATUS`` PV; the ``CERT:CONFIG`` PV is also updated. If the CCR fails, the
 authenticator logs an error and waits for the next status update before retrying. The
 certificate remains ``VALID`` throughout; ``PENDING_RENEWAL`` is only entered if

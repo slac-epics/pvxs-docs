@@ -3,6 +3,17 @@
 |security| SPVA Glossary
 ==========================
 
+.. _glossary_spva:
+
+- SPVA — Secure PVAccess.
+
+  The set of extensions to the PVAccess protocol that add TLS 1.3 transport
+  encryption, mutual X.509 certificate authentication, certificate lifecycle
+  management (via PVACMS), and fine-grained access control (via SAG/METHOD/AUTHORITY
+  ACF predicates). SPVA is the umbrella term for the combination of pvxs TLS
+  transport, pvxs-cms certificate authority tools, and EPICS Base access-security
+  extensions described in this documentation.
+
 .. _glossary_auth_vs_authz:
 
 - Auth or ``AuthN`` (Authentication) vs ``AuthZ`` (Authorization).
@@ -93,6 +104,48 @@
 
 
 
+.. _glossary_ccr:
+
+- CCR — Certificate Creation Request.
+
+  The PVAccess RPC message sent by an authenticator tool (``authnstd``,
+  ``authnkrb``, ``authnldap``) to PVACMS to request a signed X.509 certificate.
+  The CCR carries the public key, requested subject fields (CN/O/OU/C), desired
+  validity period, SANs, schedule windows, and authenticator-specific verifier
+  data (e.g. a Kerberos GSSAPI token). PVACMS verifies the CCR, signs the
+  certificate, and returns it to the requester.
+
+.. _glossary_cert_status_pv:
+
+- Certificate Status PV (``CERT:STATUS``).
+
+  A PVAccess channel published by PVACMS for each managed certificate, named
+  ``CERT:STATUS:<issuer_id>:<serial>``. Clients and servers subscribe to this
+  PV to receive live certificate status updates (``VALID``, ``PENDING_RENEWAL``,
+  ``SCHEDULED_OFFLINE``, ``REVOKED``, etc.) and the ``renewal_due`` hint.
+  The SPVA status monitoring extension embedded in the X.509 certificate provides
+  the PV name so that peers can subscribe automatically on first connection.
+
+.. _glossary_degraded_mode:
+
+- DegradedMode.
+
+  A TLS context state in which TLS is not offered or accepted because the entity's
+  own certificate is permanently invalid (``REVOKED`` or ``EXPIRED``) or no
+  certificate or Trust Anchor is configured. The entity falls back to plain TCP.
+  This is a terminal state for a given certificate; recovery requires a new
+  certificate to be provisioned.
+
+.. _glossary_keychain:
+
+- Keychain file (PKCS#12 / ``.p12``).
+
+  The PKCS#12 file that stores an EPICS agent's private key, its X.509
+  certificate, and the certificate chain up to the Trust Anchor (Root CA). The
+  keychain file path is configured via ``EPICS_PVA_TLS_KEYCHAIN`` (client) or
+  ``EPICS_PVAS_TLS_KEYCHAIN`` (server). The private key never leaves this file;
+  it is used locally for the TLS handshake and CCR signing.
+
 .. _glossary_kerberos:
 .. _glossary_kerberos_ticket:
 
@@ -110,13 +163,87 @@
     to encode data is used to decode it therefore that key is never shared and so only the KDC
     can verify a Kerberos ticket that it has issued – clients or servers can’t independently verify that a ticket is valid.
 
+.. _glossary_mtls:
+
+- mTLS — Mutual TLS.
+
+  A TLS connection mode in which both the client and the server present X.509
+  certificates and authenticate each other during the TLS 1.3 handshake. In SPVA
+  this is the ``Mutual`` authentication mode; access-control rules see
+  ``METHOD("x509")`` and ``PROTOCOL("tls")``. Contrast with *server-only TLS*
+  where only the server certificate is presented.
+
 .. _glossary_ocsp:
 
-- OCSP - Online Certificate Status Protocol.
+- OCSP — Online Certificate Status Protocol.
 
-  A modern alternative to the Certificate Revocation List (CRL) that is used to check whether a digital certificate is valid or has been revoked.
-  While ``OCSP`` requests and responses are typically served over HTTP,
-  we use ``PVACMS`` to create and send, OCSP certificate status responses over the Secure PVAccess Protocol.
+  A modern alternative to the Certificate Revocation List (CRL) for checking
+  whether a digital certificate is valid or has been revoked. While standard
+  OCSP is served over HTTP, SPVA adapts the OCSP response format and delivers
+  signed OCSP responses over PVAccess via the ``CERT:STATUS`` PV, including
+  OCSP stapling (embedding a signed status response in the TLS handshake).
+
+.. _glossary_ocsp_stapling:
+
+- OCSP Stapling.
+
+  A TLS extension (RFC 6066) in which the server attaches a cached, CA-signed
+  OCSP response to the TLS handshake, saving the client a separate status-check
+  round-trip. In SPVA, PVACMS signs OCSP responses for each certificate, and
+  servers can staple them in the TLS handshake so clients receive an immediately
+  trusted status without contacting PVACMS at connection time.
+
+.. _glossary_pending_renewal:
+
+- ``PENDING_RENEWAL``.
+
+  A certificate status indicating that the certificate's ``renew_by`` deadline
+  has passed without a renewal CCR being received. The certificate is still
+  technically valid (``not_after`` has not been reached) but is treated as
+  ``SUSPENDED`` by pvxs: no new TLS connections are established, but existing
+  mTLS connections remain open. The status automatically returns to ``VALID``
+  when a valid renewal CCR arrives.
+
+.. _glossary_pvacms:
+
+- PVACMS — PVAccess Certificate Management System.
+
+  The certificate authority server provided by the ``pvxs-cms`` module. PVACMS
+  issues, stores, renews, and revokes X.509 certificates for EPICS agents. It
+  publishes certificate status over PVAccess (``CERT:STATUS``, ``CERT:HEALTH``,
+  ``CERT:METRICS``) and accepts certificate management commands via ``pvxcert``.
+
+.. _glossary_renewal_daemon:
+
+- Renewal daemon (``authn<method> -D``).
+
+  A long-running mode of the SPVA authenticator tools (``authnstd -D``,
+  ``authnkrb -D``, ``authnldap -D``) that monitors the entity's own
+  ``CERT:STATUS`` PV and automatically submits a renewal CCR when
+  ``renewal_due = true`` is received. The renewal extends the ``renew_by``
+  deadline on the existing certificate without issuing a new certificate or
+  modifying the keychain file.
+
+.. _glossary_renewal_due:
+
+- ``renewal_due``.
+
+  A boolean field in the ``CERT:STATUS`` PV, set to ``true`` by PVACMS when the
+  current time passes the midpoint between the last status-date and the
+  ``renew_by`` deadline. It is a proactive hint: the certificate is still
+  ``VALID``, but authenticators (and the renewal daemon) should submit a CCR
+  now to avoid the certificate entering ``PENDING_RENEWAL``.
+
+.. _glossary_renew_by:
+
+- ``renew_by``.
+
+  A soft expiry date embedded in a certificate's PVACMS database record and
+  broadcast on its ``CERT:STATUS`` PV. When ``now >= renew_by``, the certificate
+  transitions to ``PENDING_RENEWAL``. For Kerberos-authenticated certificates,
+  ``renew_by`` is set to ``now + remaining_ticket_lifetime`` at issuance,
+  effectively tying the SPVA certificate's renewal cycle to the Kerberos ticket
+  lifecycle.
 
 .. _glossary_pkcs12:
 
@@ -134,21 +261,62 @@
 
   The PKCS#12 files are referenced by environment variables described in the :ref:`configuration`.
 
+.. _glossary_sag:
+
+- SAG — SAN Access Group.
+
+  An EPICS access-security predicate (defined in an ACF file alongside ``UAG``
+  and ``HAG``) that restricts access based on Subject Alternative Name (SAN)
+  entries from the client's TLS certificate. ``SAG`` entries can match IP
+  addresses (exact or CIDR subnet) and DNS names (exact or glob). A client
+  without SANs — e.g. a plain-TCP connection — automatically fails the SAG
+  predicate. See :ref:`spvaauthorization` for the full syntax.
+
+.. _glossary_scheduled_offline:
+
+- ``SCHEDULED_OFFLINE``.
+
+  A certificate status indicating that the certificate is within a configured
+  offline schedule window (see :ref:`validity_schedules`). The certificate is
+  operationally suspended during the window and returns to ``VALID``
+  automatically when the window ends. Treated as ``SUSPENDED`` by pvxs.
+
+.. _glossary_tcponly:
+
+- TcpOnly.
+
+  A TLS context state in which the entity has a certificate but it is not yet
+  operationally usable (status ``PENDING``, ``PENDING_APPROVAL``,
+  ``SCHEDULED_OFFLINE``, or ``PENDING_RENEWAL`` before TLS was ever established).
+  Plain-TCP connections are accepted while the status monitor waits for ``VALID``.
+  Once confirmed, the context upgrades automatically to ``TlsReady``.
+
+.. _glossary_tcpready:
+
+- TcpReady.
+
+  A TLS context state in which the entity's certificate was previously ``GOOD``
+  (``TlsReady``) but the most recent status is ``UNKNOWN`` (e.g. PVACMS is
+  momentarily unreachable). TCP connections are accepted while waiting for
+  status to recover to ``GOOD``.
+
+.. _glossary_trust_anchor:
+
+- Trust Anchor (Root CA certificate).
+
+  The self-signed Root CA certificate that an EPICS agent uses to verify peer
+  certificate chains. Any certificate whose chain does not trace back to the
+  Trust Anchor is rejected at the TLS handshake. Distributed as a PKCS#12 file
+  via ``authnstd --trust-anchor`` or ``authnkrb --trust-anchor``.
+
 .. _glossary_skid:
 
-- SKID - Subject Key Identifier.
+- SKID — Subject Key Identifier.
 
-  - The SKID uniquely identifies a certificate's key pair by computing a hash of its public key.
-    In simple terms, it links a certificate to the underlying key pair.
-  - In our implementation, the SKID serves as a unique identifier for an entity—whether that be a process,
-    machine, IOC, service, or any participant in the Secure PVAccess network.
-    It effectively states, "This is my key pair," ensuring consistency when certificates are renewed.
-  - Practically, the SKID is generated by hashing the public key. Since the public key is
-    uniquely paired with its corresponding private key, the hash reliably identifies the key pair.
-  - An EPICS agent stores the private key in the same key file as the certificate. When renewing a certificate,
-    the agent reuses the same private key, which is copied to the new key file,
-    resulting in an identical SKID.
-  - According to our policy, a new certificate with the same SKID cannot be issued
-    unless the previous certificate has either ``EXPIRED`` or been ``REVOKED``.
-  - For display purposes, we show only the first 8 characters of the SKID’s hexadecimal hash, providing a concise identifier.
+  - Uniquely identifies a key pair by hashing the public key, linking the
+    certificate to the underlying key pair.
+  - In SPVA, the SKID is the persistent identity for an entity across certificate
+    renewals: because the same private key is reused, the SKID remains constant.
+  - For display, only the first 8 hex characters are shown — the ``issuer_id``
+    prefix in ``<issuer_id>:<serial>`` certificate IDs.
 

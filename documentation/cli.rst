@@ -117,17 +117,20 @@ Examples
 
 .. code-block:: shell
 
-   # Query status by certificate ID
-   pvxcert 27975e6b:07246297371190731775
+   # Simplest form: no arguments reads from $EPICS_PVA_TLS_KEYCHAIN automatically
+   pvxcert
 
-   # Query status from a keychain file
+   # Query from an explicit keychain file
    pvxcert -f ~/.config/pva/1.5/client.p12
+
+   # Verbose X.509 dump — full chain, all extensions, all SANs (-X / --dump)
+   pvxcert -X -f ~/.config/pva/1.5/client.p12
 
    # Query a password-protected keychain file
    pvxcert -p -f /path/to/server.p12
 
-   # Query with verbose X.509 dump (shows full chain and all extensions)
-   pvxcert --dump -f ~/.config/pva/1.5/client.p12
+   # Query by certificate ID (issuer:serial)
+   pvxcert 27975e6b:07246297371190731775
 
 Example status output:
 
