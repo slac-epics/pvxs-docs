@@ -26,6 +26,9 @@ PVACMS Usage
       pvacms (-V | --version)                    Print version and exit
       pvacms [admin options] --admin-keychain-new <new_name>
                                                  Generate a new Admin User's keychain file, update the ACF file, and exit
+      pvacms [admin options] --admin-keychain-force <new_name> [options]
+                                                 Force (re)generation of the Admin User's keychain file (overwriting
+                                                 any existing file), update the ACF file, then continue running PVACMS
 
     options:
       (-c | --cert-auth-keychain) <cert_auth_keychain>
@@ -92,7 +95,13 @@ PVACMS Usage
     admin options:
             --acf <acf_file>                      Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf
       (-a | --admin-keychain) <admin_keychain>    Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.5/admin.p12
-            --admin-keychain-pwd <file>          Specify location of file containing Admin User's keychain file password
+            --admin-keychain-pwd <file>           Specify location of file containing Admin User's keychain file password
+            --admin-keychain-new <new_name>       Generate a new Admin User's keychain file, update the ACF file, and exit.
+                                                  Refuses to overwrite an existing admin keychain file; use
+                                                  ``--admin-keychain-force`` to replace one in place.
+            --admin-keychain-force <new_name>     Force (re)generation of the Admin User's keychain file at startup,
+                                                  overwriting any existing file and updating the ACF file, then
+                                                  continue running PVACMS. Mutually exclusive with ``--admin-keychain-new``.
 
 
 .. _pvacms_configuration:
@@ -344,6 +353,51 @@ certificates in the ``PENDING_APPROVAL`` state and ``Revoke`` ``VALID`` ones.
 
     # Revoke VALID certificate 3519231305961542464
     pvxcert fedcba98:3519231305961542464 -R
+
+.. _pvacms_admin_regenerate:
+
+Regenerating the Admin Keychain
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The default admin keychain is created automatically the first time PVACMS
+initialises its Certificate Authority.  Once a certificate authority keychain
+already exists, subsequent PVACMS startups assume the admin keychain also
+exists and will not recreate it — so a lost or compromised admin keychain
+must be regenerated explicitly.
+
+Two admin options control regeneration:
+
+``--admin-keychain-new <name>``
+    Generate a new admin keychain, add the given name to the ACF
+    ``CMS_ADMIN`` group, then **exit**.  This is the original bootstrap form,
+    intended to be run as a one-shot command.  It refuses to overwrite an
+    existing admin keychain file — remove the file first (or use
+    ``--admin-keychain-force``) if you need to replace one in place.
+    When using this option, the only other options accepted are
+    ``-a``/``--admin-keychain``, ``--admin-keychain-pwd``, and ``--acf``.
+
+``--admin-keychain-force <name>``
+    Force (re)generation of the admin keychain at startup **without
+    exiting**.  If an admin keychain file already exists at the configured
+    path it is deleted and a fresh one written; the given name is added to
+    the ACF ``CMS_ADMIN`` group; PVACMS then continues through its normal
+    startup sequence and begins servicing requests.  Use this when you want
+    to rotate (or recover) the admin keychain as part of a live PVACMS
+    deployment without needing a separate one-shot invocation.  Accepts any
+    other PVACMS runtime option and is mutually exclusive with
+    ``--admin-keychain-new``.
+
+.. code-block:: shell
+
+    # One-shot: create admin keychain then exit
+    pvacms --admin-keychain-new admin
+
+    # Rotate admin keychain in place and keep PVACMS running
+    pvacms --admin-keychain-force admin
+
+Both forms write the keychain to the path given by ``-a``/``--admin-keychain``
+(default ``${XDG_CONFIG_HOME}/pva/1.5/admin.p12``) and update the ACF file
+named by ``--acf`` (default ``${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf``).
 
 .. _pvacms_clustering:
 
