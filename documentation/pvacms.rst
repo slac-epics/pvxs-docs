@@ -26,9 +26,6 @@ PVACMS Usage
       pvacms (-V | --version)                    Print version and exit
       pvacms [admin options] --admin-keychain-new <new_name>
                                                  Generate a new Admin User's keychain file, update the ACF file, and exit
-      pvacms [admin options] --admin-keychain-force <new_name> [options]
-                                                 Force (re)generation of the Admin User's keychain file (overwriting
-                                                 any existing file), update the ACF file, then continue running PVACMS
 
     options:
       (-c | --cert-auth-keychain) <cert_auth_keychain>
@@ -97,11 +94,13 @@ PVACMS Usage
       (-a | --admin-keychain) <admin_keychain>    Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.5/admin.p12
             --admin-keychain-pwd <file>           Specify location of file containing Admin User's keychain file password
             --admin-keychain-new <new_name>       Generate a new Admin User's keychain file, update the ACF file, and exit.
-                                                  Refuses to overwrite an existing admin keychain file; use
-                                                  ``--admin-keychain-force`` to replace one in place.
-            --admin-keychain-force <new_name>     Force (re)generation of the Admin User's keychain file at startup,
-                                                  overwriting any existing file and updating the ACF file, then
-                                                  continue running PVACMS. Mutually exclusive with ``--admin-keychain-new``.
+                                                  Fails if the keychain file already exists or a certificate with that
+                                                  subject is already registered; use ``--admin-keychain-ensure`` for
+                                                  idempotent at-startup handling.
+            --admin-keychain-ensure <new_name>    Ensure the Admin User's keychain exists at startup: create one if
+                                                  missing, skip with a warning if a certificate with that subject is
+                                                  already registered, update the ACF file, then continue running
+                                                  PVACMS. Mutually exclusive with ``--admin-keychain-new``.
 
 
 .. _pvacms_configuration:
@@ -354,46 +353,54 @@ certificates in the ``PENDING_APPROVAL`` state and ``Revoke`` ``VALID`` ones.
     # Revoke VALID certificate 3519231305961542464
     pvxcert fedcba98:3519231305961542464 -R
 
-.. _pvacms_admin_regenerate:
+.. _pvacms_admin_bootstrap:
 
-Regenerating the Admin Keychain
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Bootstrapping and Recovering Admin Keychains
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The default admin keychain is created automatically the first time PVACMS
 initialises its Certificate Authority.  Once a certificate authority keychain
 already exists, subsequent PVACMS startups assume the admin keychain also
-exists and will not recreate it — so a lost or compromised admin keychain
-must be regenerated explicitly.
+exists and will not recreate it — so bootstrapping an extra admin, or
+recovering from a lost admin keychain file, must be requested explicitly.
 
-Two admin options control regeneration:
+Two admin options control this:
 
 ``--admin-keychain-new <name>``
     Generate a new admin keychain, add the given name to the ACF
-    ``CMS_ADMIN`` group, then **exit**.  This is the original bootstrap form,
-    intended to be run as a one-shot command.  It refuses to overwrite an
-    existing admin keychain file — remove the file first (or use
-    ``--admin-keychain-force``) if you need to replace one in place.
-    When using this option, the only other options accepted are
-    ``-a``/``--admin-keychain``, ``--admin-keychain-pwd``, and ``--acf``.
+    ``CMS_ADMIN`` group, then **exit**.  This is the classic bootstrap form,
+    intended to be run as a one-shot command.  It fails if the keychain file
+    already exists, or if the certificate database already has a cert with
+    the same subject — use ``--admin-keychain-ensure`` for idempotent
+    at-startup handling.  When using this option, the only other options
+    accepted are ``-a``/``--admin-keychain``, ``--admin-keychain-pwd``, and
+    ``--acf``.
 
-``--admin-keychain-force <name>``
-    Force (re)generation of the admin keychain at startup **without
-    exiting**.  If an admin keychain file already exists at the configured
-    path it is deleted and a fresh one written; the given name is added to
-    the ACF ``CMS_ADMIN`` group; PVACMS then continues through its normal
-    startup sequence and begins servicing requests.  Use this when you want
-    to rotate (or recover) the admin keychain as part of a live PVACMS
-    deployment without needing a separate one-shot invocation.  Accepts any
+``--admin-keychain-ensure <name>``
+    Ensure the admin keychain exists at startup **without exiting**, then
+    continue running PVACMS normally.  Resolution rules:
+
+    - If the keychain file is missing and no certificate with that subject
+      is in the DB, a fresh keychain is created.
+    - If a certificate with the same subject is already registered in the
+      database, PVACMS logs a warning that the certificate will not be
+      created and continues startup.  The ACF ``CMS_ADMIN`` group is still
+      updated (idempotent), so the operator can reuse the existing
+      certificate for that admin subject.
+    - If the keychain file already exists on disk, it is left untouched.
+
+    This form is safe to enable unconditionally on every PVACMS start (eg.
+    in a supervisor/systemd unit or container entrypoint).  Accepts any
     other PVACMS runtime option and is mutually exclusive with
     ``--admin-keychain-new``.
 
 .. code-block:: shell
 
-    # One-shot: create admin keychain then exit
+    # One-shot: bootstrap a new admin and exit
     pvacms --admin-keychain-new admin
 
-    # Rotate admin keychain in place and keep PVACMS running
-    pvacms --admin-keychain-force admin
+    # At every startup: ensure the admin is in the ACF and a keychain exists
+    pvacms --admin-keychain-ensure admin
 
 Both forms write the keychain to the path given by ``-a``/``--admin-keychain``
 (default ``${XDG_CONFIG_HOME}/pva/1.5/admin.p12``) and update the ACF file
