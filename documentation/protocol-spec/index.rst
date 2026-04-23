@@ -16,6 +16,7 @@ this is your reference.
    spva
    spvaauth
    spvaauthorization
+   cert-protocol
 
 .. seealso::
 

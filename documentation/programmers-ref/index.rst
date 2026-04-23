@@ -14,6 +14,7 @@ management from the application side, and EXPERT API additions.
    :maxdepth: 2
 
    configuration
+   cert-management
 
 .. seealso::
 

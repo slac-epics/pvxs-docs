@@ -31,7 +31,8 @@ For PVXS library documentation see `PVXS Docs <https://slac-epics.github.io/pvxs
    programmers-ref/configuration
    protocol-spec/spvaauth
    protocol-spec/spvaauthorization
-   spvacerts
+   protocol-spec/cert-protocol
+   programmers-ref/cert-management
    user-manual/pvacms
    user-manual/cli
    user-manual/spvaqstart
