@@ -41,7 +41,7 @@ For PVXS library documentation see `PVXS Docs <https://slac-epics.github.io/pvxs
    user-manual/spvaqstartldap
    user-manual/spvaqsgw
    shared/spvaglossary
-   appendix
+   programmers-ref/expert-api
 
 
 Indices and tables

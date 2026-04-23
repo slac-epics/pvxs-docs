@@ -15,6 +15,7 @@ management from the application side, and EXPERT API additions.
 
    configuration
    cert-management
+   expert-api
 
 .. seealso::
 
