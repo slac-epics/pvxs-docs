@@ -17,3 +17,7 @@ build internals, contributing guidelines, and design notes.
    ``pvxs/DESIGN-PVACMS-CLUSTER.md`` and
    ``phoebus/core/pva/TLS.md``.
 
+.. seealso::
+
+   :doc:`/shared/spvaglossary` — definitions of SPVA terms used across pvxs documentation.
+

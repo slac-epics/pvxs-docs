@@ -20,3 +20,7 @@ the Secure PVA Gateway.
    spvaqsgw
    pvacms
    cli
+
+.. seealso::
+
+   :doc:`/shared/spvaglossary` — definitions of SPVA terms used across this manual.

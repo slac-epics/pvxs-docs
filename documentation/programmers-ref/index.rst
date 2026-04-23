@@ -14,3 +14,7 @@ management from the application side, and EXPERT API additions.
    :maxdepth: 2
 
    configuration
+
+.. seealso::
+
+   :doc:`/shared/spvaglossary` — definitions of SPVA terms used across this manual.

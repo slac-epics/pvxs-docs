@@ -39,7 +39,7 @@ For PVXS library documentation see `PVXS Docs <https://slac-epics.github.io/pvxs
    user-manual/spvaqstartkrb
    user-manual/spvaqstartldap
    user-manual/spvaqsgw
-   spvaglossary
+   shared/spvaglossary
    appendix
 
 

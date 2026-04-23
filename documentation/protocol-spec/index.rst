@@ -16,3 +16,7 @@ this is your reference.
    spva
    spvaauth
    spvaauthorization
+
+.. seealso::
+
+   :doc:`/shared/spvaglossary` — definitions of SPVA terms used across this manual.
