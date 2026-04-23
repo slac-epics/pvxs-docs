@@ -1,5 +1,3 @@
-:orphan:
-
 .. _programmers_ref:
 
 Programmers Reference

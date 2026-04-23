@@ -1,5 +1,3 @@
-:orphan:
-
 .. _maintainer_docs:
 
 Source-Code Maintainer Documentation

@@ -1,5 +1,3 @@
-:orphan:
-
 .. _user_manual:
 
 SPVA User Manual

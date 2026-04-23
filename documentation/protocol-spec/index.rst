@@ -1,5 +1,3 @@
-:orphan:
-
 .. _protocol_spec:
 
 Protocol Specification
