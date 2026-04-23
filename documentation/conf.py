@@ -111,7 +111,25 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.githubpages',
     'breathe',
+    'sphinx_reredirects',
 ]
+
+redirects = {
+    'spva':              'protocol-spec/spva.html',
+    'spvaauth':          'protocol-spec/spvaauth.html',
+    'spvaauthorization': 'protocol-spec/spvaauthorization.html',
+    'spvacerts':         'protocol-spec/cert-protocol.html',
+    'configuration':     'programmers-ref/configuration.html',
+    'appendix':          'programmers-ref/expert-api.html',
+    'pvacms':            'user-manual/pvacms.html',
+    'cli':               'user-manual/cli.html',
+    'spvaqstart':        'user-manual/spvaqstart.html',
+    'spvaqstartstd':     'user-manual/spvaqstartstd.html',
+    'spvaqstartkrb':     'user-manual/spvaqstartkrb.html',
+    'spvaqstartldap':    'user-manual/spvaqstartldap.html',
+    'spvaqsgw':          'user-manual/spvaqsgw.html',
+    'spvaglossary':      'shared/spvaglossary.html',
+}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
