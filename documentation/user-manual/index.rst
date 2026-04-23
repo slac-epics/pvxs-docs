@@ -13,3 +13,10 @@ the Secure PVA Gateway.
 .. toctree::
    :maxdepth: 2
 
+   spvaqstart
+   spvaqstartstd
+   spvaqstartkrb
+   spvaqstartldap
+   spvaqsgw
+   pvacms
+   cli

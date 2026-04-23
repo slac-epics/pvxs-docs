@@ -32,13 +32,13 @@ For PVXS library documentation see `PVXS Docs <https://slac-epics.github.io/pvxs
    protocol-spec/spvaauth
    protocol-spec/spvaauthorization
    spvacerts
-   pvacms
-   cli
-   spvaqstart
-   spvaqstartstd
-   spvaqstartkrb
-   spvaqstartldap
-   spvaqsgw
+   user-manual/pvacms
+   user-manual/cli
+   user-manual/spvaqstart
+   user-manual/spvaqstartstd
+   user-manual/spvaqstartkrb
+   user-manual/spvaqstartldap
+   user-manual/spvaqsgw
    spvaglossary
    appendix
 
