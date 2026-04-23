@@ -27,10 +27,10 @@ For PVXS library documentation see `PVXS Docs <https://slac-epics.github.io/pvxs
    :maxdepth: 3
    :caption: Contents:
 
-   spva
+   protocol-spec/spva
    configuration
-   spvaauth
-   spvaauthorization
+   protocol-spec/spvaauth
+   protocol-spec/spvaauthorization
    spvacerts
    pvacms
    cli

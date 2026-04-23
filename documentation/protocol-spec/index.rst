@@ -13,3 +13,6 @@ this is your reference.
 .. toctree::
    :maxdepth: 2
 
+   spva
+   spvaauth
+   spvaauthorization
