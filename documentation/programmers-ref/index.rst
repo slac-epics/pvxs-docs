@@ -13,3 +13,4 @@ management from the application side, and EXPERT API additions.
 .. toctree::
    :maxdepth: 2
 
+   configuration

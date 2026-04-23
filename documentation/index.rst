@@ -28,7 +28,7 @@ For PVXS library documentation see `PVXS Docs <https://slac-epics.github.io/pvxs
    :caption: Contents:
 
    protocol-spec/spva
-   configuration
+   programmers-ref/configuration
    protocol-spec/spvaauth
    protocol-spec/spvaauthorization
    spvacerts
