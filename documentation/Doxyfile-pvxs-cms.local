@@ -1,0 +1,10 @@
+# Per-run override for the pvxs-cms source tree.
+# Concatenated to documentation/Doxyfile and piped into doxygen by
+# the root Makefile's "doxygen-pvxs-cms" target.
+
+PROJECT_NAME           = "PVXS-CMS"
+# Paths are relative to documentation/ (Doxygen's CWD). See the note in
+# Doxyfile-pvxs.local about the two-up sibling layout.
+INPUT                  = ../../pvxs-cms/src/common ../../pvxs-cms/src/pvacms ../../pvxs-cms/src/authn ../../pvxs-cms/src/tools
+XML_OUTPUT             = xml/pvxs-cms
+GENERATE_TAGFILE       = pvxs-docs-pvxs-cms.tag

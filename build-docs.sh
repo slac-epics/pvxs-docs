@@ -2,21 +2,24 @@
 #
 # build-docs.sh — Build PVXS HTML documentation from RST sources
 #
-# Generates Mermaid diagrams, converts SVGs, then runs Sphinx to compile
-# the RST files into HTML.  No Doxygen / C++ code scanning is performed;
-# Breathe directives in some RST pages will emit warnings but won't block
-# the build.
+# Generates Mermaid diagrams, runs Doxygen (cross-repo C++ API extraction)
+# against the sibling pvxs and pvxs-cms checkouts, converts SVGs, then runs
+# Sphinx to compile the RST files into HTML. The Doxygen step produces XML
+# consumed by Breathe directives in authored RST pages plus a tag file
+# (pvxs-docs.tag) published at the site root for external cross-linking.
 #
 # Output directory: ../pvxs-pages  (sibling of this repository)
 #
 # Prerequisites (install once):
-#   brew install inkscape               # SVG conversion  (optional — only for qgroup.rst images)
-#   pip install sphinx breathe          # Sphinx + Breathe stub (Breathe is listed in conf.py)
+#   brew install inkscape doxygen        # SVG conversion + Doxygen
+#   pip install sphinx breathe furo sphinx-reredirects
 #   npm install -g @mermaid-js/mermaid-cli   # OR: npx will fetch it on the fly
+#   sibling clones at ../pvxs (branch tls) and ../pvxs-cms (branch main)
 #
 # Usage:
-#   ./build-docs.sh            # full build (mermaid + inkscape + sphinx)
+#   ./build-docs.sh            # full build (mermaid + doxygen + inkscape + sphinx)
 #   ./build-docs.sh --no-mermaid   # skip mermaid regeneration (reuse existing PNGs)
+#   ./build-docs.sh --no-doxygen   # skip Doxygen extraction (reuse existing xml/)
 #   ./build-docs.sh --no-inkscape  # skip inkscape SVG conversion
 #   ./build-docs.sh --clean        # remove previous output and intermediates, then rebuild
 
@@ -35,6 +38,7 @@ PYTHON="${PYTHON:-python3}"
 INKSCAPE="${INKSCAPE:-inkscape}"
 
 DO_MERMAID=true
+DO_DOXYGEN=true
 DO_INKSCAPE=true
 DO_CLEAN=false
 
@@ -45,12 +49,14 @@ DO_CLEAN=false
 for arg in "$@"; do
     case "${arg}" in
         --no-mermaid)  DO_MERMAID=false ;;
+        --no-doxygen)  DO_DOXYGEN=false ;;
         --no-inkscape) DO_INKSCAPE=false ;;
         --clean)       DO_CLEAN=true ;;
         -h|--help)
-            echo "Usage: $0 [--no-mermaid] [--no-inkscape] [--clean] [-h|--help]"
+            echo "Usage: $0 [--no-mermaid] [--no-doxygen] [--no-inkscape] [--clean] [-h|--help]"
             echo ""
             echo "  --no-mermaid   Skip Mermaid diagram generation (reuse existing PNGs)"
+            echo "  --no-doxygen   Skip Doxygen extraction (reuse existing xml/)"
             echo "  --no-inkscape  Skip Inkscape SVG conversion"
             echo "  --clean        Remove previous output before building"
             echo ""
@@ -88,6 +94,8 @@ if ${DO_CLEAN}; then
     rm -rf "${OUTPUT_DIR}"
     rm -rf "${DOC_DIR}/_build"
     rm -rf "${DOC_DIR}/_image"
+    rm -rf "${DOC_DIR}/xml"
+    rm -f "${DOC_DIR}/pvxs-docs.tag" "${DOC_DIR}/pvxs-docs-pvxs.tag" "${DOC_DIR}/pvxs-docs-pvxs-cms.tag"
 fi
 
 # ---------------------------------------------------------------------------
@@ -128,7 +136,38 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 2 — Convert SVGs via Inkscape  (.svg → _image/*.svg)
+# Step 2 — Doxygen extraction from sibling pvxs and pvxs-cms checkouts
+# ---------------------------------------------------------------------------
+
+if ${DO_DOXYGEN}; then
+    if require_cmd doxygen; then
+        if [ -d "${SCRIPT_DIR}/../pvxs" ] && [ -d "${SCRIPT_DIR}/../pvxs-cms" ]; then
+            info "Running Doxygen (cross-repo C++ API extraction)"
+
+            mkdir -p "${DOC_DIR}/xml"
+
+            info "  pvxs (../pvxs)"
+            (cd "${DOC_DIR}" && cat Doxyfile Doxyfile-pvxs.local | doxygen -)
+
+            info "  pvxs-cms (../pvxs-cms)"
+            (cd "${DOC_DIR}" && cat Doxyfile Doxyfile-pvxs-cms.local | doxygen -)
+
+            info "  Concatenating tag files into pvxs-docs.tag"
+            (cd "${DOC_DIR}" && cat pvxs-docs-pvxs.tag pvxs-docs-pvxs-cms.tag > pvxs-docs.tag)
+        else
+            warn "Sibling repos not present (../pvxs and/or ../pvxs-cms) — skipping Doxygen."
+            warn "Maintainer-manual API-reference pages will render with empty Breathe directives."
+        fi
+    else
+        warn "doxygen not found — skipping Doxygen step."
+        warn "Install with: brew install doxygen  (or: apt-get install doxygen)"
+    fi
+else
+    info "Skipping Doxygen extraction (--no-doxygen)"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 3 — Convert SVGs via Inkscape  (.svg → _image/*.svg)
 # ---------------------------------------------------------------------------
 
 if ${DO_INKSCAPE}; then
@@ -153,7 +192,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3 — Build HTML with Sphinx
+# Step 4 — Build HTML with Sphinx
 # ---------------------------------------------------------------------------
 
 info "Building HTML documentation with Sphinx"
@@ -182,7 +221,7 @@ mkdir -p "${OUTPUT_DIR}"
     "${OUTPUT_DIR}"
 
 # ---------------------------------------------------------------------------
-# Step 4 — Copy extra assets into the output
+# Step 5 — Copy extra assets into the output
 # ---------------------------------------------------------------------------
 
 info "Copying extra assets"
@@ -205,7 +244,11 @@ if [ -d "${OUTPUT_DIR}/_static/fonts" ]; then
     cp -r "${OUTPUT_DIR}/_static/fonts/"* "${OUTPUT_DIR}/fonts/" 2>/dev/null || true
 fi
 
-# GitHub Pages no-Jekyll marker
+if [ -f "${DOC_DIR}/pvxs-docs.tag" ]; then
+    info "Publishing Doxygen tag file: pvxs-docs.tag"
+    cp "${DOC_DIR}/pvxs-docs.tag" "${OUTPUT_DIR}/pvxs-docs.tag"
+fi
+
 touch "${OUTPUT_DIR}/.nojekyll"
 
 # ---------------------------------------------------------------------------

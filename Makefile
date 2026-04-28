@@ -1,18 +1,22 @@
 # Makefile — SPVA Documentation Build
 #
-# Builds Sphinx HTML documentation from RST sources.
-# No Doxygen / C++ code scanning; Breathe warnings are non-fatal.
+# Builds Sphinx HTML documentation from RST sources, with optional
+# Doxygen extraction of C++ API reference from sibling repos
+# (../../pvxs and ../../pvxs-cms relative to documentation/).
 #
 # Targets:
-#   make            — full build (mermaid + sphinx)
-#   make html       — sphinx only (skip mermaid)
+#   make            — full build (mermaid + doxygen + sphinx)
+#   make html       — sphinx only (skip mermaid + doxygen)
 #   make mermaid    — regenerate mermaid diagrams only
+#   make doxygen    — run Doxygen for both sibling repos (xml/ + tag file)
 #   make clean      — remove build artifacts
 #   make serve      — build and serve locally on port 8000
 #
 # Prerequisites:
-#   pip install sphinx breathe
+#   pip install sphinx breathe furo sphinx-reredirects
 #   npm install -g @mermaid-js/mermaid-cli   (or use npx)
+#   doxygen (1.9.x apt-get on linux, 1.10.x brew on macOS)
+#   sibling clones ../../pvxs (branch tls) and ../../pvxs-cms (branch main)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -44,7 +48,7 @@ PUPPETEER_CFG := $(shell mktemp)
 # ---------------------------------------------------------------------------
 
 .PHONY: all
-all: mermaid html
+all: mermaid doxygen html
 
 # ---------------------------------------------------------------------------
 # Mermaid diagram generation
@@ -58,6 +62,36 @@ $(DOC_DIR)/%.png: $(DIAGRAM_DIR)/%.mmd
 	@printf '{"args":["--no-sandbox","--disable-setuid-sandbox"]}\n' > $(PUPPETEER_CFG)
 	$(MMDC) -i $< -o $@ -s 2 -p $(PUPPETEER_CFG)
 	@rm -f $(PUPPETEER_CFG)
+
+# ---------------------------------------------------------------------------
+# Doxygen — C++ API extraction from sibling repos
+# ---------------------------------------------------------------------------
+#
+# Two runs share documentation/Doxyfile (the bulk of the configuration) and
+# layer on per-project overrides from documentation/Doxyfile-pvxs.local
+# and documentation/Doxyfile-pvxs-cms.local. The shared file's INPUT,
+# XML_OUTPUT, GENERATE_TAGFILE, and PROJECT_NAME are intentionally empty;
+# the per-run file fills them in. Output:
+#   documentation/xml/pvxs/         (Breathe project: PVXS — default)
+#   documentation/xml/pvxs-cms/     (Breathe project: PVXS_CMS)
+#   documentation/pvxs-docs.tag     (concatenation of the two per-project tags)
+
+.PHONY: doxygen doxygen-pvxs doxygen-pvxs-cms
+doxygen: doxygen-pvxs doxygen-pvxs-cms
+	@printf '\033[1;34m==>\033[0m Concatenating tag files\n'
+	@cd $(DOC_DIR) && cat pvxs-docs-pvxs.tag pvxs-docs-pvxs-cms.tag > pvxs-docs.tag
+
+doxygen-pvxs:
+	@test -d ../pvxs || (echo "ERROR: sibling ../pvxs not present. Clone slac-epics/pvxs branch tls into the workspace (a sibling of pvxs-docs) before running doxygen." && false)
+	@printf '\033[1;34m==>\033[0m Doxygen run: pvxs\n'
+	@mkdir -p $(DOC_DIR)/xml
+	@cd $(DOC_DIR) && cat Doxyfile Doxyfile-pvxs.local | doxygen -
+
+doxygen-pvxs-cms:
+	@test -d ../pvxs-cms || (echo "ERROR: sibling ../pvxs-cms not present. Clone slac-epics/pvxs-cms branch main into the workspace (a sibling of pvxs-docs) before running doxygen." && false)
+	@printf '\033[1;34m==>\033[0m Doxygen run: pvxs-cms\n'
+	@mkdir -p $(DOC_DIR)/xml
+	@cd $(DOC_DIR) && cat Doxyfile Doxyfile-pvxs-cms.local | doxygen -
 
 # ---------------------------------------------------------------------------
 # Sphinx HTML build
@@ -81,6 +115,11 @@ html:
 		cp -r "$(OUTPUT_DIR)/_static/fonts/"* "$(OUTPUT_DIR)/fonts/" 2>/dev/null || true; \
 	fi
 	@touch $(OUTPUT_DIR)/.nojekyll
+	@# Copy Doxygen tag file to site root so external sites can cross-link
+	@if [ -f "$(DOC_DIR)/pvxs-docs.tag" ]; then \
+		cp "$(DOC_DIR)/pvxs-docs.tag" "$(OUTPUT_DIR)/pvxs-docs.tag"; \
+		printf '\033[1;34m==>\033[0m Published tag file: %s/pvxs-docs.tag\n' "$(OUTPUT_DIR)"; \
+	fi
 	@printf '\033[1;34m==>\033[0m Done: %s/index.html\n' "$(OUTPUT_DIR)"
 
 # ---------------------------------------------------------------------------
@@ -91,6 +130,8 @@ html:
 clean:
 	rm -rf $(OUTPUT_DIR)
 	rm -rf $(DOC_DIR)/_build $(DOC_DIR)/_image
+	rm -rf $(DOC_DIR)/xml
+	rm -f $(DOC_DIR)/pvxs-docs.tag $(DOC_DIR)/pvxs-docs-pvxs.tag $(DOC_DIR)/pvxs-docs-pvxs-cms.tag
 
 # ---------------------------------------------------------------------------
 # Serve locally
@@ -110,9 +151,10 @@ help:
 	@echo "SPVA Documentation Build"
 	@echo ""
 	@echo "Targets:"
-	@echo "  all      (default) Build mermaid diagrams + Sphinx HTML"
-	@echo "  html     Build Sphinx HTML only (skip mermaid)"
+	@echo "  all      (default) Build mermaid + Doxygen + Sphinx HTML"
+	@echo "  html     Build Sphinx HTML only (skip mermaid + Doxygen)"
 	@echo "  mermaid  Regenerate Mermaid diagrams only"
+	@echo "  doxygen  Run Doxygen for both sibling repos (xml/ + tag file)"
 	@echo "  clean    Remove build output"
 	@echo "  serve    Build and serve locally on port $(SERVE_PORT)"
 	@echo "  help     Show this message"

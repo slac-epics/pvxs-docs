@@ -7,13 +7,19 @@ For contributors and maintainers of pvxs (C++), pvxs-cms, and the
 phoebus Java PVA implementation. Will cover architecture overviews,
 build internals, contributing guidelines, and design notes.
 
+.. toctree::
+   :maxdepth: 2
+
+   pvxs-overview
+
 .. note::
 
-   Maintainer-facing documentation will be authored in a follow-up
-   change (``pvxs-docs-maintainer-content``). Until then, see the
-   per-repo design notes — for example,
-   ``pvxs/DESIGN-PVACMS-CLUSTER.md`` and
-   ``phoebus/core/pva/TLS.md``.
+   Additional content lands in follow-up
+   ``pvxs-docs-maintainer-content``. The page above is a demonstration
+   of the Doxygen + Breathe pipeline introduced by
+   ``pvxs-docs-api-extraction-pipeline``; it is not full content. Until
+   the content change lands, see the per-repo design notes — for example,
+   ``pvxs/DESIGN-PVACMS-CLUSTER.md`` and ``phoebus/core/pva/TLS.md``.
 
 .. seealso::
 

@@ -272,5 +272,6 @@ epub_exclude_files = ['search.html']
 breathe_default_project = "PVXS"
 
 breathe_projects = {
-    "PVXS": "xml"
+    "PVXS": "xml/pvxs",
+    "PVXS_CMS": "xml/pvxs-cms",
 }

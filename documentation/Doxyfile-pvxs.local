@@ -1,0 +1,11 @@
+# Per-run override for the pvxs source tree.
+# Concatenated to documentation/Doxyfile and piped into doxygen by
+# the root Makefile's "doxygen-pvxs" target.
+
+PROJECT_NAME           = "PVXS"
+# Paths are relative to documentation/ (Doxygen's CWD when invoked by the
+# Makefile's `doxygen` target). The sibling pvxs/ checkout sits two levels
+# up: documentation/ -> pvxs-docs/ -> com/slac/ -> pvxs/.
+INPUT                  = ../../pvxs/include/pvxs ../../pvxs/src/pvxs
+XML_OUTPUT             = xml/pvxs
+GENERATE_TAGFILE       = pvxs-docs-pvxs.tag
