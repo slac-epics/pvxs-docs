@@ -471,10 +471,10 @@ SPVA endpoints use X.509 v3 certificates (:rfc:`5280`). Sections
 the standard PKIX extensions every SPVA certificate carries, and
 Section 4.3 specifies the two SPVA-specific custom extensions.
 
-4.2. Required Standard PKIX Extensions
---------------------------------------
+4.2. Standard PKIX Extensions
+-----------------------------
 
-Every SPVA certificate MUST contain:
+REQUIRED. Every SPVA certificate MUST contain:
 
 - **Basic Constraints** (``id-ce-basicConstraints``): ``CA = FALSE``
   for entity certificates; ``CA = TRUE`` for Certification Authority
@@ -488,12 +488,16 @@ Every SPVA certificate MUST contain:
   ``id-kp-clientAuth`` for client certificates. A certificate
   intended for both roles MUST include both Extended Key Usage
   values.
-- **Subject Alternative Name** (``id-ce-subjectAltName``):
-  Section 4.5.
 - **Authority Key Identifier** (``id-ce-authorityKeyIdentifier``):
   REQUIRED for entity certificates.
 - **Subject Key Identifier** (``id-ce-subjectKeyIdentifier``):
   REQUIRED.
+
+OPTIONAL.
+
+- **Subject Alternative Name** (``id-ce-subjectAltName``): MAY be
+  omitted entirely. When present, see Section 4.5 for SPVA's
+  handling of its entries.
 
 4.3. SPVA Custom X.509 Extensions
 ---------------------------------
