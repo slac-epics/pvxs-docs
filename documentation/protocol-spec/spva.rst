@@ -466,9 +466,10 @@ MAY introduce an ``"spva/2"`` ALPN identifier.
 4.1. Certificate Format
 -----------------------
 
-SPVA endpoints use X.509 v3 certificates (:rfc:`5280`). All
-extensions referenced below are standard PKIX extensions; SPVA does
-not introduce custom OIDs.
+SPVA endpoints use X.509 v3 certificates (:rfc:`5280`). Sections
+4.2 and 4.3 specify the required extensions: Section 4.2 lists
+the standard PKIX extensions every SPVA certificate carries, and
+Section 4.3 specifies the two SPVA-specific custom extensions.
 
 4.2. Required Standard PKIX Extensions
 --------------------------------------
