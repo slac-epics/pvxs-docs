@@ -305,12 +305,14 @@ End-to-end SPVA connect-and-get:
 4. **Client**: initiate TLS 1.3 handshake (ClientHello). The
    ClientHello includes:
 
-   - ``server_name`` extension naming the server's expected DNS or
-     IP name (per :rfc:`6066`).
    - ``signature_algorithms`` extension limited to algorithms
      SPVA-acceptable (Section 3.3).
    - ``status_request`` extension requesting OCSP stapling
      (:rfc:`6066`, Section 13).
+
+   The ClientHello does NOT carry a ``server_name`` (SNI)
+   extension — connection targets are IP-based, not hostname-
+   based (Section 3.6).
 
 5. **Server**: respond with TLS ServerHello, server certificate
    chain, and (if available) stapled OCSP response covering the
@@ -423,13 +425,34 @@ SPVA certificates MAY use any of these signature algorithms:
 PKCS#1 v1.5 RSA signatures are deprecated by TLS 1.3 and SHOULD NOT
 be used in newly-issued SPVA certificates.
 
-3.6. Server Name Indication (SNI)
----------------------------------
+3.6. Server Name Indication (SNI) and Hostname Verification
+-----------------------------------------------------------
 
-A client SHALL send the TLS ``server_name`` extension (:rfc:`6066`)
-identifying the server it expects to connect to. The server's
-certificate Subject Alternative Name (SAN) MUST contain a matching
-DNS name or IP address (Section 4.5).
+SPVA does NOT use TLS Server Name Indication (SNI) and does NOT
+perform Web-PKI-style hostname-versus-certificate verification.
+Connection targets are ``(IP, port)`` pairs delivered by the PVA
+search reply (Section 7.2 of the PVA specification); the IP comes
+from the UDP source address of the reply and there is no DNS name
+in the connection-establishment path that a client could place in
+the TLS ``server_name`` extension. Implementations therefore do
+not call ``SSL_set_tlsext_host_name`` on outgoing TLS connections.
+
+Server-certificate authenticity is established through:
+
+1. **Chain validation** (:rfc:`5280` path validation) against the
+   client's configured trust anchor (Section 4.6).
+2. **Cert-status validation** against the cert-status PV
+   (Section 7).
+3. **Optional OCSP stapling** if the server supplies a stapled
+   Online Certificate Status Protocol (OCSP) response in the TLS
+   handshake (Section 13).
+
+A server MAY include ``dNSName`` and ``iPAddress`` Subject
+Alternative Name (SAN) entries in its certificate; SPVA exposes
+these to the application layer as connection metadata (used for
+authorization-rule matching, Section 11) but does NOT use them at
+TLS-handshake time to gate the connection. See Section 4.5 for the
+full description of how SAN entries are used.
 
 3.7. Session Resumption
 -----------------------
@@ -622,20 +645,39 @@ ASG/ACF authorization rules (Section 11).
 4.5. Subject Alternative Name
 -----------------------------
 
-The SAN extension carries the network identities the certificate is
-authoritative for. SPVA supports two SAN types:
+A certificate's primary identity in SPVA is its Subject
+Distinguished Name (Section 4.4). Subject Alternative Name (SAN)
+entries are supplementary identity metadata the certificate
+carries; SPVA reads them at the TLS layer, exposes them to the
+application layer as connection-time peer credentials, and matches
+them against authorization rules (Section 11).
 
-- ``dNSName``: a DNS host name. For server certificates, this MUST
-  match the hostname the client uses to connect (the
-  ``server_name`` extension in TLS ClientHello).
-- ``iPAddress``: an IPv4 or IPv6 address. Used for SPVA endpoints
-  identified by IP rather than DNS.
+SPVA does NOT use the SAN at TLS-handshake time as a hostname-vs-
+certificate match (no Server Name Indication / Section 3.6). The
+SAN is informational at the transport layer and authoritative at
+the authorization layer.
 
-A server certificate MAY contain multiple ``dNSName`` and/or
-``iPAddress`` SAN entries (e.g. for multi-homed servers). A client
-certificate's SAN, if present, MAY contain ``rfc822Name`` (email)
-or ``otherName`` for site-specific principal naming, but its primary
-identity is the Subject DN.
+The two SAN types SPVA recognises:
+
+- ``dNSName`` — a Domain Name System (DNS) host name. Stored in
+  the certificate and exposed to the application via the
+  per-connection peer-credentials structure. An access security
+  configuration file (ACF) rule MAY match against a ``dNSName``
+  entry to grant or deny access (Section 11).
+- ``iPAddress`` — an IPv4 or IPv6 address. Same handling as
+  ``dNSName``: stored, exposed, available for ACF matching.
+
+A certificate MAY contain multiple ``dNSName`` and/or
+``iPAddress`` SAN entries (for example: a server that operates
+under multiple hostnames or on a multi-homed host). Client
+certificates' SAN entries are read with the same handling; the
+``rfc822Name`` (email) and ``otherName`` SAN types MAY be
+included for site-specific principal-naming conventions but are
+not consumed by the standard ACF rule set.
+
+The CCR (Section 9) lets the requesting principal supply SAN
+entries at issuance time; PVACMS embeds them in the issued
+certificate verbatim subject to site-policy filtering.
 
 4.6. Trust Anchors
 ------------------
