@@ -1924,32 +1924,43 @@ that port with the Repeater.
 10.2. Repeater Registration (Client → Repeater)
 -----------------------------------------------
 
-A client that needs to receive beacons sends ``REPEATER_REGISTER``
-(command 24) to the Repeater on ``127.0.0.1:EPICS_CA_REPEATER_PORT``:
+A client that needs to receive beacons registers with the Repeater
+on ``EPICS_CA_REPEATER_PORT`` (default 5065) on a local-host
+address. Two registration forms are accepted:
 
-.. table:: REPEATER_REGISTER
-   :widths: auto
+1. A ``REPEATER_REGISTER`` (command 24) datagram:
 
-   +-----------------+----------------------------------------------+
-   | Field           | Value                                        |
-   +=================+==============================================+
-   | ``m_cmmd``      | 24                                           |
-   +-----------------+----------------------------------------------+
-   | ``m_postsize``  | 0                                            |
-   +-----------------+----------------------------------------------+
-   | ``m_dataType``  | 0                                            |
-   +-----------------+----------------------------------------------+
-   | ``m_count``     | 0                                            |
-   +-----------------+----------------------------------------------+
-   | ``m_cid``       | 0                                            |
-   +-----------------+----------------------------------------------+
-   | ``m_available`` | client's local IP (127.0.0.1)                |
-   +-----------------+----------------------------------------------+
+   .. table:: REPEATER_REGISTER
+      :widths: auto
 
-The Repeater determines the client's UDP source port from the
-register-message source-port field of the IP header (i.e., where to
-forward beacons) and stores ``(client_IP, client_source_port)`` in
-its registration table.
+      +-----------------+----------------------------------------------+
+      | Field           | Value                                        |
+      +=================+==============================================+
+      | ``m_cmmd``      | 24                                           |
+      +-----------------+----------------------------------------------+
+      | ``m_postsize``  | 0                                            |
+      +-----------------+----------------------------------------------+
+      | ``m_dataType``  | 0                                            |
+      +-----------------+----------------------------------------------+
+      | ``m_count``     | 0                                            |
+      +-----------------+----------------------------------------------+
+      | ``m_cid``       | 0                                            |
+      +-----------------+----------------------------------------------+
+      | ``m_available`` | client's local IPv4 address, or ``0``        |
+      +-----------------+----------------------------------------------+
+
+2. A zero-length UDP datagram. This is treated as an implicit
+   registration request equivalent to form 1 with all fields zero.
+
+A client MAY register from the IPv4 loopback address (``127.0.0.1``)
+or from any local non-loopback interface. Some legacy clients
+alternate between the loopback address and a non-loopback local
+interface to interoperate with pre-3.13-beta-11 Repeaters that did
+not always accept loopback registrations.
+
+The Repeater uses the UDP source ``(IP, port)`` of the registration
+datagram as the destination to which forwarded beacons will be
+re-emitted; it stores this tuple in its registration table.
 
 10.3. Repeater Registration Acknowledgment (Repeater → Client)
 --------------------------------------------------------------
@@ -1972,7 +1983,8 @@ The Repeater replies with ``REPEATER_CONFIRM`` (command 17):
    +-----------------+----------------------------------------------+
    | ``m_cid``       | 0                                            |
    +-----------------+----------------------------------------------+
-   | ``m_available`` | client's local IP                            |
+   | ``m_available`` | client's source IPv4 (as observed by the     |
+   |                 | Repeater)                                    |
    +-----------------+----------------------------------------------+
 
 If the client does not receive a CONFIRM within an
@@ -1984,54 +1996,22 @@ After launching, the client retries registration.
 10.4. Beacon Forwarding (Repeater → Client)
 -------------------------------------------
 
-When the Repeater receives a beacon from any server, it forwards the
-beacon datagram VERBATIM to each registered client by re-emitting
-``CA_PROTO_RSRV_IS_UP`` to ``(client_IP, client_source_port)`` for
-every registered client.
+When the Repeater receives a ``CA_PROTO_RSRV_IS_UP`` from any
+server, it forwards the beacon to each registered client by
+re-emitting it to the client's registered ``(IP, port)`` tuple.
 
-The client cannot distinguish a Repeater-forwarded beacon from a
-direct-from-server beacon; both arrive at the client's UDP socket as
-``CA_PROTO_RSRV_IS_UP`` messages. The Repeater is transparent.
+If a forwarded beacon arrives at the Repeater with
+``m_available == 0`` (a pre-V4.6 server that did not include its
+own IPv4 address), the Repeater MUST set ``m_available`` to the
+beacon datagram's source IPv4 address before forwarding, so that
+clients always receive a beacon with a populated ``m_available``
+field regardless of server version.
 
-10.5. Beacon Anomaly Synthesis
-------------------------------
-
-When the Repeater starts (or when a new client registers with a
-running Repeater), the Repeater MAY synthesize a fake
-"beacon-anomaly" notification to prompt the client to re-search
-for any servers it had previously known. The synthetic beacon is a
-``CA_PROTO_RSRV_IS_UP`` message with all fields zero except
-``m_cmmd``; clients recognise this all-zero form as anomalous and
-treat it as a directive to re-search.
-
-This mechanism ensures that a client registering with a
-just-started Repeater (after Repeater restart) does not need to wait
-for the next beacon period from each server; it can immediately
-re-validate its server list.
-
-10.6. Repeater Failure Recovery
--------------------------------
-
-If the Repeater process crashes:
-
-- The Repeater's UDP port becomes free; the OS may report ``ECONNRESET``
-  on subsequent ``sendto()`` calls from clients.
-- One client (the first to detect the failure) SHOULD attempt to
-  re-launch the Repeater.
-- After the new Repeater is up, all clients re-register; the
-  beacon-anomaly synthesis ensures no missed updates.
-
-A client MUST NOT rely on continuous Repeater availability; it MUST
-include exponential back-off and re-registration retry logic.
-
-10.7. Multiple Repeaters per Host
----------------------------------
-
-Sites running multiple isolated CA networks on a single host (e.g.
-test-network and production-network sharing infrastructure) may run
-multiple Repeaters, each bound to a different port via separate
-``EPICS_CA_REPEATER_PORT`` settings per CA-environment-process tree.
-This is supported but uncommon.
+Apart from this single substitution, beacons are forwarded
+unmodified. The client cannot otherwise distinguish a
+Repeater-forwarded beacon from a direct-from-server beacon; both
+arrive at the client's UDP socket as ``CA_PROTO_RSRV_IS_UP``
+messages.
 
 ----
 
@@ -2067,15 +2047,19 @@ emission via ``CA_PROTO_EVENTS_OFF`` (command 8) and resume via
 These commands apply to the entire TCP connection: ALL subscriptions
 on the connection are paused or resumed together. The server, on
 receiving ``EVENTS_OFF``, MUST stop emitting subscription updates
-within an implementation-defined window (typically a few hundred
-milliseconds); subsequent value changes are queued at the server
-until ``EVENTS_ON`` is received.
+within an implementation-defined window; subsequent value changes
+are coalesced at the server until ``EVENTS_ON`` is received.
 
-If the server-side queue overflows (implementation-defined threshold,
-typically 16 KB or 1024 entries per channel), the server MUST
-drop the oldest queued updates and SHOULD signal queue overflow to
-the client by setting an alarm in subsequent updates (status code
-``ECA_OVEVFAIL`` is reserved for this; see Section 12.2).
+When subscription updates cannot be sent (either because the
+connection is in ``EVENTS_OFF`` mode or because the server's
+per-subscription event queue is approaching its capacity limit), a
+new value for a given subscription MUST replace the most recent
+queued value for that same subscription rather than displacing
+older queue entries from other subscriptions. The result is
+**value coalescing**: only the latest value for each subscription
+is preserved, but no subscription is starved by another. The
+exact queue depth, queue-pressure threshold, and coalescing trigger
+are implementation-defined.
 
 11.2. TCP-Level Flow Control
 ----------------------------
@@ -2148,14 +2132,16 @@ A client SHOULD use priority dispatch only for genuinely
 priority-sensitive traffic; opening 100 connections per server is
 discouraged and resource-prohibitive at scale.
 
-11.5. Server Shutdown and SIGNAL
---------------------------------
+11.5. Internal-Use Command CA_PROTO_SIGNAL
+------------------------------------------
 
-``CA_PROTO_SIGNAL`` (command 25) is an internal-use command that
-servers send to themselves to wake the ``select()`` loop on the
-listen socket; it is never seen on the wire and clients MUST treat
-its receipt as a malformed message (close the connection,
-``ECA_INTERNAL``).
+``CA_PROTO_SIGNAL`` (command 25) is reserved for server-internal
+use (waking the server's I/O thread) and MUST NOT appear on the
+wire. A receiver of any command value not recognised by this
+specification (including ``CA_PROTO_SIGNAL`` arriving from a peer)
+SHOULD log the malformed message and close the TCP connection;
+the application observes this as a normal disconnect
+(``ECA_DISCONN``).
 
 ----
 
