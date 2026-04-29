@@ -1422,43 +1422,50 @@ the epics-pvData NT specification (informative reference).
 6.1. Server-Initiated Validation Request
 ----------------------------------------
 
-After TCP three-way handshake completes, the **server** MUST send
-``CMD_CONNECTION_VALIDATION`` (command 1) as the first PVA message:
+Immediately after the TCP three-way handshake the server MUST send
+a ``SetEndian`` control message (Section 12.3), then ``CMD_CONNECTION_VALIDATION``
+(command 1) as the first application message:
 
 .. table:: CMD_CONNECTION_VALIDATION (server → client) payload
    :widths: auto
 
-   +--------------+---------------------------------------------+
-   | Field        | Type / value                                |
-   +==============+=============================================+
-   | server GUID  | 12 octets (random, server-chosen)           |
-   +--------------+---------------------------------------------+
-   | server_buf   | u32 server's receive buffer size            |
-   +--------------+---------------------------------------------+
-   | server_intro | u16 server's introspection-registry size    |
-   +--------------+---------------------------------------------+
-   | reg_addr     | u8 + Size-list of authentication            |
-   |              | mechanisms (each: String) the server        |
-   |              | accepts                                     |
-   +--------------+---------------------------------------------+
-
-The server's GUID is a 12-octet random identifier chosen at server
-startup. It MUST be globally unique with high probability (server
-implementations typically generate it from ``/dev/urandom`` or
-equivalent). The GUID is the same for all connections and beacons
-emitted by the server; clients use it to detect server restarts.
+   +-----------------+---------------------------------------------+
+   | Field           | Type / value                                |
+   +=================+=============================================+
+   | server_buf      | u32 server's receive buffer size (octets)   |
+   +-----------------+---------------------------------------------+
+   | server_intro    | u16 server's introspection-registry size    |
+   +-----------------+---------------------------------------------+
+   | n_auth          | Size (Section 5.1.1): count of mechanisms   |
+   +-----------------+---------------------------------------------+
+   | auth_methods    | ``n_auth`` Strings (Section 5.1.2)          |
+   +-----------------+---------------------------------------------+
 
 The receive buffer size advertises the maximum non-segmented
 message size the server will accept. The introspection-registry
 size advertises the maximum number of cached type IDs the server
-will track per connection.
+will track per connection. (Implementations consulted in preparing
+this specification ignore both fields after parsing; treat them as
+advisory.)
 
 The authentication-mechanisms list enumerates the auth methods the
-server will accept. PVA defines one mechanism, ``"ca"``, in which
-the client's identity is conveyed as an advisory user-name and
-host-name string carried in the corresponding ``auth_data`` and
-not cryptographically verified. The list is open: server profiles
-layered above PVA MAY define additional mechanism names.
+server will accept. PVA defines two mechanisms in this
+specification:
+
+- ``"anonymous"``: no credential is presented. The server MAY accept
+  the connection and treat the client identity as unauthenticated.
+- ``"ca"``: the client conveys an advisory user-name and host-name
+  pair (Channel-Access compatibility identity). The pair is not
+  cryptographically verified.
+
+The list is open: profiles layered above PVA MAY define additional
+mechanism names (for example, the ``"x509"`` mechanism defined by
+Secure PVAccess; see :doc:`/protocol-spec/spva`).
+
+Server identity (the GUID exchanged in ``CMD_BEACON`` and
+``CMD_SEARCH_RESPONSE``) is **not** carried in
+``CMD_CONNECTION_VALIDATION``; it appears only in those two
+messages (see Sections 7.3 and 10.1).
 
 6.2. Client Validation Response
 -------------------------------
@@ -1468,26 +1475,35 @@ The client responds with its own ``CMD_CONNECTION_VALIDATION``:
 .. table:: CMD_CONNECTION_VALIDATION (client → server) payload
    :widths: auto
 
-   +--------------+---------------------------------------------+
-   | Field        | Type / value                                |
-   +==============+=============================================+
-   | client_buf   | u32 client's receive buffer size            |
-   +--------------+---------------------------------------------+
-   | client_intro | u16 client's introspection-registry size    |
-   +--------------+---------------------------------------------+
-   | qos          | u16 quality-of-service hints (priority)     |
-   +--------------+---------------------------------------------+
-   | auth_method  | String: chosen auth method (from server's   |
-   |              | offered list)                               |
-   +--------------+---------------------------------------------+
-   | auth_data    | Variant: auth-method-specific payload       |
-   |              | (e.g. for "ca": user-name + host-name       |
-   |              | strings)                                    |
-   +--------------+---------------------------------------------+
+   +-------------+----------------------------------------------+
+   | Field       | Type / value                                 |
+   +=============+==============================================+
+   | client_buf  | u32 client's receive buffer size (octets)    |
+   +-------------+----------------------------------------------+
+   | client_intro| u16 client's introspection-registry size     |
+   +-------------+----------------------------------------------+
+   | qos         | u16 quality-of-service hint (priority)       |
+   +-------------+----------------------------------------------+
+   | auth_method | String (Section 5.1.2): chosen auth method   |
+   |             | from the server's offered list               |
+   +-------------+----------------------------------------------+
+   | auth_data   | typed value (FieldDesc + value, Section 5.4) |
+   |             | carrying the auth-method-specific payload    |
+   +-------------+----------------------------------------------+
 
-The client MUST choose an auth method that the server offered. If
-no acceptable method is available, the client MUST close the
-connection.
+The ``auth_data`` field is encoded as a typed value: a FieldDesc
+introducing the structure followed by the field values, exactly as
+for any other PVA payload (Section 5.4). For ``"anonymous"`` the
+typed value is the NULL FieldDesc (``0xFF``) with no following
+value. For ``"ca"`` the typed value is a structure of two strings
+``{user, host}``.
+
+The client SHOULD choose an auth method that the server offered.
+If the server offered no method the client can use, implementations
+consulted in preparing this specification fall back to ``"anonymous"``
+rather than aborting the connection; the server then decides
+whether to accept the connection in
+``CMD_CONNECTION_VALIDATED`` (Section 6.3).
 
 6.3. Connection Validated (Success or Failure)
 ----------------------------------------------
@@ -1511,16 +1527,19 @@ MUST close the TCP connection after sending the message.
 6.4. Authentication Continuation
 --------------------------------
 
-If the chosen authentication mechanism requires additional
-round-trips (challenge-response, multi-step credential exchange),
-the client and server exchange further ``CMD_AUTHNZ`` messages
-between ``CMD_CONNECTION_VALIDATION`` and
-``CMD_CONNECTION_VALIDATED``. The format of ``CMD_AUTHNZ`` payloads
-is mechanism-specific and out of scope for this specification;
-each mechanism that uses ``CMD_AUTHNZ`` defines its own payload
-format. The PVA-native ``"ca"`` mechanism does not use
-``CMD_AUTHNZ`` (its single string-pair credential is carried in
-the ``CMD_CONNECTION_VALIDATION`` ``auth_data`` field directly).
+``CMD_AUTHNZ`` (command 5) is reserved for authentication mechanisms
+that require additional round-trips (challenge-response,
+multi-step credential exchange) between
+``CMD_CONNECTION_VALIDATION`` and ``CMD_CONNECTION_VALIDATED``.
+The payload format is mechanism-specific; each mechanism that uses
+``CMD_AUTHNZ`` defines its own payload format.
+
+Receivers MUST accept ``CMD_AUTHNZ`` messages and dispatch them
+to the active authentication mechanism. Neither of the
+authentication mechanisms defined by this specification
+(``"anonymous"`` and ``"ca"``) uses ``CMD_AUTHNZ``: their
+credentials are carried entirely in
+``CMD_CONNECTION_VALIDATION``'s ``auth_data`` field.
 
 ----
 
@@ -1602,19 +1621,25 @@ unicast to the client:
    +-----------------+-----------------------------------------+
    | search_seq      | u32 (echoed from request)               |
    +-----------------+-----------------------------------------+
-   | server_addr     | 16 octets (IPv6 or v4-mapped)           |
+   | server_addr     | 16 octets (IPv6 form). Implementations  |
+   |                 | consulted in preparing this             |
+   |                 | specification emit the IPv4-mapped      |
+   |                 | "any" address (all-zero); the client    |
+   |                 | uses the UDP source address of this     |
+   |                 | response as the server's actual address |
    +-----------------+-----------------------------------------+
    | server_port     | u16 server's TCP listening port         |
    +-----------------+-----------------------------------------+
    | protocol        | String (chosen from request's list)     |
    +-----------------+-----------------------------------------+
-   | found           | bool: 1 = at least one match,           |
+   | found           | u8 boolean: 1 = at least one match,     |
    |                 | 0 = no match (negative reply)           |
    +-----------------+-----------------------------------------+
-   | channel_count   | u16                                     |
+   | channel_count   | u16 (count of search_ids that follow;   |
+   |                 | non-zero only when ``found = 1``)       |
    +-----------------+-----------------------------------------+
-   | search_ids      | channel_count × u32 (echoed from        |
-   |                 | request, only for matched channels)     |
+   | search_ids      | ``channel_count`` × u32, only for       |
+   |                 | matched channels (echoed from request)  |
    +-----------------+-----------------------------------------+
 
 Negative replies (``found = 0``) are sent only when the request had
@@ -1631,9 +1656,9 @@ same address+port but a different GUID than previously seen, the
 client MUST treat it as a server restart: tear down all channels
 on the old (GUID, addr, port) tuple and re-search.
 
-The GUID also appears in beacons (Section 10.1) and in
-``CMD_CONNECTION_VALIDATION`` (Section 6.1); all three sources MUST
-agree for the same server.
+The GUID also appears in beacons (Section 10.1); the two sources
+MUST agree for the same server. The GUID is **not** carried in
+``CMD_CONNECTION_VALIDATION`` (Section 6.1).
 
 7.4. Multicast and Origin Tagging
 ---------------------------------
