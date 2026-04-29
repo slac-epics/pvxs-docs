@@ -924,42 +924,41 @@ subscription is required.
 
 ::
 
-    [requesting party submits CCR]
-              │
-              ▼
-       PENDING_APPROVAL  ◄─────┐ (admin can approve)
-              │                │
-              │ approve        │ deny
-              │                │
-              ▼                ▼
-          PENDING          REVOKED  (terminal)
-              │
-              │ certificate generation
-              │ + delivery to subject
-              ▼
-            VALID  ◄─────────┐
-              │ │  │         │
-              │ │  └──── revoke (admin) ──┐
-              │ │                         ▼
-              │ │                     REVOKED  (terminal)
-              │ │                         ▲
-              │ ├────── auto-revoke ──────┤  (CA policy)
-              │ │
-              │ └────── pause/maintenance ───►  SCHEDULED_OFFLINE
-              │              │
-              │              ▼ resume
-              │            VALID
-              │
-              │ near-expiry (7 days before)
-              ▼
-       PENDING_RENEWAL ────────► VALID  (after renewal)
-              │
-              │ no renewal in time
-              ▼
-           EXPIRED  (terminal)
+    [CCR submission]
+            │
+            ▼
+     PENDING_APPROVAL  ◄────┐ (admin)
+            │               │
+            │ approve        │ deny
+            │                │
+            ▼                ▼
+        PENDING          REVOKED  (terminal)
+            │
+            │ cert generated and delivered
+            ▼
+          VALID  ◄────────┐
+            │ │ │         │
+            │ │ └─ revoke (admin or CA policy) ─► REVOKED (terminal)
+            │ │
+            │ └─ admin pause ─► SCHEDULED_OFFLINE
+            │                          │
+            │                          ▼ admin resume
+            │                        VALID
+            │
+            │ time crosses ``renew_by`` (Section 8.5)
+            ▼
+     PENDING_RENEWAL ──── renewal completed ────► VALID
+            │
+            │ no renewal in time
+            ▼
+        EXPIRED  (terminal)
 
 8.2. State Definitions
 ----------------------
+
+The cert-status states are lifecycle labels. Each state's
+connection-state effect is given by the class mapping in
+Section 8.4; it is not duplicated here.
 
 .. table:: SPVA certificate lifecycle states
    :widths: auto
@@ -968,54 +967,55 @@ subscription is required.
    | State                  | Meaning                                 |
    +========================+=========================================+
    | ``UNKNOWN``            | PVACMS cannot determine status (e.g.    |
-   |                        | the certificate's serial is not in its  |
-   |                        | database). Connections MUST be          |
-   |                        | rejected.                               |
+   |                        | certificate serial unknown to PVACMS,   |
+   |                        | or status response not current).        |
    +------------------------+-----------------------------------------+
-   | ``PENDING_APPROVAL``   | A CCR has been submitted but PVACMS     |
-   |                        | requires administrator approval before  |
-   |                        | issuance.                               |
+   | ``PENDING_APPROVAL``   | CCR submitted; awaiting administrator   |
+   |                        | approval.                               |
    +------------------------+-----------------------------------------+
    | ``PENDING``            | CCR approved; certificate generation    |
    |                        | in progress (transient state).          |
    +------------------------+-----------------------------------------+
    | ``VALID``              | Certificate issued, in date, not        |
-   |                        | revoked. Connections accepted.          |
+   |                        | revoked.                                |
    +------------------------+-----------------------------------------+
-   | ``PENDING_RENEWAL``    | Certificate still valid but approaching |
-   |                        | expiry; renewal recommended.            |
-   |                        | Connections accepted.                   |
+   | ``PENDING_RENEWAL``    | Time has crossed the per-certificate    |
+   |                        | ``renew_by`` (Section 8.5); renewal     |
+   |                        | requested.                              |
    +------------------------+-----------------------------------------+
-   | ``EXPIRED``            | Validity period has passed. Terminal.   |
-   |                        | Connections rejected.                   |
+   | ``EXPIRED``            | Validity period (``notAfter``) has      |
+   |                        | passed. Terminal.                       |
    +------------------------+-----------------------------------------+
-   | ``REVOKED``            | Certificate has been revoked by CA      |
-   |                        | action. Terminal. Connections rejected. |
+   | ``REVOKED``            | Certificate has been revoked. Terminal. |
    +------------------------+-----------------------------------------+
-   | ``SCHEDULED_OFFLINE``  | Certificate temporarily inactive (e.g.  |
-   |                        | scheduled maintenance). Connections     |
-   |                        | rejected during this window.            |
+   | ``SCHEDULED_OFFLINE``  | Certificate has been administratively   |
+   |                        | paused.                                 |
    +------------------------+-----------------------------------------+
 
 8.3. State Transitions
 ----------------------
 
-The full set of permitted transitions:
+Permitted transitions:
 
 - ``[no entry]`` → ``PENDING_APPROVAL`` (CCR submitted, requires
-  admin)
+  admin approval)
 - ``[no entry]`` → ``PENDING`` (CCR auto-approved by site policy)
 - ``PENDING_APPROVAL`` → ``PENDING`` (admin approval)
 - ``PENDING_APPROVAL`` → ``REVOKED`` (admin denial)
 - ``PENDING`` → ``VALID`` (certificate generated and delivered)
-- ``VALID`` → ``REVOKED`` (admin revocation, CA policy revocation,
-  or compromise notification)
+- ``VALID`` → ``REVOKED`` (admin revocation or CA policy
+  revocation)
 - ``VALID`` → ``SCHEDULED_OFFLINE`` (admin pause)
 - ``SCHEDULED_OFFLINE`` → ``VALID`` (admin resume)
-- ``VALID`` → ``PENDING_RENEWAL`` (auto, near-expiry)
+- ``SCHEDULED_OFFLINE`` → ``REVOKED`` (admin revocation while
+  paused)
+- ``VALID`` → ``PENDING_RENEWAL`` (auto, on time crossing
+  ``renew_by``)
 - ``PENDING_RENEWAL`` → ``VALID`` (renewal completed)
+- ``PENDING_RENEWAL`` → ``REVOKED`` (admin revocation while
+  renewing)
 - ``VALID`` or ``PENDING_RENEWAL`` → ``EXPIRED`` (auto, on
-  ``notAfter`` date)
+  ``notAfter``)
 
 8.4. Cert-Status to Connection-State Mapping
 --------------------------------------------
