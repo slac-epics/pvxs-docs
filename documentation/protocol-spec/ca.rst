@@ -2159,34 +2159,43 @@ responds with ``CA_PROTO_ERROR`` (command 11):
 .. table:: CA_PROTO_ERROR
    :widths: auto
 
-   +-----------------+----------------------------------------------+
-   | Field           | Value                                        |
-   +=================+==============================================+
-   | ``m_cmmd``      | 11                                           |
-   +-----------------+----------------------------------------------+
-   | ``m_postsize``  | 16 + length of error string (padded to 8)    |
-   +-----------------+----------------------------------------------+
-   | ``m_dataType``  | 0                                            |
-   +-----------------+----------------------------------------------+
-   | ``m_count``     | 0                                            |
-   +-----------------+----------------------------------------------+
-   | ``m_cid``       | client CID of the failed channel             |
-   +-----------------+----------------------------------------------+
-   | ``m_available`` | CA status code (Section 12.2)                |
-   +-----------------+----------------------------------------------+
-   | Payload         | 16-byte copy of the failing request's        |
-   |                 | header, followed by null-terminated ASCII    |
-   |                 | error message                                |
-   +-----------------+----------------------------------------------+
+   +-----------------+--------------------------------------------------+
+   | Field           | Value                                            |
+   +=================+==================================================+
+   | ``m_cmmd``      | 11                                               |
+   +-----------------+--------------------------------------------------+
+   | ``m_postsize``  | length of payload (header copy + diag string +   |
+   |                 | NUL terminator); maximum payload is 512 octets   |
+   +-----------------+--------------------------------------------------+
+   | ``m_dataType``  | 0                                                |
+   +-----------------+--------------------------------------------------+
+   | ``m_count``     | 0                                                |
+   +-----------------+--------------------------------------------------+
+   | ``m_cid``       | client CID of the failed channel, or             |
+   |                 | ``0xFFFFFFFF`` if the failing request is not     |
+   |                 | bound to a channel (e.g. ``CA_PROTO_EVENTS_ON``  |
+   |                 | / ``EVENTS_OFF``); for ``CA_PROTO_SEARCH``,      |
+   |                 | the failing request's ``m_cid`` is echoed        |
+   +-----------------+--------------------------------------------------+
+   | ``m_available`` | CA status code (Section 12.2)                    |
+   +-----------------+--------------------------------------------------+
+   | Payload         | A copy of the failing request's header (16       |
+   |                 | octets standard, 24 octets extended-header       |
+   |                 | form per Section 4.3 when the original used      |
+   |                 | extended header), followed by a NUL-terminated   |
+   |                 | ASCII diagnostic string                          |
+   +-----------------+--------------------------------------------------+
 
-The first 16 bytes of the payload are a verbatim copy of the
-``caHdr`` of the failing request. This allows the client to identify
-which request the error pertains to (by inspecting the IOI in the
-copied ``m_available``).
+The leading payload octets are a verbatim copy of the failing
+request's ``caHdr`` (or ``caHdrLargeArray`` for V4.9 extended-header
+requests). This allows the client to identify which request the
+error pertains to: in particular, the copied ``m_available`` field
+carries the IOID for the read/write/event-add commands (Sections 7,
+8) and the original CID for SEARCH.
 
 The trailing ASCII string is human-readable and SHOULD be logged but
 MUST NOT be parsed for programmatic decisions; clients dispatch on
-the status code in ``m_available``.
+the status code in this message's ``m_available``.
 
 12.2. Status Code Table
 -----------------------
@@ -2392,14 +2401,16 @@ A receiver MUST treat all severity values it does not recognize as
 
 The CA major protocol revision is **4**, fixed for the entire CA
 specification covered by this document. The major revision is
-encoded into the default port number (Section 3.2):
+encoded into the default port numbers (Section 3.2):
 
 ::
 
-    CA_SERVER_PORT = CA_PORT_BASE + (major * 2) = 5008 + 8 = 5064
+    CA_PORT_BASE     = IPPORT_USERRESERVED + 56 = 5000 + 56 = 5056
+    CA_SERVER_PORT   = CA_PORT_BASE + major * 2     = 5056 +  8 = 5064
+    CA_REPEATER_PORT = CA_PORT_BASE + major * 2 + 1 = 5056 +  9 = 5065
 
 A future major revision (CA 5, hypothetically) would shift the
-default port by +2; clients and servers of different major
+default ports by +2; clients and servers of different major
 revisions cannot interoperate at all.
 
 13.2. Minor Version Exchange
@@ -2446,7 +2457,9 @@ Section 6.5).
    +-------+----------+--------------------------------------------------+
    | V4.5  | 4.5      | (reserved)                                       |
    +-------+----------+--------------------------------------------------+
-   | V4.6  | 4.6      | Beacon source-IP from datagram (Section 9.1)     |
+   | V4.6  | 4.6      | Server populates beacon ``m_available`` with     |
+   |       |          | own IPv4 (Section 9.1); pre-V4.6 senders emit    |
+   |       |          | ``m_available = 0``                              |
    +-------+----------+--------------------------------------------------+
    | V4.7  | 4.7      | (reserved)                                       |
    +-------+----------+--------------------------------------------------+
@@ -2521,11 +2534,14 @@ breaking older peers. New features MUST follow these rules:
   field's reserved area.
 - **No reuse**. A new feature MUST NOT reinterpret an existing field's
   meaning at any older minor version.
-- **Default behavior**. Receiving an unknown ``m_cmmd`` from a peer
-  reporting a higher minor version MUST be tolerated as a no-op (the
-  receiver downgrades to its own version's behavior); from a peer
-  reporting an equal or lower minor version, MUST be treated as
-  protocol error.
+- **Default behavior**. Receipt of any ``m_cmmd`` value not recognised
+  by the receiver's implementation of this specification SHOULD be
+  logged and SHOULD cause the TCP connection to be closed. Clients
+  observe such closures as ``ECA_DISCONN`` (Section 12.2). A
+  receiver MAY instead silently ignore the unknown command if it has
+  reason to believe the sender's minor version is higher than its
+  own (graceful forward-compat); this behavior is implementation-
+  defined and not required.
 
 14.3. Deprecated Commands
 -------------------------
@@ -2562,8 +2578,11 @@ have been removed; receivers MUST treat them as protocol errors:
   (Section 8.3.1) are deprecated and ignored. New implementations
   MUST set them to ``0.0f`` and MUST NOT rely on receivers honoring
   any non-zero value.
-- The ``CA_PROTO_NEEDSFP`` (vxWorks-specific FP-task option check) is
-  defunct.
+- The status code ``ECA_NEEDSFP`` (vxWorks-specific FP-task option
+  check) is marked defunct in the status table (Section 12.2). No
+  current server returns it; receivers handle it via the generic
+  unknown-status-code rule (treat unknown severities as
+  ``CA_K_ERROR``; Section 12.3).
 
 ----
 
