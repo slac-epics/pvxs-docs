@@ -454,13 +454,36 @@ authorization-rule matching, Section 11) but does NOT use them at
 TLS-handshake time to gate the connection. See Section 4.5 for the
 full description of how SAN entries are used.
 
-3.7. Session Resumption
------------------------
+3.7. Session Resumption (Not Used)
+----------------------------------
 
-TLS 1.3 session tickets are PERMITTED but OPTIONAL. Implementations
-SHOULD support them for performance. Tickets MUST NOT be reused
-across server restarts; servers MUST issue fresh
-PSK/resumption secrets on each startup.
+SPVA does NOT use TLS 1.3 session resumption. Every TLS connection
+between an SPVA client and an SPVA server completes a full
+handshake; no client-side session ticket cache, no Pre-Shared Key
+(PSK) reuse, and no 0-RTT (Section 3.8) is performed. A server MAY
+still emit ``NewSessionTicket`` messages (these are the OpenSSL
+default for TLS 1.3 servers), and a client MUST tolerate receiving
+them, but a conforming SPVA client MUST NOT cache the tickets and
+MUST NOT present them on a subsequent connection.
+
+The rationale is that PVA's connection-management model (PVA spec
+Section 8) treats every loss of TCP as a full disconnect that
+returns each affected channel to the SEARCHING state; recovery is
+by fresh UDP search → fresh search reply → fresh TCP connect →
+fresh TLS handshake → fresh ``CMD_CONNECTION_VALIDATION`` →
+re-create channels → re-subscribe monitors. Cross-connection TLS
+state (a session ticket bound to a specific endpoint identity)
+would not survive this flow even if implementations attempted to
+preserve it, because the post-disconnect search may resolve to a
+different IP, a different server certificate (e.g. after a server
+restart), or both.
+
+The pvxs implementation reflects this design: no session-cache
+configuration is set on the SSL context, no
+``SSL_set_session`` call is ever made on the client side, and
+session tickets received from servers are discarded (see
+``pvxs/src/clientconn.cpp`` ``Connection::startConnecting()``,
+``Connection::cleanup()``).
 
 3.8. 0-RTT (Early Data)
 -----------------------
