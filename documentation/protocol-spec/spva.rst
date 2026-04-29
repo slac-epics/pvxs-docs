@@ -1101,35 +1101,51 @@ See Section 4.7.3 for the relationship between ``renew_by``,
 
 A Certificate Creation Request is submitted to PVACMS via PVA RPC
 (``CMD_RPC``, PVA Section 9.6) targeting the well-known PV name
-``<prefix>:CCR:CREATE`` (default prefix ``CERT``). The RPC's
-request value is a CCR PVStructure:
+``<prefix>:CREATE[:<issuer_id>]`` (default prefix ``CERT``). The
+optional trailing ``:<issuer_id>`` selects a specific issuer in
+multi-issuer PVACMS deployments; without it the deployment's
+default issuer is used. The RPC's request value is a CCR
+PVStructure:
 
 ::
 
     structure CCR
-        string      type                   # authenticator name (e.g. "x509", "krb")
-        string      name                   # principal name (CN component of Subject)
-        string      organization           # site / facility (O component)
-        string      organization_unit      # optional OU
-        string      country                # 2-letter ISO country code
-        string      pub_key                # PEM-encoded public key (PKCS#1 or SPKI)
-        time_t      not_before             # requested validity start
-        time_t      not_after              # requested validity end
-        enum_t      use                    # CLIENT, SERVER, or BOTH
-        u32         status_monitoring_extension  # 0 = disabled, 1 = enabled
-        structure   verifier               # optional, authenticator-specific
-            ...                            # type-specific fields
+        string             type             # authenticator: "std", "krb", or "ldap"
+        string             name             # principal name (CN of Subject)
+        string             country          # 2-letter ISO country code
+        string             organization     # O component of Subject
+        string             organization_unit # OU component of Subject
+        u16                usage            # bitmask: CLIENT (0x01),
+                                            #   SERVER (0x02), CMS (0x04),
+                                            #   IOC (0x08); bits OR-able
+        u64                not_before       # requested validity start (UTC seconds)
+        u64                not_after        # requested validity end (UTC seconds)
+        string             pub_key          # PEM-encoded public key
+        bool               no_status        # true ⇒ omit SPvaCertStatusURI
+                                            #   (Section 4.3); status monitoring
+                                            #   not bound to this certificate
+        structure          verifier         # authenticator-specific (Section 6.2)
+            ...                             # per-authenticator fields
+        struct[]           schedule         # SCHEDULED_OFFLINE windows
+                                            #   (Section 8); empty ⇒ none
+            string         day_of_week      # e.g. "MON"
+            string         start_time       # HH:MM
+            string         end_time         # HH:MM
+        struct[]           san              # Subject Alternative Name entries to
+                                            #   embed in the issued certificate
+                                            #   (Section 4.5); empty ⇒ no SAN ext
+            string         type             # "dns" or "ip"
+            string         value            # DNS name or IP address
 
-The ``verifier`` sub-structure carries data the chosen
-authenticator (Section 6.2) needs to validate the requesting
-principal's identity:
+The ``verifier`` sub-structure is per-authenticator (Section 6.2):
 
-- ``authnstd``: empty.
-- ``authnkrb``: ``{ token: byte[], mic: byte[] }`` — GSS-API
-  initial-context token plus message integrity check.
-- ``authnldap``: ``{ signature: byte[] }`` — base64-encoded
-  signature over the CCR contents made with the principal's own
-  private key after a successful LDAP bind has proved identity.
+- ``type = "std"``: ``verifier`` is empty.
+- ``type = "krb"``: ``verifier = { token: byte[], mic: byte[] }``
+  — GSS-API initial-context token plus message integrity check.
+- ``type = "ldap"``: ``verifier = { signature: byte[] }`` —
+  base64-encoded signature over the CCR contents, made with the
+  principal's own private key after a successful LDAP bind has
+  proved identity.
 
 9.2. CCR Submission
 -------------------
@@ -1138,13 +1154,13 @@ A CCR is submitted via:
 
 ::
 
-    Channel<RPC>: <prefix>:CCR:CREATE
+    Channel<RPC>: <prefix>:CREATE[:<issuer_id>]
     Request: CCR PVStructure
     Response: structure { string cert_pem; status }
 
-The response, on success, contains the PEM-encoded issued
-certificate that the client installs in its keychain. On failure,
-the response Status is ERROR or FATAL with a descriptive message.
+On success, the response contains the PEM-encoded issued
+certificate. On failure, the response Status is ERROR or FATAL
+with a descriptive message.
 
 9.3. CCR Authorization
 ----------------------
