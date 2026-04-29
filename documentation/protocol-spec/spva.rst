@@ -155,9 +155,12 @@ SPVA is designed to:
   infrastructure (corporate CA, IPA, freeIPA, internal AD CS) can
   reuse it.
 - **Provide a bootstrapping path** — PVACMS (Section 10) issues
-  certificates to clients and servers that do not yet have them,
-  using site-defined authentication mechanisms (Kerberos, LDAP,
-  password) to verify the requesting principal's identity.
+  certificates to clients and servers that do not yet have them.
+  The Certificate Creation Request (Section 9) carries an
+  authenticator-specific verifier (Kerberos GSS-API token, LDAP-
+  bind-then-sign signature, or administrator-approval-pending
+  marker) that PVACMS uses to verify the requesting principal's
+  identity at issuance time.
 
 1.3. Scope
 ----------
@@ -171,10 +174,9 @@ This specification covers:
   EKU constraints.
 - The connection-validation handshake additions for SPVA
   (Section 5).
-- The set of authentication mechanisms (Section 6): the standard
-  ``x509`` mechanism, and the bootstrapping mechanisms
-  ``authnstd`` (password), ``authnkrb`` (Kerberos),
-  ``authnldap`` (LDAP).
+- The single SPVA authentication mechanism (Section 6.1):
+  ``x509``. The CCR issuance authenticators (Section 6.2):
+  ``authnstd``, ``authnkrb``, ``authnldap``.
 - The certificate-status protocol (Section 7): the cert-status
   PVStructure schema, the subscribe/publish flow, OCSP stapling
   (Section 13).
@@ -219,11 +221,11 @@ CMS
    Abbreviated PVACMS.
 
 Authenticator
-   A bootstrap mechanism by which a non-yet-certified principal
+   An issuance mechanism by which a not-yet-certified principal
    proves its identity to PVACMS in order to obtain a certificate.
-   Examples: ``authnstd`` (administrator-pre-approved password),
-   ``authnkrb`` (Kerberos service ticket), ``authnldap`` (LDAP
-   bind).
+   Defined values: ``authnstd`` (administrator approval),
+   ``authnkrb`` (Kerberos GSS-API), ``authnldap`` (LDAP-bind plus
+   key signature).
 
 CCR (Certificate Creation Request)
    A PVStructure that a principal sends to PVACMS to request
@@ -772,55 +774,54 @@ OU=<z>]`` for use in:
 
 ----
 
-6. Authentication Mechanisms
-============================
+6. Authentication
+=================
 
-6.1. Standard Mechanism: ``x509``
----------------------------------
+6.1. SPVA Authentication: ``x509``
+----------------------------------
 
-The default and primary SPVA authentication mechanism is ``x509`` —
-mutual TLS authentication with X.509 certificates as described in
-Sections 3 through 5. Once both endpoints have valid certificates
-(issued by PVACMS or any trusted CA), ``x509`` requires no
-additional protocol round-trips beyond the TLS handshake itself.
+SPVA uses one authentication mechanism: ``x509``. The peer
+certificate presented during the TLS handshake is the
+authenticator. The PVA ``CMD_CONNECTION_VALIDATION`` exchange
+(Section 5.2) carries ``auth_data = empty`` for the ``x509``
+mechanism.
 
-6.2. Bootstrap Mechanisms (For Cert Issuance)
----------------------------------------------
+PVA's ``CMD_AUTHNZ`` (command 5; PVA Section 6.4) is not used by
+SPVA. Implementations MUST tolerate receiving it (the PVA spec
+permits it for mechanism continuation) but MUST NOT depend on it.
 
-Before an endpoint can use ``x509``, it must HAVE an X.509
-certificate. PVACMS (Section 10) issues certificates to endpoints
-that authenticate via one of three bootstrap mechanisms:
+6.2. Certificate Issuance Authenticators
+----------------------------------------
 
-- ``authnstd`` (Standard) — administrator-pre-approved password.
-  The principal supplies a password to the ``authnstd`` tool, which
-  verifies it against PVACMS-side ACL and submits a CCR.
-- ``authnkrb`` (Kerberos) — the principal obtains a Kerberos
-  service ticket for PVACMS, sends it to the ``authnkrb`` tool,
-  which forwards the ticket to PVACMS in the CCR. PVACMS verifies
-  the ticket against its keytab.
-- ``authnldap`` (LDAP) — the principal supplies LDAP credentials;
-  ``authnldap`` performs an LDAP bind, on success submits a CCR
-  with an LDAP-signed assertion of the bound DN.
+Before an endpoint can present an ``x509`` certificate, the
+certificate must have been issued. PVACMS (Section 10) issues
+certificates in response to a Certificate Creation Request
+(Section 9). The CCR carries an authenticator-specific verifier
+in its ``verifier`` sub-structure that PVACMS uses to verify the
+requesting principal's identity at issuance time.
 
-The bootstrap mechanisms run OUTSIDE the SPVA-protected channel —
-they connect to PVACMS via plain TCP and rely on PVACMS to bind
-the bootstrap identity to the issued certificate. Once the
-certificate is issued and installed in the principal's keychain,
-all subsequent SPVA traffic uses ``x509``.
+Three issuance authenticators are defined:
 
-6.3. CMD_AUTHNZ in SPVA
------------------------
+- ``authnstd`` — issuance with administrator approval. The CCR is
+  submitted without external credential proof. PVACMS issues the
+  certificate in ``PENDING_APPROVAL`` state (Section 8.2). The
+  certificate becomes ``VALID`` only when an administrator
+  performs a PUT to the certificate's status PV.
+- ``authnkrb`` — Kerberos. The principal obtains a GSS-API token
+  for the PVACMS service principal (output of
+  ``gss_init_sec_context``) plus a Message Integrity Check; both
+  travel in the CCR as ``verifier.token`` and ``verifier.mic``.
+  PVACMS verifies via ``gss_accept_sec_context`` against its
+  service keytab.
+- ``authnldap`` — LDAP. The principal performs an LDAP bind
+  locally to prove identity, then signs the CCR contents with the
+  principal's own private key. The signature travels in the CCR
+  as ``verifier.signature``. PVACMS verifies the signature against
+  the LDAP-bound principal's public key.
 
-PVA's ``CMD_AUTHNZ`` (command 5, PVA Section 6.4) is reserved for
-SPVA bootstrap-mechanism continuation. The format of its payload is
-authenticator-specific:
-
-- For ``authnstd``: ``CMD_AUTHNZ`` is not used; the password is
-  carried in the CCR's ``verifier`` sub-structure (Section 9).
-- For ``authnkrb``: ``CMD_AUTHNZ`` payload is the Kerberos AP-REQ
-  service ticket (binary, opaque to PVA).
-- For ``authnldap``: ``CMD_AUTHNZ`` payload is the LDAP bind
-  challenge/response (handled by the underlying LDAP library).
+The CCR submission to PVACMS uses PVA RPC (Section 9). The
+issuance authenticators are not SPVA-protocol messages on their
+own; they are CCR ``verifier`` payloads.
 
 ----
 
@@ -1119,13 +1120,16 @@ request value is a CCR PVStructure:
         structure   verifier               # optional, authenticator-specific
             ...                            # type-specific fields
 
-The ``verifier`` sub-structure carries data the chosen authenticator
-needs to validate the requesting principal's identity:
+The ``verifier`` sub-structure carries data the chosen
+authenticator (Section 6.2) needs to validate the requesting
+principal's identity:
 
-- ``authnstd``: empty or ``{ password: string }``.
-- ``authnkrb``: ``{ ap_req: byte[] }`` carrying the Kerberos
-  service ticket.
-- ``authnldap``: ``{ ldap_dn: string, ldap_signature: byte[] }``.
+- ``authnstd``: empty.
+- ``authnkrb``: ``{ token: byte[], mic: byte[] }`` — GSS-API
+  initial-context token plus message integrity check.
+- ``authnldap``: ``{ signature: byte[] }`` — base64-encoded
+  signature over the CCR contents made with the principal's own
+  private key after a successful LDAP bind has proved identity.
 
 9.2. CCR Submission
 -------------------
