@@ -208,8 +208,12 @@ PVACMS
    The Process Variable Access Certificate Management Service. A
    long-running service that issues, monitors, and revokes X.509
    certificates for SPVA endpoints. PVACMS itself runs as a PVA
-   server, exposing its functions as RPCs at well-known PV names
-   (Section 10).
+   server. It exposes some of its functions as remote procedure
+   calls (RPCs) at well-known PV names — certificate creation,
+   admin scheduling and approval — and other functions as
+   conventional monitorable / readable PVs: per-certificate
+   status (subscribable), service health, service metrics,
+   issuer-cert info, and root-CA info (Section 10).
 
 CMS
    Abbreviated PVACMS.
@@ -1190,39 +1194,100 @@ by signing the CCR itself).
 10.1. PVACMS as a PVA Server
 ----------------------------
 
-PVACMS runs as a PVA server, exposing all its functions as PVs
-under a configurable PV-name prefix (default ``CERT``). Clients
-interact with PVACMS using standard PVA operations: ``CMD_RPC``
-(for CCR submission, status queries), ``CMD_MONITOR`` (for
-cert-status subscriptions), ``CMD_GET`` (for cert-detail retrieval).
+PVACMS runs as a PVA server. It exposes its functions through
+two distinct kinds of well-known PVs under a configurable
+PV-name prefix (default ``CERT``):
+
+- **Operational PVs** — conventional readable / monitorable PVs
+  that publish PVACMS state. Clients access them with PVA's
+  ``CMD_GET`` and ``CMD_MONITOR``. These cover per-certificate
+  status, service health, service metrics, the issuer
+  certificate's metadata, and the root Certification Authority
+  (root CA) certificate's metadata. They are not RPC entry
+  points — they are state PVs that any cert-bearing client may
+  read or subscribe to (subject to the EPICS access security
+  configuration file rules; see Section 11).
+
+- **Action PVs** — RPC entry points (PVA ``CMD_RPC``) that
+  cause PVACMS to perform a privileged operation. These cover
+  certificate creation, admin approval of pending requests,
+  admin revocation, and scheduled-operation submission.
 
 PVACMS itself is an SPVA-secured server: clients connecting to
-PVACMS MUST use TLS, and PVACMS's own server certificate MUST be
-issued by a trust anchor common to all participating endpoints.
+PVACMS MUST use Transport Layer Security (TLS), and PVACMS's own
+server certificate MUST be issued by a trust anchor common to
+all participating endpoints.
 
 10.2. PVACMS PV Namespace
 -------------------------
 
-.. table:: PVACMS well-known PV names
+.. table:: PVACMS well-known PVs (operational)
    :widths: auto
 
-   +------------------------------------+--------------------------------+
-   | PV name                            | Operation                      |
-   +====================================+================================+
-   | ``<prefix>:CCR:CREATE``            | RPC: submit a CCR              |
-   +------------------------------------+--------------------------------+
-   | ``<prefix>:STATUS:<skid>:<serial>``| MONITOR: cert-status updates   |
-   +------------------------------------+--------------------------------+
-   | ``<prefix>:CERT:<skid>:<serial>``  | RPC: get full cert details     |
-   +------------------------------------+--------------------------------+
-   | ``<prefix>:REVOKE``                | RPC (admin): revoke a cert     |
-   +------------------------------------+--------------------------------+
-   | ``<prefix>:APPROVE``               | RPC (admin): approve pending   |
-   |                                    | CCR                            |
-   +------------------------------------+--------------------------------+
+   +-------------------------------------+----------+--------------------------------+
+   | PV name                             | Access   | Purpose                        |
+   +=====================================+==========+================================+
+   | ``<prefix>:STATUS:<skid>:<serial>`` | GET /    | Per-certificate status updates |
+   |                                     | MONITOR  | (one PV per issued cert; see   |
+   |                                     |          | Section 7).                    |
+   +-------------------------------------+----------+--------------------------------+
+   | ``<prefix>:HEALTH``                 | GET /    | Service health (NTEnum:        |
+   |                                     | MONITOR  | "OK" / "Not OK") plus          |
+   |                                     |          | ancillary fields (database     |
+   |                                     |          | connectivity, signing-key      |
+   |                                     |          | validity, uptime, current      |
+   |                                     |          | issued-cert count, cluster     |
+   |                                     |          | member count, last self-check  |
+   |                                     |          | timestamp).                    |
+   +-------------------------------------+----------+--------------------------------+
+   | ``<prefix>:METRICS``                | GET /    | Service metrics (NTScalar:     |
+   |                                     | MONITOR  | currently-VALID certificate    |
+   |                                     |          | count) plus ancillary counters |
+   |                                     |          | (request rates, error rates,   |
+   |                                     |          | signing latencies).            |
+   +-------------------------------------+----------+--------------------------------+
+   | ``<prefix>:ISSUER:<skid>``          | GET      | Issuer certificate metadata    |
+   |                                     |          | (Subject Distinguished Name,   |
+   |                                     |          | validity, public-key digest,   |
+   |                                     |          | full chain).                   |
+   +-------------------------------------+----------+--------------------------------+
+   | ``<prefix>:ROOT:<skid>``            | GET      | Root CA certificate metadata.  |
+   +-------------------------------------+----------+--------------------------------+
 
-Admin RPCs are gated by ASG/ACF rules that require the calling
-principal to be in the PVACMS administrators role.
+.. table:: PVACMS well-known PVs (action / RPC)
+   :widths: auto
+
+   +-------------------------------------+----------+--------------------------------+
+   | PV name                             | Access   | Purpose                        |
+   +=====================================+==========+================================+
+   | ``<prefix>:CREATE``                 | RPC      | Submit a Certificate Creation  |
+   |                                     |          | Request (Section 9). Open to   |
+   |                                     |          | any client whose authenticator |
+   |                                     |          | the PVACMS recognises.         |
+   +-------------------------------------+----------+--------------------------------+
+   | ``<prefix>:SCHEDULE``               | RPC      | Submit a scheduled-operation   |
+   |                                     | (admin)  | request (e.g. scheduled        |
+   |                                     |          | revocation).                   |
+   +-------------------------------------+----------+--------------------------------+
+   | ``<prefix>:APPROVE``                | RPC      | Approve a pending CCR (drives  |
+   |                                     | (admin)  | the ``PENDING_APPROVAL`` →     |
+   |                                     |          | ``PENDING`` state transition;  |
+   |                                     |          | see Section 8.3).              |
+   +-------------------------------------+----------+--------------------------------+
+   | ``<prefix>:REVOKE``                 | RPC      | Revoke an issued certificate.  |
+   |                                     | (admin)  |                                |
+   +-------------------------------------+----------+--------------------------------+
+
+Admin RPCs are gated by EPICS access security rules that require
+the calling principal to be in the PVACMS administrators role
+(Section 11).
+
+The ``<prefix>:STATUS:<skid>:<serial>`` PV is implemented as a
+*wildcard PV* — a single server-side PV pattern that
+materialises one channel per actually-issued certificate, rather
+than a fixed set of pre-registered PVs. This allows the channel
+list to grow with the certificate population without redeploying
+PVACMS.
 
 10.3. PVACMS Identity
 ---------------------

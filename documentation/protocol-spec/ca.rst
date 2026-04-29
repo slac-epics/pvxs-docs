@@ -252,8 +252,8 @@ behavior.
 2.1. Layering
 -------------
 
-CA runs directly over UDP and TCP. There is no intermediate framing
-layer.
+CA runs directly over UDP and TCP. There is no intermediate
+framing layer.
 
 ::
 
@@ -263,8 +263,15 @@ layer.
     +-------------------+ +-------------------+
     |        UDP        | |        TCP        |
     +-------------------+ +-------------------+
-    |               IPv4 / IPv6                |
+    |                   IPv4                   |
     +------------------------------------------+
+
+CA is IPv4-only. The wire format reserves a 32-bit slot for the
+server's IP address in the search reply (Section 6.2) and in the
+pre-V4.6 beacon (Section 9.1); these slots are sized for IPv4 and
+have no IPv6 extension. See Section 3.6 for the consequence; sites
+needing IPv6 transport SHALL use PVAccess
+(:doc:`/protocol-spec/pva`).
 
 UDP carries:
 
