@@ -619,9 +619,9 @@ and MUST NOT contain any revoked or expired certificate.
 SPVA distinguishes the **cryptographic** validity of an entity
 certificate (its X.509 ``notBefore`` and ``notAfter`` fields, fixed
 at issuance and verifiable by any standard X.509 verifier) from its
-**operational** validity (whether the cert-status protocol of
-Section 7 currently asserts the certificate is in an
-operationally-good state, Section 8.4).
+**operational** validity (the cert-status protocol of Section 7
+currently asserts a status mapped to a usable connection-state
+class, Section 8.4).
 
 Operational validity is enforced by the cert-status protocol, not
 by ``notAfter``. The two are deliberately decoupled so that
@@ -669,31 +669,20 @@ revocation propagation.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Operational validity is the property checked by an SPVA endpoint
-when admitting or maintaining a connection (Section 5.1, Section
-7). An operationally-valid certificate is one whose cert-status
-PV currently reports a status in the operationally-good set
-(``VALID``, ``PENDING_RENEWAL``; see Section 8.4) AND whose
-status response's ``status_valid_until_date`` has not passed.
+when establishing and maintaining a connection (Section 5.1,
+Section 7). The current cert-status report drives the connection's
+state per the mapping in Section 8.4; only the GOOD class permits
+unrestricted SPVA traffic. The cert-status response's
+``status_valid_until_date`` field defines the freshness window: a
+report whose ``status_valid_until_date`` has passed MUST be
+treated as ``UNKNOWN`` regardless of the underlying ``status``
+value.
 
-The cert-status response's ``status_valid_until_date`` field
-defines the freshness window: a cached or stapled cert-status
-response is honored only until this time, after which a fresh
-response MUST be obtained. PVACMS sets ``status_valid_until_date``
-per its configured cert-status validity duration; the
-configuration interface is the environment variable
-``EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS`` (a duration in
-minutes). Endpoints obtain fresh status either by maintaining a
-live cert-status subscription (Section 7.3, the typical case) or,
-if subscription is unavailable, by re-querying.
-
-This design — long cryptographic lifetime, short operational
-window — means that revocation, suspension, and policy changes
-propagate within the cert-status validity window (typically tens of
-minutes) rather than being bounded by the certificate's
-``notAfter``. A revoked certificate becomes operationally invalid
-within at most one ``status_valid_until_date`` interval after
-PVACMS records the revocation, regardless of whether the
-certificate's ``notAfter`` is days or years away.
+PVACMS sets ``status_valid_until_date`` per the duration
+configured by ``EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS``.
+Endpoints obtain fresh status by maintaining a live cert-status
+subscription (Section 7.3) or, if subscription is unavailable, by
+re-querying.
 
 4.7.3. Renewal Hint (PENDING_RENEWAL and renew_by)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -711,14 +700,13 @@ certificate. The renewal hint is conveyed:
   PVStructure (Section 7.2).
 
 A certificate-holder receiving ``PENDING_RENEWAL`` SHOULD initiate
-a renewal Certificate Creation Request (Section 9.4) but MAY
-continue using the current certificate for operations until the
-renewal completes; ``PENDING_RENEWAL`` is in the operationally-good
-set so existing connections are not disrupted while the holder
-arranges renewal. The renewal hint is policy-driven, not
-cryptographic: it gives the operator a controlled re-key cadence
-that is independent of (and typically much shorter than)
-``notAfter``.
+a renewal Certificate Creation Request (Section 9.4). While
+``PENDING_RENEWAL`` is in effect the certificate's connections are
+in the SUSPENDED class (Section 8.4): TLS sockets remain open but
+SPVA channel operations are paused; plain-TCP fallback (where
+negotiated) remains usable. The connections resume normal SPVA
+operation when the renewal completes and the cert-status
+transitions back to ``VALID``.
 
 4.8. Key Algorithms
 -------------------
@@ -740,22 +728,23 @@ security margin.
 5.1. Order of Operations
 ------------------------
 
-When a client connects to an SPVA server:
+When an SPVA client connects to an SPVA server:
 
 1. TCP three-way handshake to the SPVA server port.
-2. TLS 1.3 handshake (Section 3) with mutual authentication and
-   peer certificate path validation (Section 4.5).
-3. Cert-status check: each side queries (or has cached) the other's
-   certificate status (Section 7) and rejects the connection if
-   the status is not ``VALID`` or ``PENDING_RENEWAL`` (the
-   "operationally good" set; Section 8.4).
-4. PVA ``CMD_CONNECTION_VALIDATION`` (PVA Section 6) is exchanged
+2. TLS 1.3 mutual-authentication handshake (Section 3) with peer
+   certificate chain validation against the configured trust
+   anchor (Section 4.6). A failed chain validation MUST cause TLS
+   handshake abort with a TLS Alert.
+3. PVA ``CMD_CONNECTION_VALIDATION`` (PVA Section 6) is exchanged
    inside the TLS tunnel.
 
-The TLS handshake MUST complete before any PVA byte is exchanged.
-A failed peer certificate validation (chain verification fails,
-status is ``REVOKED`` or ``EXPIRED``) MUST cause TLS handshake
-abort with a TLS Alert.
+Cert-status monitoring (Section 7) runs asynchronously alongside
+the connection. If the peer certificate carries the
+``SPvaCertStatusURI`` extension (Section 4.3), each side installs
+a cert-status subscription against the named PV; the subscription's
+updates drive the connection's per-status behaviour as specified
+in Section 8.4. If the extension is absent, no cert-status
+monitoring is installed and the connection runs without it.
 
 5.2. Auth-Method List Includes ``x509``
 ---------------------------------------
@@ -774,7 +763,7 @@ data needs to be exchanged.
 
 After successful TLS handshake, both endpoints extract the peer's
 principal identity from the peer certificate's Subject DN (Section
-4.3). The identity is normalized to the form ``CN=<x>, O=<y>[,
+4.4). The identity is normalised to the form ``CN=<x>, O=<y>[,
 OU=<z>]`` for use in:
 
 - Authorization rule lookup (Section 11).
@@ -894,22 +883,20 @@ separate OCSP query.
 7.3. Subscription Flow
 ----------------------
 
-When an SPVA endpoint completes a TLS handshake, it constructs the
-cert-status PV name for the peer's certificate (Section 7.1) and
-subscribes to that PV using PVA ``CMD_MONITOR`` (PVA Section 9.5)
-against the PVACMS server.
+If the peer certificate carries the ``SPvaCertStatusURI``
+extension (Section 4.3), the endpoint reads the PV name from the
+extension and subscribes to that PV using PVA ``CMD_MONITOR``
+(PVA Section 9.5) against the PVACMS server. The subscription
+runs for the lifetime of the connection.
 
-The first monitor update delivers the certificate's current
-status. The endpoint MUST wait for this first update before
-considering the connection operational. If the first update has
-``status`` outside the operationally-good set (Section 8.4), the
-endpoint MUST close the SPVA connection.
+Each cert-status update drives the connection's state per the
+mapping in Section 8.4. Updates and connection-state transitions
+are asynchronous; the connection is not held open or torn down
+synchronously with respect to handshake completion.
 
-For the lifetime of the SPVA connection, the endpoint maintains
-the cert-status subscription. If a subsequent update transitions
-the status to a non-operationally-good state, the endpoint MUST
-close the SPVA connection within an implementation-defined window
-(typically a few hundred milliseconds).
+If the peer certificate does not carry the ``SPvaCertStatusURI``
+extension, no subscription is installed and the connection runs
+without cert-status monitoring (Section 4.3).
 
 7.4. Cert-Status Cache
 ----------------------
@@ -1029,23 +1016,57 @@ The full set of permitted transitions:
 - ``VALID`` or ``PENDING_RENEWAL`` → ``EXPIRED`` (auto, on
   ``notAfter`` date)
 
-8.4. Operationally-Good Set
----------------------------
+8.4. Cert-Status to Connection-State Mapping
+--------------------------------------------
 
-For purposes of admitting an SPVA connection, the
-"operationally-good" status set is:
+Each cert-status state maps to one of four *status classes*. A
+status class drives the per-connection behaviour the endpoint
+applies for the affected peer:
 
-::
+.. table:: Status-class mapping
+   :widths: auto
 
-    {VALID, PENDING_RENEWAL}
+   +------------------------+-------------+-------------------------------------------+
+   | Cert status            | Class       | Connection-state effect                   |
+   +========================+=============+===========================================+
+   | ``VALID``              | GOOD        | TLS connection ready; SPVA traffic        |
+   |                        |             | proceeds normally.                        |
+   +------------------------+-------------+-------------------------------------------+
+   | ``SCHEDULED_OFFLINE``  | SUSPENDED   | TLS socket kept open; SPVA channel        |
+   |                        |             | operations are paused. Plain-TCP fallback |
+   |                        |             | (where negotiated) remains usable. The    |
+   |                        |             | connection upgrades to GOOD on transition |
+   |                        |             | to ``VALID`` or moves to BAD on           |
+   |                        |             | revocation/expiry.                        |
+   +------------------------+-------------+-------------------------------------------+
+   | ``PENDING_RENEWAL``    | SUSPENDED   | Same as ``SCHEDULED_OFFLINE``: TLS socket |
+   |                        |             | kept, channels paused, plain-TCP fallback |
+   |                        |             | usable. Resumes on the renewal completing |
+   |                        |             | (transition to ``VALID``).                |
+   +------------------------+-------------+-------------------------------------------+
+   | ``REVOKED``            | BAD         | Connection MUST be closed; the endpoint   |
+   |                        |             | enters degraded mode and refuses further  |
+   |                        |             | TLS connections involving this            |
+   |                        |             | certificate.                              |
+   +------------------------+-------------+-------------------------------------------+
+   | ``EXPIRED``            | BAD         | Same as ``REVOKED``.                      |
+   +------------------------+-------------+-------------------------------------------+
+   | ``UNKNOWN``            | UNKNOWN     | TLS not yet ready; plain-TCP fallback     |
+   |                        |             | (where negotiated) remains usable. The    |
+   |                        |             | endpoint waits for a status update that   |
+   |                        |             | resolves to GOOD, SUSPENDED, or BAD.      |
+   +------------------------+-------------+-------------------------------------------+
+   | ``PENDING``            | UNKNOWN     | Same as ``UNKNOWN``.                      |
+   +------------------------+-------------+-------------------------------------------+
+   | ``PENDING_APPROVAL``   | UNKNOWN     | Same as ``UNKNOWN``.                      |
+   +------------------------+-------------+-------------------------------------------+
 
-Any other status MUST cause the connection to be rejected (or
-torn down if already established).
+A non-current cert-status response (``status_valid_until_date``
+in the past) MUST be treated as ``UNKNOWN`` regardless of the
+underlying ``status`` field.
 
-``PENDING_RENEWAL`` is included because the certificate is still
-in date and validly issued; it is just approaching expiry. Tearing
-down operational connections during the renewal window would
-disrupt service unnecessarily.
+Status-class transitions take effect within an implementation-
+defined window of the cert-status update arriving at the endpoint.
 
 8.5. Renewal Hint (renew_by)
 ----------------------------
@@ -1503,13 +1524,19 @@ immediately; backoff per implementation.
 15.2. Cert-Status Mid-Connection
 --------------------------------
 
-If a peer's cert-status transitions to a non-operationally-good
-state during a connection, the endpoint MUST close the SPVA
-connection (TCP RST or clean TLS close) within an
-implementation-defined window, with a descriptive log message.
+If a peer's cert-status transitions during a connection, the
+endpoint applies the connection-state effect for the new status's
+class per Section 8.4. The transition takes effect within an
+implementation-defined window of the cert-status update arriving
+at the endpoint.
 
-The closing party MAY include a TLS Alert ``certificate_revoked``
-(:rfc:`8446`) before the close.
+A transition into the BAD class MUST cause connection close (TCP
+RST or clean TLS close). The closing party MAY include a TLS
+Alert ``certificate_revoked`` (:rfc:`8446`) before the close.
+
+A transition into the SUSPENDED or UNKNOWN class MUST NOT close
+the underlying TLS socket; channel operations are paused per
+Section 8.4 until the next transition.
 
 15.3. CCR Failures
 ------------------
