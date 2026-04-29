@@ -2025,28 +2025,41 @@ Destroy.
 ------------
 
 ``CMD_RPC`` (command 20) is a request-response operation with
-arbitrary structured payloads. The Init exchange delivers no type
-information for RPC (each RPC call describes its argument and result
-inline).
+arbitrary structured payloads. The Init exchange delivers no
+channel-bound type information for RPC; each RPC invocation
+carries its own argument structure inline as a typed value.
 
-RPC request:
+RPC Init request (sub-command bit ``0x08`` set):
 
 ::
 
     u32  server_sid
     u32  client_ioid
-    u8   subcmd = 0x40     (Invoke)
-    PVRequest  request_value
+    u8   subcmd            (bit 0x08 = Init)
+    typed-value  pvRequest    (FieldDesc + value)
 
-RPC response:
+RPC Init response (mirror).
+
+RPC invocation request (sub-command bit ``0x08`` clear, bit ``0x40``
+clear; for CMD_RPC, "Get-bit clear" denotes the put-side
+"Invoke"):
+
+::
+
+    u32  server_sid
+    u32  client_ioid
+    u8   subcmd            (typically 0x00)
+    typed-value  argument     (FieldDesc + value)
+
+RPC invocation response:
 
 ::
 
     u32  client_ioid
-    u8   subcmd = 0x40
+    u8   subcmd
     Status status
     [if status OK:]
-        Value      response_value
+        typed-value  result     (FieldDesc + value)
 
 9.7. CMD_PROCESS
 ----------------
@@ -2111,30 +2124,47 @@ analog of CA's repeater).
    +=================+=========================================+
    | server GUID     | 12 octets                               |
    +-----------------+-----------------------------------------+
+   | flags           | u8 reserved (implementations consulted  |
+   |                 | in preparing this specification emit 0) |
+   +-----------------+-----------------------------------------+
    | beacon_seq      | u8 monotonically increasing per server  |
+   |                 | (8-bit wrap)                            |
    +-----------------+-----------------------------------------+
    | change_count    | u16 increments on server-side change    |
    |                 | (PV add/remove)                         |
    +-----------------+-----------------------------------------+
-   | server_addr     | 16 octets (IPv6 or v4-mapped)           |
+   | server_addr     | 16 octets (IPv6 form). Implementations  |
+   |                 | consulted in preparing this             |
+   |                 | specification emit the IPv4-mapped      |
+   |                 | "any" address; the client uses the UDP  |
+   |                 | source address as the server's actual   |
+   |                 | address                                 |
    +-----------------+-----------------------------------------+
    | server_port     | u16 server's TCP port                   |
    +-----------------+-----------------------------------------+
-   | protocol        | String (e.g. "tcp" or "tls")            |
+   | protocol        | String (e.g. ``"tcp"``)                 |
    +-----------------+-----------------------------------------+
-   | server_status   | Variant: server-defined status fields,  |
-   |                 | usually empty                           |
+   | server_status   | typed value (FieldDesc + value).        |
+   |                 | Implementations consulted in preparing  |
+   |                 | this specification emit the NULL        |
+   |                 | FieldDesc (``0xFF``) with no value      |
    +-----------------+-----------------------------------------+
 
 10.2. Beacon Cadence
 --------------------
 
-A PVA server emits beacons:
+A PVA server's beacon cadence is implementation-defined. The
+implementations consulted in preparing this specification differ:
 
-- **Initial fast cadence**: every 100 ms for the first 5 beacons
-  after server startup (rapid-presence-announcement).
-- **Steady-state**: every ``EPICS_PVA_BEACON_PERIOD`` (default
-  15 seconds).
+- One implementation emits beacons every 15 seconds for the first
+  10 beacons after startup, then falls back to 180 seconds.
+- Other implementations honor an ``EPICS_PVA_BEACON_PERIOD``
+  environment variable and use a different burst pattern.
+
+Receivers MUST NOT assume any particular cadence. Liveness
+detection (Section 10.3) uses the GUID and ``change_count`` to
+distinguish server restart and topology change from regular
+re-emission, regardless of the cadence the server happens to use.
 
 10.3. Use of Beacons for Liveness Detection
 -------------------------------------------
@@ -2203,9 +2233,19 @@ MUST discard the partial reassembly without applying it.
 ------------------------------------
 
 Standalone messages (``SegNone``) MAY be interleaved with the
-segments of a different logical message. Implementations MUST NOT
-allow two segmented messages of the SAME command code to be
-in-flight simultaneously on the same connection.
+segments of a different logical message.
+
+A sender MUST NOT have more than one segmented message in flight
+on the same connection at a time, regardless of command code:
+once ``SegFirst`` has been sent, the sender MUST send
+``SegMid`` / ``SegLast`` segments of that same logical message
+(possibly interleaved with standalone ``SegNone`` messages of
+other command codes) until ``SegLast`` completes the reassembly,
+before beginning another segmented message.
+
+A receiver SHOULD treat any ``SegMid`` / ``SegLast`` whose
+command code differs from the in-progress segmented message's
+command code as a peer protocol violation and close the connection.
 
 ----
 
@@ -2272,25 +2312,20 @@ Clients SHOULD log received messages at the equivalent severity.
 13. ACL Change Notification
 ============================
 
-The server MAY send ``CMD_ACL_CHANGE`` (command 6) at any time
-after a channel is connected to update the client's understanding
-of the channel's permissions. This is typically triggered by a
-server-side policy reload (e.g. ASG reload).
+The server emits ``CMD_ACL_CHANGE`` (command 6) to convey or
+update a channel's permissions. The server MUST emit one
+``CMD_ACL_CHANGE`` immediately before the corresponding
+successful ``CMD_CREATE_CHANNEL`` response (Section 8.2) to
+establish the channel's initial permissions, and MAY emit
+additional ``CMD_ACL_CHANGE`` messages at any later time on the
+same connection to signal permission changes (typically triggered
+by a server-side policy reload).
 
-.. table:: CMD_ACL_CHANGE payload
-   :widths: auto
+The payload format and bit values are defined in Section 8.2.
 
-   +-----------------+-----------------------------------------+
-   | Field           | Type / value                            |
-   +=================+=========================================+
-   | client_cid      | u32 affected channel's CID              |
-   +-----------------+-----------------------------------------+
-   | permissions     | u8 bitmask (PUT 0x01, PUT_GET 0x02,     |
-   |                 | RPC 0x04)                               |
-   +-----------------+-----------------------------------------+
-
-The client MUST update its cached access-rights for the channel
-and apply the new permissions to all subsequent operations.
+The client MUST update its cached permissions for the channel and
+apply the new permissions to all subsequent operations on that
+channel.
 
 ----
 
@@ -2315,41 +2350,40 @@ appears as the first message in a UDP datagram, prefixing the
 15.1. Status Encoding
 ---------------------
 
-PVA's "Status" is a structured value embedded in many response
-payloads:
+PVA's Status is a tagged value embedded in many response payloads.
+The leading octet selects between the regular encoding and a
+single-byte shortcut:
 
 .. table:: Status encoding
    :widths: auto
 
-   +---------+--------------+----------------------------------+
-   | Field   | Type         | Meaning                          |
-   +=========+==============+==================================+
-   | type    | u8           | 0=OK, 1=OK_WITH_WARN, 2=ERROR,   |
-   |         |              | 3=FATAL, 0xFF=OK_NO_DETAIL       |
-   +---------+--------------+----------------------------------+
-   | message | String       | (only if type != OK_NO_DETAIL)   |
-   +---------+--------------+----------------------------------+
-   | callTree| String       | (only if type != OK_NO_DETAIL,   |
-   |         |              | server-side stack trace, MAY be  |
-   |         |              | empty)                           |
-   +---------+--------------+----------------------------------+
+   +-----------+--------------+--------------------------------+
+   | Lead byte | Following    | Meaning                        |
+   +===========+==============+================================+
+   | ``0xFF``  | (none)       | Shortcut: equivalent to type   |
+   |           |              | OK with empty message and      |
+   |           |              | empty call-tree                |
+   +-----------+--------------+--------------------------------+
+   | 0..3      | String msg,  | Regular encoding: leading byte |
+   |           | String trace | is the type; both strings      |
+   |           |              | follow even if empty           |
+   +-----------+--------------+--------------------------------+
 
-The 0xFF (``OK_NO_DETAIL``) shortcut allows the common
-no-error-no-message case to be encoded as a single byte.
+The shortcut allows the common no-error-no-message case to be
+encoded as a single byte. A receiver decoding ``0xFF`` MUST treat
+the value as type OK with both strings empty.
 
 15.2. Status Type Semantics
 ---------------------------
 
-- **OK (0)**: operation succeeded; no message necessary.
-- **OK_WITH_WARN (1)**: operation succeeded; message describes a
+- **OK (0)**: operation succeeded.
+- **WARN (1)**: operation succeeded; the message describes a
   non-fatal warning the client SHOULD log.
-- **ERROR (2)**: operation failed; message describes the error;
-  the client MAY retry; the connection remains usable.
+- **ERROR (2)**: operation failed; the message describes the
+  error; the client MAY retry; the connection remains usable.
 - **FATAL (3)**: operation failed and the connection is now
   unusable; the server SHOULD close the TCP connection after
-  sending; client MUST treat the connection as lost.
-- **OK_NO_DETAIL (0xFF)**: like OK but with no message and no
-  call tree; on-wire encoding shortcut.
+  sending; the client MUST treat the connection as lost.
 
 15.3. Status in Operation Responses
 -----------------------------------
