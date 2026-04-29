@@ -1457,109 +1457,78 @@ If the server cannot speak TLS but the search list includes
 If neither protocol matches, the server MUST silently ignore the
 search.
 
-12.3. TLS-First Discovery
--------------------------
+12.3. TLS-Only Discovery
+------------------------
 
-For SPVA-required deployments, clients MAY send searches with only
-``protocols = ["tls"]`` (no fallback). Servers without SPVA support
-will silently ignore; the client will only connect to SPVA-capable
-servers. This provides a hard policy guarantee that no plaintext
-connection is ever attempted.
+A client MAY send searches with ``protocols = ["tls"]`` (no
+``"tcp"`` fallback). Servers that cannot speak TLS will silently
+ignore the search; the client will only connect to SPVA-capable
+servers.
 
 ----
 
 13. OCSP Stapling
 =================
 
-13.1. Stapling Rationale
-------------------------
+OCSP stapling is OPTIONAL. The mechanism follows :rfc:`6066`
+(``status_request`` extension) and :rfc:`6066` Section 8 / :rfc:`6961`
+(stapled response carried in the TLS handshake).
 
-OCSP stapling (:rfc:`6066` Section 8, :rfc:`6961`) embeds the OCSP
-response into the TLS handshake itself. This avoids the latency and
-privacy issues of a client-initiated OCSP query at handshake time:
-the server includes a recent OCSP response (signed by the issuing CA)
-in its TLS Certificate message.
+13.1. Client Behaviour
+----------------------
 
-13.2. Stapled Status Format
----------------------------
+A client MAY include the TLS ``status_request`` extension in its
+ClientHello.
 
-The stapled OCSP response is a standard OCSP response per
-:rfc:`6960`. SPVA does not modify the OCSP format. The client MUST
-verify:
+A client receiving a stapled OCSP response in the handshake MUST:
 
-- The OCSP response's signature against the issuing CA.
-- The OCSP response's ``thisUpdate`` is recent (typically within
-  the last hour).
-- The OCSP response's ``certStatus`` is ``GOOD``.
+- parse the response per :rfc:`6960`;
+- verify its signature against the configured trust anchor
+  (Section 4.6);
+- treat the response as not-current if its ``thisUpdate`` is older
+  than the cert-status validity duration (Section 4.7.2);
+- map the stapled ``certStatus`` to the cert-status mapping in
+  Section 8.4 (GOOD → GOOD class; REVOKED → BAD class; UNKNOWN →
+  UNKNOWN class).
 
-A stapled OCSP with ``certStatus`` ``REVOKED`` MUST cause the TLS
-handshake to abort.
+A stapled response in the BAD class MUST cause the TLS handshake
+to abort.
 
-13.3. Stapling Source
----------------------
+13.2. Server Behaviour
+----------------------
 
-PVACMS provides OCSP responses via the ocsp sub-structure of the
-cert-status PV (Section 7.2). An SPVA server SHOULD obtain its own
-stapling response by subscribing to its own cert-status PV and
-caching the most recent OCSP response. Implementations MAY refresh
-the stapled response on each TLS handshake or MAY cache for the
-``status_valid_until_date`` window.
+A server MAY supply a stapled OCSP response in its TLS Certificate
+message. The server obtains the OCSP response from the
+``ocsp_response`` field of its own cert-status PV (Section 7.2).
+The server MUST NOT staple a response whose freshness window
+(Section 4.7.2) has passed.
 
-13.4. Stapling Optional
------------------------
+13.3. Relationship to Cert-Status Monitoring
+--------------------------------------------
 
-SPVA endpoints SHOULD support OCSP stapling but MAY operate without
-it. When stapling is unavailable, endpoints fall back to the
-cert-status monitor (Section 7) for revocation awareness.
+A peer with a stapled OCSP response and a peer with no stapled
+response are subject to the same cert-status monitoring (Section 7)
+post-handshake. The stapled response affects only the initial
+handshake decision; subsequent transitions in the cert-status PV
+drive the connection state per Section 8.4 in either case.
 
 ----
 
-14. Connection Reconfiguration
-==============================
+14. Keychain Rotation
+=====================
 
-14.1. Runtime Keychain Rotation
--------------------------------
+An SPVA endpoint MAY rotate its TLS identity (the keychain
+backing its certificate) at runtime without process restart. The
+wire-protocol consequence is that all TLS connections at that
+endpoint close (with a TLS ``close_notify`` alert) and the PVA
+layer re-establishes them per the standard PVA reconnection
+flow: fresh search → fresh TCP connect → fresh TLS handshake (now
+using the new certificate) → fresh ``CMD_CONNECTION_VALIDATION``
+→ re-create channels → re-subscribe monitors.
 
-SPVA endpoints support runtime certificate rotation without process
-restart via the ``reconfigure()`` API (see
-:doc:`/programmers-ref/expert-api`). When called, the endpoint:
-
-1. Closes all existing TLS connections (with a clean TLS Alert).
-2. Re-reads the keychain file.
-3. Re-establishes connections under the new identity.
-
-The wire-protocol consequence is that all SPVA peers see TLS
-connection close, followed by a new TLS handshake (with the new
-certificate) when the connection is re-established.
-
-14.2. Triggers
---------------
-
-Reconfiguration is typically triggered by:
-
-- The cert-status monitor reporting ``PENDING_RENEWAL``, after
-  which the endpoint completes a renewal CCR (Section 9.4) and
-  reconfigures with the new certificate.
-- An administrator manually replacing the keychain file (e.g. for
-  an emergency revocation recovery).
-- A scheduled rotation policy.
-
-14.3. Connection Re-Establishment Sequence
-------------------------------------------
-
-After ``reconfigure()``:
-
-1. All TLS connections close; PVA channels enter DISCONNECTED state.
-2. The endpoint's PVA connection-management logic re-attempts
-   connections per its standard reconnection policy.
-3. New TLS handshakes use the new keychain.
-4. Channels re-create on the new connections.
-5. Subscriptions re-establish.
-
-The application code that depends on the channels SHOULD be
-prepared for a brief disconnection during reconfiguration; pvxs
-provides reconnection-aware monitor wrappers
-(see :doc:`/programmers-ref/expert-api`).
+There is no SPVA wire mechanism for in-place keychain swap on an
+existing connection; rotation is always observed by peers as a
+disconnect followed by a fresh handshake.
 
 ----
 
