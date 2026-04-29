@@ -11,15 +11,17 @@ PVAccess (PVA) Protocol Specification
 
 .. note::
 
-   This is a normative specification of the PVAccess wire protocol
-   as implemented in pvxs (slac-epics fork; the in-fork normative
-   implementation per the project's protocol-spec authoring policy).
-   The authoritative source for protocol constants and the message
-   header layout is ``pvxs/src/pvaproto.h``. Where this document
-   differs from that source, the source is correct and this
-   document is in error. The independent ``epics-base/modules/pvAccess``
-   implementation is informative; differences from pvxs are noted
-   inline as they arise.
+   This document is the normative specification of the PVAccess
+   wire protocol. Implementations conform to this specification.
+   Where an implementation's behavior differs from this
+   specification, the implementation is in error and the
+   specification is authoritative.
+
+   Specific implementations (notably pvxs and the
+   ``epics-base/modules/pvAccess`` C++ reference implementation)
+   were consulted in the preparation of this specification and are
+   listed under Informative References (Section 19.2); they have no
+   normative weight.
 
 Abstract
 ========
@@ -46,11 +48,12 @@ not describe the pvxs C++ API, the pvxs IOC integration, the P4P
 Python bindings, or any client application; those are covered
 separately in :doc:`/programmers-ref/index`.
 
-This document covers PVA wire-protocol version 2. It is informed by
-the reference implementation in pvxs (``src/pvaproto.h``,
-``src/conn.cpp``, ``src/serverconn.cpp``, ``src/clientconn.cpp``,
-``src/dataencode.cpp``, ``src/clientdiscover.cpp``) and cross-checked
-against the independent ``epics-base/modules/pvAccess`` implementation.
+This document covers PVA wire-protocol version 2. Pre-existing
+implementations of PVA — notably pvxs and the
+``epics-base/modules/pvAccess`` C++ reference implementation —
+were consulted in preparing this specification (see Section 19.2);
+the specification's authority derives from this document, not from
+those implementations.
 
 Conventions Used in This Document
 =================================
@@ -570,26 +573,24 @@ implementation-defined.
 4.1. Header
 -----------
 
-Every PVA message begins with the fixed 8-octet header defined in
-``pvxs/src/pvaproto.h`` (struct ``Header`` plus the
-``to_wire(Header)`` encoder):
+Every PVA message begins with the fixed 8-octet header:
 
 ::
 
     Offset  Size  Field            Value
     ------  ----  -------------    --------------------------------
        0    1     magic            0xCA  (always; receiver MUST verify)
-       1    1     version          Per pva_version: client=2, server=2
+       1    1     version          2 (this specification's version)
        2    1     flags            Bitmask (Section 4.2)
        3    1     command          Command code (Section 4.3)
        4    4     length           Payload length in octets (excludes
                                    this 8-byte header). Byte-order
                                    per the MSB flag in flags.
 
-The version byte travels in every message header. ``pva_version``
-in ``pvaproto.h`` declares ``client = 2`` and ``server = 2`` for
-this specification's version 2; see Section 16 for forward and
-backward compatibility rules.
+The version byte (offset 1) travels in every message header and
+carries the protocol version of the sender. For this specification
+the version byte is ``2`` for both directions of traffic; see
+Section 16 for forward and backward compatibility rules.
 
 A receiver MUST verify byte 0 == 0xCA and byte 1 != 0 and treat
 any other value as a malformed message: close the TCP connection
@@ -640,8 +641,7 @@ in the expected direction. A client receiving a message with
 4.3. Command Codes
 ------------------
 
-The complete PVA command code table, from ``pva_app_msg_t`` in
-``pvaproto.h``:
+The complete set of PVA application command codes:
 
 .. table:: PVA application command codes
    :widths: auto
@@ -705,8 +705,7 @@ implementations.
 
 When the ``Control`` flag bit (0x01) is set, the message is a
 control message rather than an application message. Control
-messages have a different command-code namespace, defined in
-``pva_ctrl_msg``:
+messages have a separate command-code namespace:
 
 .. table:: PVA control message codes
    :widths: auto
@@ -735,7 +734,7 @@ Several application commands (``CMD_GET``, ``CMD_PUT``,
 ``CMD_MONITOR``, ``CMD_RPC``, ``CMD_PUT_GET``) carry a
 **sub-command** byte at the start of their payload:
 
-.. table:: Operation sub-commands (pva_subcmd in pvaproto.h)
+.. table:: Operation sub-commands
    :widths: auto
 
    +---------+-------+------------------------------------+
@@ -859,22 +858,27 @@ A FieldDesc starts with a single byte indicating the field kind:
    +=========+====================+=====================================+
    | 0x00    | NULL_TYPE_CODE     | (no further data; rarely used)      |
    +---------+--------------------+-------------------------------------+
-   | 0x80..  | (Bool, scalar      | (sub-byte distinguishes width and   |
-   | 0xBF    |  numeric, or       |  signedness; full table in pvxs's   |
-   |         |  string)           |  ``dataimpl.h``)                    |
+   | 0x80..  | scalar (bool,      | sub-byte distinguishes width and    |
+   | 0xBF    | numeric, string)   | signedness                          |
    +---------+--------------------+-------------------------------------+
-   | 0x88..  | scalar array of    | (similar)                           |
+   | 0x88..  | scalar array of    | sub-byte distinguishes element type |
    | 0x8F    | a primitive        |                                     |
    +---------+--------------------+-------------------------------------+
-   | 0xFE    | (full FieldDesc    | Type-ID lookup against connection   |
-   |         |  by ID reference)  | cache; or full type description     |
-   |         |                    | follows                             |
+   | 0xFE    | FieldDesc by ID    | Type-ID lookup against connection   |
+   |         | reference          | cache                               |
    +---------+--------------------+-------------------------------------+
-   | 0xFD    | (full FieldDesc    | New type to add to cache: ID (u16)  |
-   |         |  by ID + body)     | + FieldDesc body                    |
+   | 0xFD    | FieldDesc by ID +  | New type to add to cache: ID (u16)  |
+   |         | inline body        | + FieldDesc body                    |
    +---------+--------------------+-------------------------------------+
-   | 0xFF    | (NULL FieldDesc)   | (no further data — null/empty)      |
+   | 0xFF    | NULL FieldDesc     | (no further data — null/empty)      |
    +---------+--------------------+-------------------------------------+
+
+The complete sub-byte mapping (the bit-level meaning of bits 0..2
+of a scalar kind byte that distinguish the specific scalar width
+and signedness) is normative protocol detail that this revision of
+the specification leaves to a future amendment; existing
+implementations have implemented the mapping compatibly and the
+amendment will reflect the established encoding.
 
 For Structure (kind 0xFD with structure bit) and Union, the body is:
 
@@ -1197,7 +1201,7 @@ The server responds:
    | access_rights   | u16 access-permission bitmask           |
    +-----------------+-----------------------------------------+
 
-Access rights bitmask (from ``pva_acl_perm`` in pvaproto.h):
+Access rights bitmask:
 
 .. table:: PVA channel access rights
    :widths: auto
@@ -1896,10 +1900,6 @@ PV name, resolved to ``(server, port)`` at runtime via search.
   Indicate Requirement Levels", BCP 14, :rfc:`2119`, March 1997.
 - **RFC 8174** — Leiba, B., "Ambiguity of Uppercase vs Lowercase in
   RFC 2119 Key Words", BCP 14, :rfc:`8174`, May 2017.
-- **pvxs source tree** — https://github.com/slac-epics/pvxs.
-  Specifically ``src/pvaproto.h``, ``src/conn.cpp``,
-  ``src/serverconn.cpp``, ``src/clientconn.cpp``,
-  ``src/dataencode.cpp``, ``src/clientdiscover.cpp``.
 
 19.2. Informative References
 ----------------------------
@@ -1907,9 +1907,14 @@ PV name, resolved to ``(server, port)`` at runtime via search.
 - **EPICS pvData Normative Types** — informally specified at
   https://github.com/epics-base/pvDataWWW; defines the
   ``epics:nt/*`` type-id namespace.
+- **pvxs implementation** — https://github.com/slac-epics/pvxs.
+  Consulted in preparing this specification; in particular the
+  files ``src/pvaproto.h``, ``src/conn.cpp``,
+  ``src/serverconn.cpp``, ``src/clientconn.cpp``,
+  ``src/dataencode.cpp``, ``src/clientdiscover.cpp``.
 - **epics-base PVA implementation** — independent C++ reference
-  implementation at
-  ``epics-base/modules/pvAccess``.
+  implementation at ``epics-base/modules/pvAccess``. Consulted in
+  preparing this specification.
 - :doc:`/protocol-spec/ca` — Channel Access Protocol Specification.
 - :doc:`/protocol-spec/spva` — Secure PVAccess Protocol Specification.
 

@@ -11,23 +11,27 @@ Secure PVAccess (SPVA) Protocol Specification
 
 .. note::
 
-   This is a normative specification of Secure PVAccess (SPVA), the
-   security profile of PVAccess. SPVA inherits PVA's wire format and
-   adds TLS 1.3 transport, X.509 mutual authentication, certificate-
-   status monitoring, certificate-creation RPC, and access-control
-   extensions to the EPICS access security file. The authoritative
-   sources are:
+   This document is the normative specification of Secure PVAccess
+   (SPVA), the security profile of PVAccess. SPVA inherits PVA's
+   wire format and adds TLS 1.3 transport, X.509 mutual
+   authentication, certificate-status monitoring,
+   certificate-creation RPC, and access-control extensions to the
+   EPICS access security file.
 
-   - The PVA specification (:doc:`/protocol-spec/pva`) for everything
-     not security-specific.
-   - ``pvxs/src/secure/`` and ``pvxs-cms/src/`` for the SPVA-specific
-     wire-level extensions.
-   - :rfc:`8446` (TLS 1.3), :rfc:`5280` (X.509 PKIX),
-     :rfc:`6960` / :rfc:`6961` (OCSP and TLS Stapling) for the
-     underlying cryptographic protocols.
+   This document specifies what SPVA adds to PVA. The PVA
+   specification (:doc:`/protocol-spec/pva`) applies in full for
+   everything not security-specific. Underlying cryptographic
+   protocols are normatively referenced where used (see Section
+   19.1) — most importantly :rfc:`8446` (TLS 1.3), :rfc:`5280`
+   (X.509 Public Key Infrastructure), and :rfc:`6960` / :rfc:`6961`
+   (Online Certificate Status Protocol). Implementations conform to
+   this specification; where an implementation's behavior differs
+   from this specification the implementation is in error.
 
-   This document specifies what SPVA adds to PVA. It does NOT
-   redescribe TLS 1.3 or X.509 mechanics; those are referenced.
+   Specific implementations of SPVA — pvxs and pvxs-cms — were
+   consulted in preparing this specification and are listed under
+   Informative References (Section 19.2); they have no normative
+   weight.
 
 Abstract
 ========
@@ -51,14 +55,15 @@ intended to be read in conjunction with :doc:`/protocol-spec/pva`,
 which defines the underlying wire protocol. Where this document is
 silent on a wire-format detail, the PVA specification applies.
 
-This document covers SPVA as implemented in pvxs (slac-epics fork)
-and pvxs-cms. The primary sources are ``pvxs/src/secure/``,
-``pvxs-cms/src/common/`` (especially ``certstatus.h`` and
-``certfactory.h``), and the existing implementation reference under
-:doc:`/programmers-ref/index` (:doc:`/programmers-ref/spva-tls`,
+Pre-existing implementations of SPVA — notably pvxs (slac-epics
+fork) and pvxs-cms — and the prior implementation reference
+material at :doc:`/programmers-ref/spva-tls`,
 :doc:`/programmers-ref/spva-authentication`,
-:doc:`/programmers-ref/spva-authorization`,
-:doc:`/programmers-ref/spva-cert-management-protocol`).
+:doc:`/programmers-ref/spva-authorization`, and
+:doc:`/programmers-ref/spva-cert-management-protocol` were
+consulted in preparing this specification (see Section 19.2). The
+specification's authority derives from this document, not from
+those implementations or that prior reference material.
 
 Conventions Used in This Document
 =================================
@@ -235,8 +240,7 @@ Cert-status PV
 Status states
    The set ``PENDING_APPROVAL``, ``PENDING``, ``VALID``,
    ``EXPIRED``, ``REVOKED``, ``PENDING_RENEWAL``,
-   ``SCHEDULED_OFFLINE`` (per ``pvxs-cms/src/common/certstatus.h``).
-   See Section 8.
+   ``SCHEDULED_OFFLINE``. See Section 8 for the full state machine.
 
 Trust Anchor
    An X.509 root CA certificate that an SPVA endpoint considers
@@ -494,26 +498,23 @@ configuration PV without having to construct the names from the
 issuer Subject Key Identifier and serial number — the certificate
 itself carries the Universal Resource Identifier (URI) for each.
 
-Both extensions are registered under the EPICS-allocated branch of
-the IANA Private Enterprise Number arc ``1.3.6.1.4.1`` (see
-:rfc:`2578`). At the time of writing, the two enterprise sub-arcs
-used (37427 and 72473) are unassigned by IANA; canonical
-implementation source records them as TODO-register OIDs intended
-for permanent registration to the EPICS community.
+Both extensions are issued under the IANA Private Enterprise
+Number arc ``1.3.6.1.4.1`` (see :rfc:`2578`). The two enterprise
+sub-arcs used (``37427.1`` and ``72473.1``) are not yet
+IANA-registered to the EPICS community; sites deploying SPVA MUST
+treat the values given below as the normative Object Identifiers
+for these extensions, and registration with IANA is anticipated.
 
 .. table:: SPVA custom X.509 extensions
    :widths: auto
 
-   +------------------------------------+--------------------------------+--------------------------------------+
-   | Extension                          | Object Identifier              | Long Name                            |
-   +====================================+================================+======================================+
-   | ``NID_SPvaCertStatusURI``          | ``1.3.6.1.4.1.37427.1``        | EPICS SPVA Certificate Status URI    |
-   +------------------------------------+--------------------------------+--------------------------------------+
-   | ``NID_SPvaCertConfigURI``          | ``1.3.6.1.4.1.72473.1``        | EPICS SPVA Certificate Config URI    |
-   +------------------------------------+--------------------------------+--------------------------------------+
-
-The canonical source for these definitions is
-``pvxs-cms/src/pvacms/opensslgbl.h``.
+   +-----------------------------+----------------------------+--------------------------------------+
+   | Extension name              | Object Identifier          | Description                          |
+   +=============================+============================+======================================+
+   | SPvaCertStatusURI           | ``1.3.6.1.4.1.37427.1``    | EPICS SPVA Certificate Status URI    |
+   +-----------------------------+----------------------------+--------------------------------------+
+   | SPvaCertConfigURI           | ``1.3.6.1.4.1.72473.1``    | EPICS SPVA Certificate Config URI    |
+   +-----------------------------+----------------------------+--------------------------------------+
 
 4.3.1. SPvaCertStatusURI Extension
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -674,14 +675,15 @@ channel.
 The X.509 ``notAfter`` of an entity certificate marks the end of
 the certificate's cryptographic life: after this instant any X.509
 verifier MUST reject the certificate independently of any cert-
-status check. PVACMS sets ``notAfter`` from a configured default
-(``EPICS_PVACMS_CERT_VALIDITY``, with per-role overrides
+status check. PVACMS sets ``notAfter`` per its configured policy.
+The configuration interface is the environment variables
+``EPICS_PVACMS_CERT_VALIDITY`` (with per-role overrides
 ``EPICS_PVACMS_CLIENT_CERT_VALIDITY``,
-``EPICS_PVACMS_SERVER_CERT_VALIDITY``,
-``EPICS_PVACMS_IOC_CERT_VALIDITY``); the canonical implementation's
-default is ``6M`` (six months), but sites are explicitly EXPECTED
-to configure this to their preferred cryptographic lifetime, which
-MAY be much longer than six months.
+``EPICS_PVACMS_SERVER_CERT_VALIDITY``, and
+``EPICS_PVACMS_IOC_CERT_VALIDITY``); the value is a duration. Sites
+are expected to set this to their preferred cryptographic lifetime,
+which MAY be much longer than the duration any one implementation
+defaults to.
 
 Sites SHOULD treat ``notAfter`` as the rotation horizon — the
 maximum time the same keypair MAY remain in service — not as the
@@ -712,12 +714,12 @@ The cert-status response's ``status_valid_until_date`` field
 defines the freshness window: a cached or stapled cert-status
 response is honored only until this time, after which a fresh
 response MUST be obtained. PVACMS sets ``status_valid_until_date``
-from its configured cert-status validity duration
-(``EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS``; default 30 minutes in
-the canonical implementation). Endpoints obtain fresh status
-either by maintaining a live cert-status subscription
-(Section 7.3, the typical case) or, if subscription is unavailable,
-by re-querying.
+per its configured cert-status validity duration; the
+configuration interface is the environment variable
+``EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS`` (a duration in
+minutes). Endpoints obtain fresh status either by maintaining a
+live cert-status subscription (Section 7.3, the typical case) or,
+if subscription is unavailable, by re-querying.
 
 This design — long cryptographic lifetime, short operational
 window — means that revocation, suspension, and policy changes
@@ -898,7 +900,7 @@ out-of-band lookup.
 -----------------------------------
 
 The cert-status PV's value is a PVStructure with the following
-fields (per ``pvxs-cms/src/common/certstatus.h``):
+fields:
 
 ::
 
@@ -1648,29 +1650,26 @@ SPVA does not currently use TLS ALPN (Section 3.9).
 
 - **RFC 2119** — Bradner, S., "Key words for use in RFCs to
   Indicate Requirement Levels", BCP 14, :rfc:`2119`, March 1997.
+- **RFC 2578** — McCloghrie, K. et al., "Structure of Management
+  Information Version 2 (SMIv2)", :rfc:`2578`, April 1999. Defines
+  the Private Enterprise Number arc ``1.3.6.1.4.1`` referenced in
+  Section 4.3 for SPVA's custom X.509 extension Object Identifiers.
+- **RFC 5280** — Cooper, D. et al., "Internet X.509 Public Key
+  Infrastructure Certificate and Certificate Revocation List (CRL)
+  Profile", :rfc:`5280`, May 2008.
+- **RFC 6066** — Eastlake, D., "Transport Layer Security (TLS)
+  Extensions: Extension Definitions", :rfc:`6066`, January 2011.
+- **RFC 6960** — Santesson, S. et al., "X.509 Internet Public Key
+  Infrastructure Online Certificate Status Protocol - OCSP",
+  :rfc:`6960`, June 2013.
+- **RFC 6961** — Pettersen, Y., "The Transport Layer Security
+  (TLS) Multiple Certificate Status Request Extension",
+  :rfc:`6961`, June 2013.
 - **RFC 8174** — Leiba, B., "Ambiguity of Uppercase vs Lowercase in
   RFC 2119 Key Words", BCP 14, :rfc:`8174`, May 2017.
 - **RFC 8446** — Rescorla, E., "The Transport Layer Security (TLS)
   Protocol Version 1.3", :rfc:`8446`, August 2018.
-- **RFC 5280** — Cooper, D. et al., "Internet X.509 Public Key
-  Infrastructure Certificate and Certificate Revocation List (CRL)
-  Profile", :rfc:`5280`, May 2008.
-- **RFC 6960** — Santesson, S. et al., "X.509 Internet Public Key
-  Infrastructure Online Certificate Status Protocol - OCSP",
-  :rfc:`6960`, June 2013.
-- **RFC 6066** — Eastlake, D., "Transport Layer Security (TLS)
-  Extensions: Extension Definitions", :rfc:`6066`, January 2011.
-- **RFC 6961** — Pettersen, Y., "The Transport Layer Security
-  (TLS) Multiple Certificate Status Request Extension",
-  :rfc:`6961`, June 2013.
 - **PVA Specification** — :doc:`/protocol-spec/pva`.
-- **pvxs source tree** — https://github.com/slac-epics/pvxs;
-  specifically ``src/secure/`` and the ``ConfigCommon`` TLS-related
-  fields.
-- **pvxs-cms source tree** — https://github.com/slac-epics/pvxs-cms;
-  specifically ``src/common/certstatus.h``,
-  ``src/common/certfactory.h``, and the cert-status PVStructure
-  declarations.
 
 19.2. Informative References
 ----------------------------
@@ -1679,6 +1678,16 @@ SPVA does not currently use TLS ALPN (Section 3.9).
 - **RFC 7301** — Friedl, S. et al., "Transport Layer Security (TLS)
   Application-Layer Protocol Negotiation Extension", :rfc:`7301`,
   July 2014. (For potential future ALPN use.)
+- **pvxs implementation** — https://github.com/slac-epics/pvxs;
+  in particular the SPVA-specific code under ``src/secure/`` and
+  the TLS-related fields of ``ConfigCommon``. Consulted in
+  preparing this specification.
+- **pvxs-cms implementation** — https://github.com/slac-epics/pvxs-cms;
+  in particular ``src/common/certstatus.h`` (the cert-status
+  PVStructure schema), ``src/common/certfactory.h`` (the
+  certificate-issuance code path), and ``src/pvacms/opensslgbl.h``
+  (the custom Object Identifier definitions referenced in
+  Section 4.3). Consulted in preparing this specification.
 - :doc:`/programmers-ref/spva-tls` — pvxs's SPVA TLS implementation.
 - :doc:`/programmers-ref/spva-authentication` — pvxs's
   authentication implementation.

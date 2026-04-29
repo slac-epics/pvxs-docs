@@ -11,13 +11,18 @@ Channel Access (CA) Protocol Specification
 
 .. note::
 
-   This is a clean-room specification of the Channel Access wire protocol
-   as implemented in EPICS Base. The authoritative source for the protocol
-   constants and message structures is
-   ``epics-base/modules/ca/src/client/caProto.h`` (Jeffrey O. Hill,
-   Argonne National Laboratory / Los Alamos National Laboratory). Where
-   this document differs from the source, the source is correct and this
-   document is in error.
+   This document is the normative specification of the Channel Access
+   wire protocol. Implementations conform to this specification.
+   Where an implementation's behavior differs from this specification,
+   the implementation is in error and the specification is authoritative.
+   The reverse is not true: a behavior observed in any one
+   implementation does not become normative because it is observed
+   there.
+
+   Specific implementations (EPICS Base, pvxs, others) and historical
+   reference materials consulted in the preparation of this
+   specification are listed under Informative References (Section
+   17.2); they have no normative weight.
 
 Abstract
 ========
@@ -41,13 +46,16 @@ EPICS Base ``libca`` C API, the IOC database engine, or any client
 application; those are covered separately in the EPICS Base
 documentation.
 
-This document covers CA major protocol revision 4. It is informed by
-the canonical implementation in EPICS Base
-(``modules/ca/src/client/caProto.h`` and surrounding source files) and
-by the historical *Channel Access Reference Manual* prepared by Jeffrey
-Hill at PSI. Where minor protocol revisions (4.0 through 4.13) introduce
-or modify behavior, this document calls out the minor revision in which
-the behavior first appeared.
+This document covers CA major protocol revision 4. Where minor
+protocol revisions (4.0 through 4.13) introduce or modify
+behavior, this document calls out the minor revision in which the
+behavior first appeared.
+
+Pre-existing implementations of CA (notably EPICS Base) and the
+historical *Channel Access Reference Manual* by Jeffrey Hill were
+consulted during the preparation of this specification (see Section
+17.2); however, the specification's authority derives from this
+document, not from those implementations or that manual.
 
 Conventions Used in This Document
 =================================
@@ -230,12 +238,6 @@ Repeater
    beacons from all servers reachable from that host and forwards them
    to all CA clients on that host. Specified in Section 10.
 
-EPICS Base
-   The reference implementation of CA, hosted at
-   https://github.com/epics-base/epics-base. Where this specification
-   refers to "the canonical implementation" or "EPICS Base" without
-   qualification, this is the implementation meant.
-
 ----
 
 2. Protocol Overview
@@ -408,18 +410,26 @@ destinations.
 3.2. Default Port Assignments
 -----------------------------
 
-The default ports are derived in ``caProto.h`` as:
+The default port numbers are derived from a fixed formula:
 
 ::
 
-    CA_PORT_BASE     = IPPORT_USERRESERVED + 56     = 5008
-    CA_SERVER_PORT   = CA_PORT_BASE + (4 * 2)       = 5064
-    CA_REPEATER_PORT = CA_PORT_BASE + (4 * 2) + 1   = 5065
+    PORT_BASE       = 5000 + 56                                = 5056
+    SERVER_PORT     = PORT_BASE + (major-revision * 2)         = 5064
+    REPEATER_PORT   = PORT_BASE + (major-revision * 2) + 1     = 5065
 
-The factor "``CA_MAJOR_PROTOCOL_REVISION * 2``" in the formula reflects
-the historical convention that each major protocol revision occupies
-two port numbers (server + repeater). For CA major revision 4, this
-yields 5064 (server) and 5065 (repeater).
+The constant 5000 above is the value of the BSD socket
+``IPPORT_USERRESERVED`` constant (the start of the user-reserved
+port range on POSIX systems); the spec itself does not depend on
+the symbolic name of this constant and the ``5000`` value MUST be
+used directly by implementations on systems that do not provide
+``IPPORT_USERRESERVED``.
+
+The factor "major-revision × 2" in the formula reflects the
+historical convention that each major protocol revision occupies
+two port numbers (server + repeater). For CA major revision 4
+(this specification), this yields 5064 (server) and 5065
+(repeater).
 
 .. table:: Default CA port assignments
    :widths: auto
@@ -567,12 +577,11 @@ destinations.
 3.6. IPv6 Considerations
 ------------------------
 
-The canonical implementation of CA in EPICS Base does not support IPv6
-on the wire. CA-protocol-revision-4 was designed for IPv4 only;
-``caProto.h`` does not define any IPv6-specific message variants. Sites
-requiring IPv6 transport SHALL use PVAccess (:doc:`/protocol-spec/pva`)
-which is IPv6-aware in modern implementations. This restriction MAY be
-lifted in a future major protocol revision.
+CA major revision 4 is defined over IPv4 only. The protocol
+defines no IPv6-specific message variants and provides no
+mechanism for negotiating IPv6 transport. Sites requiring IPv6
+transport SHALL use PVAccess (:doc:`/protocol-spec/pva`). This
+restriction MAY be lifted in a future major protocol revision.
 
 ----
 
@@ -582,19 +591,20 @@ lifted in a future major protocol revision.
 4.1. Standard Header (caHdr)
 ----------------------------
 
-Every CA message begins with the fixed 16-octet ``caHdr`` structure
-defined in ``caProto.h``:
+Every CA message begins with the fixed 16-octet header. As a C
+structure (informative — the normative definition is the field
+table that follows):
 
 .. code-block:: c
 
-    typedef struct ca_hdr {
-        ca_uint16_t m_cmmd;       /* operation to be performed */
-        ca_uint16_t m_postsize;   /* size of payload */
-        ca_uint16_t m_dataType;   /* operation data type */
-        ca_uint16_t m_count;      /* operation data count */
-        ca_uint32_t m_cid;        /* channel identifier */
-        ca_uint32_t m_available;  /* protocol stub dependent */
-    } caHdr;
+    struct caHdr {
+        uint16_t m_cmmd;       /* operation to be performed */
+        uint16_t m_postsize;   /* size of payload */
+        uint16_t m_dataType;   /* operation data type */
+        uint16_t m_count;      /* operation data count */
+        uint32_t m_cid;        /* channel identifier */
+        uint32_t m_available;  /* protocol stub dependent */
+    };
 
 All fields are transmitted in network byte order (big-endian).
 
@@ -703,11 +713,10 @@ client MUST fail it locally with ``ECA_TOLARGE`` and SHOULD report
 4.4. Payload Padding
 --------------------
 
-The ``CA_MESSAGE_ALIGN`` macro in ``caProto.h`` requires every CA
-message — header plus payload — to be padded with trailing zero
-octets to a multiple of 8 octets. The padding is NOT counted in
-``m_postsize``; receivers MUST consume and discard the padding
-between messages.
+Every CA message — header plus payload — MUST be padded with
+trailing zero octets to a multiple of 8 octets. The padding is
+NOT counted in ``m_postsize``; receivers MUST consume and discard
+the padding between messages.
 
 For a payload of ``P`` octets, the on-wire size of one message is:
 
@@ -745,7 +754,7 @@ connection and re-establish.
 4.6. Command Codes
 ------------------
 
-The complete CA command code table, from ``caProto.h``:
+The complete set of CA command codes:
 
 .. table:: CA command codes (all defined values)
    :widths: auto
@@ -814,10 +823,9 @@ The complete CA command code table, from ``caProto.h``:
 4.7. DBR Type Codes
 -------------------
 
-The ``m_dataType`` field carries a DBR (Database Request) type code.
-DBR types are defined in ``epics-base/modules/ca/src/client/db_access.h``
-and combine a *base type* (DBF_*) with an optional *meta-data
-prefix*. The base types are:
+The ``m_dataType`` field carries a Database Request (DBR) type
+code. A DBR type combines a *base type* (DBF_*) with an optional
+*meta-data prefix*. The base types are:
 
 .. table:: DBF base types
    :widths: auto
@@ -864,9 +872,12 @@ The DBR namespace then layers four meta-data prefixes on top:
 
 For example, ``DBR_TIME_DOUBLE`` (code 20) is a double-precision
 value preceded by a 2-byte status, 2-byte severity, and a 64-bit
-EPICS timestamp. The exact layout of each prefix is specified in
-``db_access.h`` and is reproduced for reference in
-:doc:`/programmers-ref/index` (informative, not normative).
+EPICS timestamp. The full per-prefix layout (the on-wire field
+order and width for each meta-data prefix combined with each base
+type) is normative protocol detail that this revision of the
+specification leaves to a future amendment; existing
+implementations have implemented the layouts compatibly and the
+amendment will reflect the established forms.
 
 4.8. Element Count Semantics
 ----------------------------
@@ -979,9 +990,9 @@ ASCII strings as payload.
 - ``m_postsize``: length of the ASCII user-name string, padded with
   zero bytes to a multiple of 8.
 - ``m_dataType``, ``m_count``, ``m_cid``, ``m_available``: 0 (reserved).
-- Payload: null-terminated ASCII string. Maximum length is
-  implementation-defined; the canonical implementation enforces
-  ``unreasonablePVNameSize`` (500 octets) as an upper bound.
+- Payload: null-terminated ASCII string. Implementations SHOULD
+  reject strings longer than 500 octets as malformed; this bound
+  prevents resource-exhaustion via oversized name strings.
 
 ``CA_PROTO_HOST_NAME`` (command code 21): same structure, with the
 client's host-name string as payload.
@@ -1159,10 +1170,12 @@ particular server is sure it does not host the PV.
 6.4. Search Retransmission and Back-off
 ---------------------------------------
 
-A client receiving no reply within an implementation-defined timeout
-(typically 30 ms initial) MUST retransmit the search request. The
-canonical implementation uses an exponential back-off with a maximum
-interval of 5 seconds and an unbounded retry count.
+A client receiving no reply within an implementation-defined
+timeout MUST retransmit the search request. Implementations SHOULD
+use exponential back-off and SHOULD continue retransmitting until
+the application cancels the search; the exact initial interval,
+back-off factor, maximum interval, and retry count are
+implementation-defined.
 
 Each retransmission MUST use the same CID. The retransmission MAY be
 sent to a different destination from the address list (round-robin)
@@ -1337,10 +1350,10 @@ channel's access rights change at the server), the server MUST send
    | ``m_available`` | bitmask of access rights                     |
    +-----------------+----------------------------------------------+
 
-The ``m_available`` bitmask uses the constants from ``caProto.h``:
+The ``m_available`` bitmask:
 
-- Bit 0: ``CA_PROTO_ACCESS_RIGHT_READ`` — channel may be read
-- Bit 1: ``CA_PROTO_ACCESS_RIGHT_WRITE`` — channel may be written
+- Bit 0 (``CA_PROTO_ACCESS_RIGHT_READ``): channel may be read
+- Bit 1 (``CA_PROTO_ACCESS_RIGHT_WRITE``): channel may be written
 
 A client receiving access rights ``0`` (neither read nor write) MAY
 keep the channel open but MUST fail any operation against it locally
@@ -1607,9 +1620,8 @@ A client subscribes to value-change notifications via
    +-----------------+----------------------------------------------+
 
 The ``m_lval``, ``m_hval``, ``m_toval`` fields of ``mon_info`` are
-DEPRECATED and have not been honored by canonical implementations
-since CA was first published. Senders SHOULD set them to ``0.0f``;
-receivers MUST ignore them.
+DEPRECATED and historically have not been honored. Senders SHOULD
+set them to ``0.0f``; receivers MUST ignore them.
 
 The ``m_mask`` field selects which kinds of changes trigger updates:
 
@@ -1823,10 +1835,12 @@ A client tracking beacons from a server uses them to detect:
   this as a hint to verify connection liveness via ``CA_PROTO_ECHO``
   (Section 11.3) on any TCP connection to that server.
 
-The exact thresholds (number of missed beacons, time-to-detect) are
-implementation-defined; the canonical implementation declares a
-server "unresponsive" after ``EPICS_CA_CONN_TMO`` seconds of no
-beacon and no TCP traffic (default 30 seconds).
+The exact thresholds (number of missed beacons, time-to-detect)
+are implementation-defined; implementations SHOULD expose them to
+operators as configuration. The environment variable
+``EPICS_CA_CONN_TMO`` is conventionally honored where present and
+sets the no-beacon-no-TCP-traffic interval after which a server is
+declared unresponsive.
 
 ----
 
@@ -1908,10 +1922,10 @@ The Repeater replies with ``REPEATER_CONFIRM`` (command 17):
    +-----------------+----------------------------------------------+
 
 If the client does not receive a CONFIRM within an
-implementation-defined timeout (typically 30 seconds), it MAY assume
-no Repeater is running and try to spawn one (the canonical
-implementation invokes ``caRepeater`` automatically). After
-spawning, the client retries registration.
+implementation-defined timeout, it MAY assume no Repeater is
+running and MAY attempt to launch one (the typical mechanism is to
+fork or exec a Repeater process bundled with the implementation).
+After launching, the client retries registration.
 
 10.4. Beacon Forwarding (Repeater → Client)
 -------------------------------------------
@@ -1929,11 +1943,12 @@ direct-from-server beacon; both arrive at the client's UDP socket as
 ------------------------------
 
 When the Repeater starts (or when a new client registers with a
-running Repeater), the Repeater MAY synthesize a fake "beacon-anomaly"
-notification to prompt the client to re-search for any servers it had
-previously known. The canonical implementation does this by sending a
-beacon with all-zero fields except ``m_cmmd``, which the client
-recognizes as "anomalous" and treats as a directive to re-search.
+running Repeater), the Repeater MAY synthesize a fake
+"beacon-anomaly" notification to prompt the client to re-search
+for any servers it had previously known. The synthetic beacon is a
+``CA_PROTO_RSRV_IS_UP`` message with all fields zero except
+``m_cmmd``; clients recognise this all-zero form as anomalous and
+treat it as a directive to re-search.
 
 This mechanism ensures that a client registering with a
 just-started Repeater (after Repeater restart) does not need to wait
@@ -2014,10 +2029,10 @@ the client by setting an alarm in subsequent updates (status code
 CA relies on TCP's native flow control (windowing) for back-pressure:
 a slow receiver causes the sender's TCP send buffer to fill, which
 blocks the application's ``send()`` calls. Implementations SHOULD
-configure TCP send and receive buffers via ``setsockopt(SO_SNDBUF,
-SO_RCVBUF)`` to values appropriate for the expected throughput; the
-canonical implementation uses 16 KB send and 16 KB receive by
-default.
+configure TCP send and receive buffers (e.g. via ``setsockopt`` of
+``SO_SNDBUF`` / ``SO_RCVBUF``) to values appropriate for the
+expected throughput. The exact buffer sizes are
+implementation-defined.
 
 A server MUST NOT drop a TCP connection due to slow client receive;
 it MUST either tolerate the back-pressure or use ``CA_PROTO_EVENTS_OFF``
@@ -2066,12 +2081,14 @@ distinct priority value (``CA_PROTO_PRIORITY_MIN..MAX``, 0..99) in
 the ``CA_PROTO_VERSION`` ``m_dataType`` field at connection
 establishment.
 
-A V4.9+ server MUST maintain separate processing queues per priority
-and MUST process higher-priority requests (numerically lower priority
-value? — note: the protocol does not normatively specify the meaning
-of "higher" priority; ``CA_PROTO_PRIORITY_MIN = 0`` is described as
-"min" and ``MAX = 99`` as "max"; the canonical implementation treats
-99 as the highest priority).
+A V4.9+ server MUST maintain separate processing queues per
+priority. Numerically larger priority values denote higher priority:
+99 is the highest priority and 0 is the lowest. Servers MUST
+process queued requests in priority order, draining higher-priority
+queues before lower-priority queues; servers MAY use additional
+fairness mechanisms (e.g. weighted round-robin between priorities)
+provided the strict-priority ordering is preserved at any
+contention point.
 
 A client SHOULD use priority dispatch only for genuinely
 priority-sensitive traffic; opening 100 connections per server is
@@ -2134,9 +2151,9 @@ the status code in ``m_available``.
 12.2. Status Code Table
 -----------------------
 
-The complete CA status code table, from ``caerr.h``. Codes marked
-"defunct" are reserved (current servers no longer return them, but
-older servers might).
+The complete set of CA status codes. Codes marked "defunct" are
+reserved (current servers do not return them, but older servers
+might).
 
 .. table:: CA status codes
    :widths: auto
@@ -2270,8 +2287,8 @@ older servers might).
 12.3. Status Code Encoding
 --------------------------
 
-CA status codes encode three subfields: a message number, a severity,
-and a level. The bit layout is defined in ``caerr.h``:
+CA status codes encode three subfields: a message number, a
+severity, and a level. The bit layout is:
 
 ::
 
@@ -2365,7 +2382,7 @@ Section 6.5).
 13.3. Minor Version Feature Flags
 ---------------------------------
 
-.. table:: Minor-version feature flags (from caProto.h)
+.. table:: Minor-version feature flags
    :widths: auto
 
    +-------+----------+--------------------------------------------------+
@@ -2444,16 +2461,10 @@ a new major-revision increment (CA 5+) and a new default port.
 14.1. Minimum Supported Version
 -------------------------------
 
-``caProto.h`` defines:
-
-::
-
-    #define CA_MINIMUM_SUPPORTED_VERSION 4u
-
-The canonical implementation of CA in EPICS Base does NOT
-interoperate with peers reporting minor version less than 4 in
-``CA_PROTO_VERSION``. A peer reporting minor version 0..3 MUST be
-treated as malformed:
+The minimum supported minor version is 4. Implementations of this
+specification MUST NOT interoperate with peers reporting minor
+version less than 4 in ``CA_PROTO_VERSION``. A peer reporting
+minor version 0..3 MUST be treated as malformed:
 
 - Clients MUST close the TCP connection.
 - Servers MUST respond with ``CA_PROTO_ERROR (ECA_DEFUNCT)`` and
@@ -2479,9 +2490,10 @@ breaking older peers. New features MUST follow these rules:
 14.3. Deprecated Commands
 -------------------------
 
-The following commands are deprecated and MUST NOT be used by new
-implementations. The canonical implementation accepts them for
-backward compatibility but treats them as no-ops:
+The following commands are deprecated and MUST NOT be sent by new
+implementations. Receivers MAY accept them silently (treating them
+as no-ops) for backward compatibility with pre-V4.0 senders, or
+MAY respond with ``CA_PROTO_ERROR`` carrying ``ECA_ANACHRONISM``:
 
 .. table:: Deprecated CA commands
    :widths: auto
@@ -2588,20 +2600,21 @@ against on-path attackers.
 16.1. Port Assignments
 ----------------------
 
-The default CA port numbers are NOT IANA-registered. They are derived
-from a fixed formula in ``caProto.h`` (Section 3.2) that places them
-in the IANA "user reserved" range:
+The default CA port numbers are NOT IANA-registered. They are
+derived from the fixed formula given in Section 3.2, which places
+them in the IANA user-reserved range:
 
 - TCP port 5064 (CA server)
 - UDP port 5064 (CA search, CA beacon)
 - UDP port 5065 (CA repeater)
 
-Sites SHOULD NOT request IANA registration for these ports without
-coordination with the EPICS Base maintainers; the formula-derived
-default is sufficient for internal facility use, and the
-environment-variable override (``EPICS_CA_SERVER_PORT`` /
-``EPICS_CA_REPEATER_PORT``) accommodates the rare case where the
-default ports collide with site-specific applications.
+Independent IANA registration of these ports SHOULD be coordinated
+through the EPICS community to prevent conflicting registration
+attempts; the formula-derived default is sufficient for internal
+facility use, and the environment-variable override
+(``EPICS_CA_SERVER_PORT`` / ``EPICS_CA_REPEATER_PORT``)
+accommodates the case where the default ports collide with
+site-specific applications.
 
 16.2. Protocol Number
 ---------------------
@@ -2628,17 +2641,19 @@ the search mechanism (Section 6) at runtime.
   Requirement Levels", BCP 14, :rfc:`2119`, March 1997.
 - **RFC 8174** — Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
   2119 Key Words", BCP 14, :rfc:`8174`, May 2017.
-- **EPICS Base, Channel Access source tree** —
-  ``modules/ca/src/client/caProto.h`` and surrounding files.
-  https://github.com/epics-base/epics-base
 
 17.2. Informative References
 ----------------------------
 
 - **Channel Access Reference Manual** — Hill, J. O., Paul Scherrer
   Institute / Los Alamos National Laboratory, historical document,
-  various editions. The original informal specification on which this
-  normative document is based.
+  various editions. Earlier informal description of the protocol;
+  consulted in preparing this specification.
+- **EPICS Base implementation** — https://github.com/epics-base/epics-base.
+  Consulted in preparing this specification; in particular the
+  files ``modules/ca/src/client/caProto.h`` and
+  ``modules/ca/src/client/caerr.h``, plus the surrounding C++
+  client and ``rsrv`` server source.
 - :doc:`/protocol-spec/pva` — PVAccess Protocol Specification.
 - :doc:`/protocol-spec/spva` — Secure PVAccess Protocol Specification.
 
