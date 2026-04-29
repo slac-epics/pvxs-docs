@@ -45,8 +45,8 @@ resolution mechanism that allows multiple servers to share a UDP
 broadcast group, a richer set of operations (get / put / put-get /
 monitor / RPC / introspect) and a 23-command wire format with
 explicit segmentation and per-message byte-order declaration. This
-document specifies PVA wire-protocol version 2 as implemented in
-pvxs.
+document specifies PVA wire-protocol version 2 as implemented by
+pvxs, pvAccessCPP, and core-pva.
 
 Status of This Document
 =======================
@@ -54,16 +54,18 @@ Status of This Document
 This document is a wire-protocol specification. It describes the
 bytes that travel between a PVA client and a PVA server, the order
 in which they are exchanged, and the meaning of each field. It does
-not describe the pvxs C++ API, the pvxs IOC integration, the P4P
-Python bindings, or any client application; those are covered
-separately in :doc:`/programmers-ref/index`.
+not describe any implementation's library API (the pvxs C++ API,
+the P4P Python bindings, the pvAccessCPP C++ API, the core-pva
+Java API), nor any of those implementations' IOC-integration code;
+those are covered in each implementation's own documentation and,
+for the SLAC-fork pvxs, summarised in
+:doc:`/programmers-ref/index`.
 
-This document covers PVA wire-protocol version 2. Pre-existing
-implementations of PVA — notably pvxs and the
-``epics-base/modules/pvAccess`` C++ reference implementation —
-were consulted in preparing this specification (see Section 19.2);
-the specification's authority derives from this document, not from
-those implementations.
+This document covers PVA wire-protocol version 2. The three
+independent implementations of PVA — pvxs, pvAccessCPP, and
+core-pva — were consulted in preparing this specification (see
+Section 19.2); the specification's authority derives from this
+document, not from those implementations.
 
 Conventions Used in This Document
 =================================
@@ -142,8 +144,13 @@ beyond CA's capabilities:
 
 PVA was designed in the late 2000s by Marty Kraimer and others as
 the wire protocol underlying EPICS V4, then adopted as the EPICS 7
-"PVA module". A clean re-implementation, pvxs, was developed at
-Brookhaven and is now maintained at SLAC (slac-epics).
+"PVA module". The original C++ reference implementation,
+pvAccessCPP, is integrated into EPICS Base 7 as
+``modules/pvAccess``. A clean modern C++ re-implementation, pvxs,
+was developed at Brookhaven and is now maintained in the
+slac-epics fork. An independent Java client/server implementation,
+core-pva, is part of phoebus and was developed by tracking the
+protocol description rather than a particular C++ API.
 
 1.2. Design Philosophy
 ----------------------
@@ -189,13 +196,17 @@ This specification covers:
 
 It does not cover:
 
-- The pvxs C++ API, the P4P Python bindings, the pvxs IOC
-  integration. Those are in :doc:`/programmers-ref/index`.
+- Any implementation's library API or IOC-integration code: the
+  pvxs C++ API, the P4P Python bindings, the pvxs IOC integration,
+  the pvAccessCPP C++ API, the core-pva Java API in phoebus, etc.
+  These are documented separately by each implementation; the
+  pvxs / P4P bindings are summarised in
+  :doc:`/programmers-ref/index`.
 - The IOC record database, ASG/ACF, or PVAccess Group ("QSRV2")
   features.
 - Any security mechanisms (authentication, encryption). PVA itself
-  has no transport security; sites requiring it use Secure
-  PVAccess (:doc:`/protocol-spec/spva`).
+  has no transport security; sites requiring it use a secure
+  profile of PVA (Section 17.5).
 
 1.4. Terminology
 ----------------
@@ -250,13 +261,21 @@ Beacon
    its presence to potential clients. Specified in Section 10.
 
 pvxs
-   The reference implementation of PVA used by this specification,
-   hosted at https://github.com/slac-epics/pvxs.
+   A modern C++ client/server implementation of PVA, hosted
+   upstream at https://github.com/mdavidsaver/pvxs and tracked in
+   the slac-epics fork at https://github.com/slac-epics/pvxs.
+   Informative for this specification.
 
-epics-base PVA
-   The independent reference C++ implementation maintained at
-   ``epics-base/modules/pvAccess``. Informative only for this
+pvAccessCPP
+   The original C++ reference implementation of PVA, integrated
+   into EPICS Base 7 as ``modules/pvAccess``. Informative for this
    specification.
+
+core-pva
+   An independent Java client/server implementation of PVA, part
+   of phoebus (``phoebus/core/pva``). Implemented from the
+   protocol description rather than as a binding over a C++
+   library. Informative for this specification.
 
 ----
 
@@ -386,7 +405,7 @@ each with their own type), unions (one-of), and named-type references
 PVA does not provide:
 
 - **Authentication or confidentiality**. Sites requiring either
-  SHALL use SPVA (:doc:`/protocol-spec/spva`).
+  SHALL use a secure profile of PVA (Section 17.5).
 - **Repeater-style beacon redistribution** as in CA. PVA beacons
   reach clients directly via the broadcast port, not via a per-host
   forwarding daemon.
@@ -435,8 +454,6 @@ revision).
    +------------------------+-------+----------------+----------------------------------+
    | PVA search / beacons   | 5076  | UDP            | ``EPICS_PVA_BROADCAST_PORT``     |
    +------------------------+-------+----------------+----------------------------------+
-   | PVA TLS server [SPVA]  | 5076  | TCP (TLS)      | ``EPICS_PVAS_TLS_PORT``          |
-   +------------------------+-------+----------------+----------------------------------+
 
 The variant ``EPICS_PVAS_*`` (with trailing 'S') is the
 server-side configuration; ``EPICS_PVA_*`` (without 'S') is the
@@ -458,11 +475,6 @@ binding it; a client connecting to it); implementations therefore
 typically honour both, with the client preferring the unsuffixed
 form and the server preferring the ``-S``-suffixed form.
 
-The TLS port (5076 TCP) collides with the UDP broadcast port; this
-is intentional and works because TCP and UDP are different transport
-layers with separate port spaces. SPVA uses this default; see
-:doc:`/protocol-spec/spva`.
-
 3.3. UDP Usage
 --------------
 
@@ -478,8 +490,9 @@ dispatching each message in turn.
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 Implementations SHOULD configure ``SO_RCVBUF`` to at least 65536
-octets (the IPv4 maximum datagram size). pvxs uses 65536 by
-default; this accommodates large search-request batches.
+octets (the IPv4 maximum datagram size). This accommodates large
+search-request batches that consolidate many channel-name queries
+into a single datagram.
 
 3.3.3. Broadcast and Multicast
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -489,13 +502,13 @@ Search requests are sent to every destination in the client's
 if ``EPICS_PVA_AUTO_ADDR_LIST=YES`` (default), the broadcast
 addresses of all locally-bound network interfaces.
 
-PVA additionally supports IPv4 **multicast** for search and beacons
-(unlike CA, which only supports broadcast). The client MAY join a
-multicast group and emit search packets to it; servers wishing to
-participate in that group join it on the same port. The default
-multicast configuration is implementation-defined; pvxs does not
-auto-join a multicast group by default and requires explicit
-configuration via ``EPICS_PVA_NAME_SERVERS``.
+PVA additionally supports IPv4 **multicast** for search and
+beacons (unlike CA, which only supports broadcast). A client MAY
+emit search packets to a multicast group address; servers wishing
+to participate in that group join it on the same port. The default
+behaviour is implementation-defined; implementations typically do
+not auto-join any multicast group and require explicit
+configuration of the multicast destination via the address list.
 
 3.4. TCP Usage
 --------------
@@ -540,11 +553,11 @@ There is no hard upper bound on a single PVA message size; the
 upper bounds are set by:
 
 - The receiver's buffer size, declared in
-  ``CMD_CONNECTION_VALIDATION`` (Section 6.1). pvxs's default is
-  16384 octets per logical message, with longer messages
-  segmented (Section 11).
-- The configured limit ``EPICS_PVA_MAX_ARRAY_BYTES`` for the size
-  of a single value payload.
+  ``CMD_CONNECTION_VALIDATION`` (Section 6.1); messages larger
+  than this size MUST be segmented (Section 11). Implementations
+  typically default this to the order of 16 KiB.
+- Site-configured per-array byte limits (the conventional
+  environment variable is ``EPICS_PVA_MAX_ARRAY_BYTES``).
 
 A sender that exceeds the receiver's declared buffer size for a
 single (non-segmented) message MUST segment the message; if
@@ -580,14 +593,17 @@ A third variable is unique to PVA:
 3.6. IPv6 Considerations
 ------------------------
 
-pvxs supports IPv6 transport for both UDP and TCP. Servers binding
-to ``::`` (IPv6 wildcard) accept both v4 and v6 connections. The
-search and beacon mechanisms work over IPv6 multicast (e.g.
-``ff02::1`` link-local all-nodes); IPv6 broadcast equivalents are
-multicast-based by IPv6 design. Sites deploying IPv6 SHOULD
-configure ``EPICS_PVA_ADDR_LIST`` with explicit IPv6 multicast
-addresses; auto-detection of IPv6 multicast groups is
-implementation-defined.
+PVA's wire format is transport-layer-independent and operates over
+IPv6 as well as IPv4. A server binding to ``::`` (the IPv6 wildcard
+address) accepts both v4 and v6 connections. The search and beacon
+mechanisms work over IPv6 multicast (e.g. ``ff02::1`` link-local
+all-nodes); IPv6 has no broadcast and uses multicast for the
+equivalent fan-out. Sites deploying IPv6 SHOULD configure
+``EPICS_PVA_ADDR_LIST`` with explicit IPv6 multicast addresses;
+auto-detection of IPv6 multicast groups is implementation-defined.
+
+Support for IPv6 is implementation-dependent: not every conforming
+implementation provides it.
 
 ----
 
@@ -1194,10 +1210,11 @@ size advertises the maximum number of cached type IDs the server
 will track per connection.
 
 The authentication-mechanisms list enumerates the auth methods the
-server will accept. For plain PVA (this specification), the only
-mechanism is "ca" (advisory client-name only, no cryptographic
-verification). For SPVA, additional mechanisms appear:
-``x509``, ``krb``, ``ldap``, etc. (See :doc:`/protocol-spec/spva`.)
+server will accept. PVA defines one mechanism, ``"ca"``, in which
+the client's identity is conveyed as an advisory user-name and
+host-name string carried in the corresponding ``auth_data`` and
+not cryptographically verified. The list is open: server profiles
+layered above PVA MAY define additional mechanism names.
 
 6.2. Client Validation Response
 -------------------------------
@@ -1250,12 +1267,16 @@ MUST close the TCP connection after sending the message.
 6.4. Authentication Continuation
 --------------------------------
 
-If the chosen auth method requires additional round-trips (e.g.
-SPVA's Kerberos or X.509 challenge-response), the client and server
-exchange further ``CMD_AUTHNZ`` messages between
-``CMD_CONNECTION_VALIDATION`` and ``CMD_CONNECTION_VALIDATED``.
-The format of ``CMD_AUTHNZ`` payloads is auth-method-specific and
-out of scope for this specification (see :doc:`/protocol-spec/spva`).
+If the chosen authentication mechanism requires additional
+round-trips (challenge-response, multi-step credential exchange),
+the client and server exchange further ``CMD_AUTHNZ`` messages
+between ``CMD_CONNECTION_VALIDATION`` and
+``CMD_CONNECTION_VALIDATED``. The format of ``CMD_AUTHNZ`` payloads
+is mechanism-specific and out of scope for this specification;
+each mechanism that uses ``CMD_AUTHNZ`` defines its own payload
+format. The PVA-native ``"ca"`` mechanism does not use
+``CMD_AUTHNZ`` (its single string-pair credential is carried in
+the ``CMD_CONNECTION_VALIDATION`` ``auth_data`` field directly).
 
 ----
 
@@ -1286,8 +1307,8 @@ servers hosting one or more named PVs:
    +-----------------+--------------------------------------------+
    | proto_count     | u8 number of accepted protocols            |
    +-----------------+--------------------------------------------+
-   | protocols       | proto_count × String (e.g. "tcp",          |
-   |                 | "tls" for SPVA)                            |
+   | protocols       | proto_count × String (transport tokens;    |
+   |                 | see below)                                 |
    +-----------------+--------------------------------------------+
    | channel_count   | u16 number of channel names searched       |
    +-----------------+--------------------------------------------+
@@ -1309,13 +1330,14 @@ The flags:
   rate-limiting on the server side.
 
 The ``protocols`` list enumerates which TCP transports the client
-accepts:
-
-- ``"tcp"`` — plain PVA over TCP
-- ``"tls"`` — SPVA over TCP with TLS 1.3
-
+accepts. PVA defines one token, ``"tcp"``, denoting plain PVA over
+TCP. The list is open: profiles layered above PVA MAY define
+additional tokens (the secure profile of PVA defined in
+:doc:`/protocol-spec/spva` uses ``"tls"`` to denote PVA over TLS).
 A server replying MUST select a transport from this list and
-include it in the response.
+include it in the response; a server not supporting any token in
+the list silently ignores the search (subject to the ``MustReply``
+flag).
 
 The per-channel ``search_id`` is a client-allocated handle the
 client uses to match the response to the request.
@@ -1382,9 +1404,11 @@ prefix in the same UDP datagram (Section 14).
 ---------------------------------------
 
 A client receiving no reply within an implementation-defined
-timeout MUST retransmit the search. pvxs uses an exponential
-back-off: 30 ms, 60 ms, 120 ms, ..., capped at 30 seconds; retries
-continue indefinitely until the application cancels the search.
+timeout MUST retransmit the search. Implementations SHOULD use
+exponential back-off and SHOULD continue retransmitting until the
+application cancels the search; the exact initial interval, the
+back-off factor, the maximum interval, and the retry count are
+implementation-defined.
 
 Each retransmission MAY change the destination from the address
 list (round-robin) and MAY combine multiple channels into a single
@@ -1901,9 +1925,10 @@ highest-seen marker via ``AckMarker``. A sender that has sent
 acknowledgment if ``M`` exceeds the receiver's declared buffer
 size (Section 6.1).
 
-This mechanism is rarely exercised because TCP's native flow
-control usually suffices; pvxs uses it only at very high data
-rates.
+This mechanism is rarely exercised in practice because TCP's
+native flow control suffices for typical traffic patterns;
+implementations may use it only at high data rates or omit it
+entirely.
 
 12.3. SetEndian
 ---------------
@@ -2031,13 +2056,14 @@ value follows.
 ------------------
 
 The header version byte (offset 1) is the protocol version of the
-sending peer. pvxs (this specification's normative implementation)
-sends version 2 for both client and server messages. A receiver
-seeing version != 2 and != 1 MUST close the connection with FATAL
-status.
+sending peer. Implementations of this specification (version 2)
+SHALL send the value ``2`` for both client and server messages. A
+receiver seeing version other than ``2`` or ``1`` MUST close the
+connection with FATAL status.
 
-Version 1 is the historical EPICS V4 PVA implementation; pvxs is
-backward-compatible with V1 clients in practice. New features that
+Version 1 is the historical wire version of the original EPICS V4
+PVA deployment; conforming version-2 implementations are
+backward-compatible with V1 senders in practice. New features that
 would require a wire-format change beyond what version 2 supports
 require a version 3 increment, which is reserved for future work.
 
@@ -2076,8 +2102,8 @@ verification. Servers MUST treat these as advisory metadata only.
 
 PVA traffic is plaintext. PV names, values, and authentication
 data are all visible to on-path observers. Sites carrying
-sensitive process data over PVA SHOULD use a private network or
-SHALL switch to SPVA.
+sensitive process data over PVA SHOULD use a private network or a
+secure profile of PVA (see Section 17.5).
 
 17.3. PVA Provides Limited Integrity
 ------------------------------------
@@ -2099,13 +2125,15 @@ Implementations SHOULD provide configurable limits on per-client
 search rate, max connections per source IP, and max distinct
 type-IDs per connection.
 
-17.5. When to Use SPVA Instead
-------------------------------
+17.5. Secure Profiles
+---------------------
 
 Sites requiring cryptographic authentication, confidentiality,
 integrity protection against active attackers, or per-channel
-authorization tied to verified identity SHALL use SPVA
-(:doc:`/protocol-spec/spva`).
+authorization tied to verified identity SHALL use a secure
+profile of PVA. The Secure PVAccess (SPVA) profile, specified in
+:doc:`/protocol-spec/spva`, layers TLS 1.3 transport and X.509
+mutual authentication over the PVA wire format defined here.
 
 ----
 
@@ -2143,13 +2171,20 @@ PV name, resolved to ``(server, port)`` at runtime via search.
 - **EPICS pvData Normative Types** — informally specified at
   https://github.com/epics-base/pvDataWWW; defines the
   ``epics:nt/*`` type-id namespace.
-- **pvxs implementation** — https://github.com/slac-epics/pvxs.
+- **pvxs implementation** — modern C++ client/server library;
+  https://github.com/mdavidsaver/pvxs upstream,
+  https://github.com/slac-epics/pvxs in the slac-epics fork.
   Consulted in preparing this specification; in particular the
   files ``src/pvaproto.h``, ``src/conn.cpp``,
   ``src/serverconn.cpp``, ``src/clientconn.cpp``,
   ``src/dataencode.cpp``, ``src/clientdiscover.cpp``.
-- **epics-base PVA implementation** — independent C++ reference
-  implementation at ``epics-base/modules/pvAccess``. Consulted in
+- **pvAccessCPP implementation** — original C++ reference
+  implementation, integrated into EPICS Base 7 as
+  ``modules/pvAccess`` (https://github.com/epics-base/epics-base).
+  Consulted in preparing this specification.
+- **core-pva implementation** — independent Java client/server
+  implementation, part of phoebus (``phoebus/core/pva``;
+  https://github.com/ControlSystemStudio/phoebus). Consulted in
   preparing this specification.
 - :doc:`/protocol-spec/ca` — Channel Access Protocol Specification.
 - :doc:`/protocol-spec/spva` — Secure PVAccess Protocol Specification.
@@ -2164,7 +2199,7 @@ https://github.com/slac-epics/pvxs-docs. Issues and proposed
 clarifications should be filed there.
 
 The PVA protocol was designed by Marty Kraimer and contributors as
-part of the EPICS V4 effort. The pvxs reference implementation is
-maintained at SLAC. Attribution for the protocol design is to the
-EPICS V4 working group; this document is a description, not the
+part of the EPICS V4 effort. Attribution for the protocol design
+is to the EPICS V4 working group; this document is a description,
+not the
 design.
