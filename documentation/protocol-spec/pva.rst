@@ -769,19 +769,37 @@ encoding rules:
    :widths: auto
 
    +---------------------+-----------------------------------------+
-   | Magnitude           | Encoding                                |
+   | First octet         | Encoding                                |
    +=====================+=========================================+
-   | 0..253              | Single byte (the value itself)          |
+   | 0..253              | The single octet IS the value           |
+   |                     | (range 0..253).                         |
    +---------------------+-----------------------------------------+
-   | 254..(2³¹−1)        | Byte 254, then 4-byte unsigned integer  |
-   |                     | (per-message byte order)                |
+   | 254 (0xFE)          | Followed by a 4-octet unsigned integer  |
+   |                     | (per-message byte order; Section 4.2)   |
+   |                     | giving the value (range 0..2³²−1).      |
    +---------------------+-----------------------------------------+
-   | (2³¹)..(2⁶³−1)      | Byte 255, then 8-byte unsigned integer  |
-   |                     | (per-message byte order)                |
+   | 255 (0xFF)          | "Null" sentinel; valid ONLY in nullable |
+   |                     | contexts (see below). Outside nullable  |
+   |                     | contexts, 0xFF is a protocol error.     |
    +---------------------+-----------------------------------------+
 
-Size 0xFF == 255 also serves as a "null" sentinel in some contexts
-(e.g. nullable-string encoding); semantics are command-specific.
+The maximum representable Size is 2³² − 1; PVA does not define a
+64-bit Size form. Sites or applications requiring values larger
+than 2³² − 1 octets in a single field SHALL fail the operation
+locally; the protocol provides no encoding for such values.
+
+**Null sentinel (0xFF).** A Size appearing in a *nullable* context
+— principally in the PVData scalar-string encoding (Section 5.1.2),
+where a string field whose schema permits a null value is encoded
+either as a present empty string (Size 0 followed by zero octets)
+or as null (a single 0xFF octet with no following payload) — uses
+0xFF to denote null. The set of Size occurrences that are nullable
+is determined by the surrounding type description (FieldDesc):
+nullable contexts are limited to those explicitly defined in
+Sections 5.1.2 and 5.4.
+
+Outside a nullable context, a receiver encountering 0xFF where a
+Size is expected MUST treat the message as malformed.
 
 5.1.2. String Encoding
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -895,7 +913,201 @@ own outgoing-side cache (IDs it has assigned) and incoming-side cache
 (IDs the peer has assigned). The two caches are independent and MAY
 use overlapping ID values.
 
-5.5. Type ID Lifetime
+5.5. BitSet Encoding
+--------------------
+
+Many PVA messages carry a *BitSet*: a length-prefixed sequence of
+octets used as a bitmap whose bit indices correspond to fields of
+a previously-introduced PVData type description (FieldDesc, Section
+5.4). BitSets appear in operation messages to indicate which fields
+of a structured value are present (CMD_GET response, Section 9.2.2),
+which fields are being written (CMD_PUT request, Section 9.3),
+which fields changed in a monitor update (CMD_MONITOR update,
+Section 9.5.3), and which fields experienced server-side queue
+overrun (the ``overrun_mask`` of a monitor update). All BitSets in
+this protocol use the encoding and indexing rules specified here.
+
+5.5.1. Wire Format
+~~~~~~~~~~~~~~~~~~
+
+A BitSet is encoded as:
+
+::
+
+    Size      n               (octet count of the bit data;
+                               0 is permitted and means "no bits")
+    octet[n]  data             (bit data; little-endian within each
+                               octet — see 5.5.2)
+
+The leading Size (Section 5.1.1) is the **octet count** of the
+bit data, NOT the bit count. A BitSet that addresses K bits
+occupies ceil(K/8) octets, padded with trailing zero bits in the
+final octet.
+
+5.5.2. Bit-to-Octet Mapping
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Within the bit data, **bit index i is octet (i / 8), bit (i mod 8)**,
+with bit 0 of an octet being the least-significant bit (value 1)
+and bit 7 the most significant (value 128). Equivalently:
+
+::
+
+    is_set(i) = (data[i / 8] >> (i mod 8)) & 1
+
+The bit-to-octet mapping does NOT depend on the per-message byte
+order flag (Section 4.2). BitSet octets are read in receive order;
+the LSB-first-within-octet convention is fixed. (This is consistent
+with the standard ``java.util.BitSet``-style encoding from which
+the PVA encoding was derived.)
+
+5.5.3. Bit Indexing within a FieldDesc Tree
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Bit indices in a BitSet correspond to nodes of the FieldDesc tree
+(Section 5.4) of the receiving operation. The mapping is
+**depth-first pre-order** with the root structure assigned bit 0:
+
+- **Bit 0** is assigned to the **root node** of the FieldDesc
+  (the structure that the BitSet is reporting on, in its entirety).
+- For any node assigned bit ``i``, its **first child** is assigned
+  bit ``i + 1``.
+- A child's **subsequent siblings** are assigned bits at offsets
+  computed from each preceding sibling's *subtree size*: if the
+  first child of a node N is assigned bit ``i+1`` and has
+  subtree-size ``s``, then N's second child is assigned bit
+  ``i + 1 + s``; the third is offset by another full subtree-size
+  of the second child; and so on.
+
+The **subtree size** of a node is defined recursively:
+
+- A leaf node (a primitive scalar, a scalar array, or a string)
+  has subtree size 1.
+- A complex node (struct, union, any, structure-array) has
+  subtree size = 1 + sum(subtree-sizes of its direct children).
+
+Thus a BitSet for a structure with ``M`` total nodes (counting the
+root, every nested structure, and every leaf field) addresses bit
+indices in the range ``[0, M-1]``; the BitSet's octet count is
+ceil(M / 8). Bits beyond ``M-1`` are reserved and MUST be sent as
+zero by senders; receivers MUST ignore them.
+
+**Example.** Consider this FieldDesc:
+
+::
+
+    structure {                  bit 0  (root)
+        double  value;           bit 1
+        structure timestamp {    bit 2
+            uint  secondsPastEpoch;  bit 3
+            uint  nanoseconds;       bit 4
+        }
+        structure alarm {        bit 5
+            int  severity;       bit 6
+            int  status;         bit 7
+            string message;      bit 8
+        }
+    }
+
+The whole tree has 9 nodes; a complete BitSet addressing every
+field requires at least 2 octets (ceil(9/8) = 2). Bit indices are
+assigned in depth-first pre-order. To indicate that the entire
+``timestamp`` substructure is present, a sender sets bit 2; bits
+3 and 4 (the children of ``timestamp``) MAY be left zero — see the
+parent-cascade rule in Section 5.5.5.
+
+5.5.4. Special Node Kinds
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The bit-indexing rules above are uniform across structure-bearing
+node kinds, but two kinds have additional semantics:
+
+- **Union** (and **any** / variant-union). The union node itself
+  has a bit; its possible discriminated-union members do NOT each
+  have separate bits at the same level. The union's child structure
+  in the FieldDesc is the *currently-selected* member; sub-bits
+  inside the union descend into that selected member. Union bits
+  do NOT participate in the parent-cascade rule (Section 5.5.5).
+
+- **Structure-array** (an array whose elements are themselves
+  structures). The structure-array node has a single bit; the
+  per-element structures do NOT each receive their own bits. When
+  the structure-array bit is set, the entire array (every element)
+  is considered present in the message; partial-array deltas at
+  per-element granularity are not expressible via BitSet.
+
+5.5.5. Parent Cascade
+~~~~~~~~~~~~~~~~~~~~~
+
+When a parent node's bit is set AND none of that parent's direct
+children's bits are set, AND the parent is a complex type that is
+NOT a union (or any / variant-union), then the parent bit
+**implicitly cascades** to all direct children: the receiver
+treats every direct child's bit as set. The cascade applies
+recursively — once a child receives the implicit set via cascade,
+the same rule fires again at the next level if that child is itself
+complex with no explicit child bits set.
+
+This rule is the standard way to denote "the whole subtree is
+present" without listing every leaf bit individually:
+
+- A sender that includes the entire structure sets only bit 0
+  (the root) and leaves all other bits zero. The receiver, on
+  applying the cascade, treats the whole tree as present.
+- A sender that updates only one leaf inside a substructure sets
+  only that leaf's bit; the parent and root bits are zero, and
+  no cascade fires.
+- A sender that updates an entire substructure sets that
+  substructure's bit and leaves the substructure's children
+  zero; the cascade fills in the children at the receiver.
+
+The cascade does NOT apply to unions, anys, or structure-arrays
+(the union case is documented in Section 5.5.4).
+
+5.5.6. Empty BitSets
+~~~~~~~~~~~~~~~~~~~~
+
+A BitSet with ``n = 0`` (zero octets of bit data) is permitted and
+has well-defined meaning: no bits are set. In the contexts where
+BitSets appear in this protocol, an empty BitSet means:
+
+- **CMD_GET / CMD_PUT request and response**: no fields are being
+  reported or written. The body of the operation MUST contain no
+  per-field data.
+- **CMD_MONITOR update**: no fields changed since the last update;
+  the update is a heartbeat / keepalive only. (Servers SHOULD use
+  pipelined-monitor flow control rather than emitting empty
+  updates; see Section 9.5.4.)
+- **overrun_mask**: no per-field overrun.
+
+5.5.7. Receiver Algorithm
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Pseudocode for decoding a BitSet against a known FieldDesc tree
+``T``:
+
+::
+
+    1. Read Size n.
+    2. Read n octets of bit data into D.
+    3. For each node N in T, in depth-first pre-order, with index i:
+         is_set(i) := (i/8 < n) AND ((D[i/8] >> (i mod 8)) & 1)
+         If T's node N is a leaf (or union/any/struct-array),
+             N.included := is_set(i).
+         If T's node N is a structure (and not union/any/
+                 struct-array):
+             N.included := is_set(i).
+             If N.included AND no direct child of N has its
+                     is_set(j) true:
+                 mark every direct child of N as included
+                 (cascade — apply recursively as each marked
+                 child is itself processed).
+
+A complete decoder additionally walks ``T`` to consume the
+per-field encoded values for every node whose ``included`` flag
+came out true.
+
+5.6. Type ID Lifetime
 ---------------------
 
 Type IDs are valid for the lifetime of the TCP connection only.
@@ -904,7 +1116,7 @@ directions. There is no protocol-level way to "forget" an ID
 mid-connection; once assigned, an ID maps to its type description
 until connection close.
 
-5.6. Normalised Types (NT)
+5.7. Normalised Types (NT)
 --------------------------
 
 The PVA type system supports user-defined named types via the
@@ -1322,9 +1534,9 @@ The server responds:
         BitSet     changed_fields   (which fields are valid in payload)
         Value      value            (encoded per channel_type)
 
-The ``BitSet`` is a length-prefixed bitmap indicating which fields of
-the structured value are present in the payload (the rest retain
-their previous values, useful for delta-style transmission).
+The ``BitSet`` (Section 5.5) indicates which fields of the
+structured value are present in the payload; fields whose bits are
+clear retain their previously-known values at the receiver.
 
 9.2.3. Destroy
 ~~~~~~~~~~~~~~
