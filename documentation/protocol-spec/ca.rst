@@ -563,14 +563,14 @@ when many clients lose a single server simultaneously.
 Two environment variables determine the destinations of UDP search
 packets and beacon listening:
 
-- **``EPICS_CA_ADDR_LIST``** — a whitespace-separated list of IP
+- ``EPICS_CA_ADDR_LIST`` — a whitespace-separated list of IP
   addresses or hostnames, with optional ``:port`` suffix per entry.
   When set, the listed addresses are added to the search destination
   list. Addresses without a ``:port`` suffix use ``EPICS_CA_SERVER_PORT``.
-- **``EPICS_CA_AUTO_ADDR_LIST``** — boolean (``YES`` or ``NO``,
-  default ``YES``). When ``YES``, the OS-reported broadcast addresses
-  of all locally-bound interfaces are added to the search destination
-  list automatically. When ``NO``, only ``EPICS_CA_ADDR_LIST`` is used.
+- ``EPICS_CA_AUTO_ADDR_LIST`` — boolean (``YES`` or ``NO``, default
+  ``YES``). When ``YES``, the OS-reported broadcast addresses of all
+  locally-bound interfaces are added to the search destination list
+  automatically. When ``NO``, only ``EPICS_CA_ADDR_LIST`` is used.
 
 A client MUST send each search packet to every destination in the
 final list. The client MAY parallelize transmission to all

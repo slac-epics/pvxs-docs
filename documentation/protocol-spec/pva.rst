@@ -577,16 +577,16 @@ Reconnection logic SHOULD include exponential back-off.
 
 Two environment variables determine search destinations:
 
-- **``EPICS_PVA_ADDR_LIST``** — whitespace-separated list of IP
+- ``EPICS_PVA_ADDR_LIST`` — whitespace-separated list of IP
   addresses or hostnames, optional ``:port`` suffix per entry.
   Without ``:port``, ``EPICS_PVA_BROADCAST_PORT`` is used.
-- **``EPICS_PVA_AUTO_ADDR_LIST``** — boolean (``YES``/``NO``,
-  default ``YES``). When ``YES``, broadcast addresses of all
-  locally-bound interfaces are added to the list.
+- ``EPICS_PVA_AUTO_ADDR_LIST`` — boolean (``YES``/``NO``, default
+  ``YES``). When ``YES``, broadcast addresses of all locally-bound
+  interfaces are added to the list.
 
 A third variable is unique to PVA:
 
-- **``EPICS_PVA_NAME_SERVERS``** — explicit list of unicast
+- ``EPICS_PVA_NAME_SERVERS`` — explicit list of unicast
   ``(host, TCP-port)`` PVA servers to connect to directly without
   UDP search. Useful for routed deployments where UDP is filtered.
 
@@ -762,10 +762,14 @@ messages have a separate command-code namespace:
    |    |                  | messages                              |
    +----+------------------+---------------------------------------+
 
-Control messages have no payload; the 4-octet length field MUST be
-0 (or carry control-specific data; ``SetEndian`` carries a single
-byte indicating requested order, encoded as the MSB flag of a
-following message).
+Control messages have no body following the 8-octet header. The
+4-octet field at offset 4 of the header (which in application
+messages is the body length) is reinterpreted as opaque
+control-specific data carried inline in the header itself; its
+meaning is per-control-command (see Section 12.2 for ``SetMarker``
+/ ``AckMarker`` cumulative-bytes semantics, and Section 12.3 for
+``SetEndian``). Receivers MUST NOT attempt to read additional
+bytes after a control-message header.
 
 4.5. Sub-Commands
 -----------------
