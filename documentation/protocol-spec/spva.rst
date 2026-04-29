@@ -553,15 +553,11 @@ constrains the DN form to:
     Subject:  CN=<principal-name>, O=<org-name>[, OU=<unit>]
 
 The ``CN`` (Common Name) is the principal's identity string. For
-host-bound principals (e.g. an IOC certificate), CN is the
-fully-qualified DNS name. For user-bound principals (e.g. an
-operator's client certificate), CN is the username or service-account
-name. The ``O`` (Organization) is the site or facility identifier.
-The optional ``OU`` (Organizational Unit) MAY be used to distinguish
-sub-organisations.
+host-bound principals, CN MUST default to the fully-qualified DNS
+name. For user-bound principals, CN MUST default to the username.
 
-The full ``CN=…, O=…[, OU=…]`` string is the principal name used in
-ASG/ACF authorization rules (Section 11).
+The ``CN`` value is used as the principal name in authorization
+predicates (Section 11).
 
 4.5. Subject Alternative Name
 -----------------------------
