@@ -455,25 +455,15 @@ revision).
    | PVA search / beacons   | 5076  | UDP            | ``EPICS_PVA_BROADCAST_PORT``     |
    +------------------------+-------+----------------+----------------------------------+
 
-The variant ``EPICS_PVAS_*`` (with trailing 'S') is the
-server-side configuration; ``EPICS_PVA_*`` (without 'S') is the
-client-side configuration. Servers SHOULD honour both forms (with
-``EPICS_PVAS_*`` taking precedence when both are set); clients
-SHOULD honour ``EPICS_PVA_*`` and SHOULD NOT honour
-``EPICS_PVAS_*`` for variables whose meaning differs between
-client and server (notably the broadcast port: a client connecting
-to a server on a non-default broadcast port reads
-``EPICS_PVA_BROADCAST_PORT`` and ignores any
-``EPICS_PVAS_BROADCAST_PORT`` value, since the latter configures
-which port the local server *binds*, not which port a remote
-server is listening on).
+The variant ``EPICS_PVAS_*`` (trailing ``S``) is the server-side
+configuration; ``EPICS_PVA_*`` is the client-side configuration.
 
-For ``EPICS_PVA_SERVER_PORT`` and ``EPICS_PVAS_SERVER_PORT`` the
-two forms are usually equivalent on both sides because the variable
-expresses the same TCP port number from both perspectives (a server
-binding it; a client connecting to it); implementations therefore
-typically honour both, with the client preferring the unsuffixed
-form and the server preferring the ``-S``-suffixed form.
+Servers SHOULD honour both forms; ``EPICS_PVAS_*`` takes precedence
+when both are set.
+
+Clients SHOULD honour only ``EPICS_PVA_*``. The one exception is
+``EPICS_PVA_SERVER_PORT`` / ``EPICS_PVAS_SERVER_PORT``: clients MAY
+honour both forms with ``EPICS_PVA_*`` taking precedence.
 
 3.3. UDP Usage
 --------------

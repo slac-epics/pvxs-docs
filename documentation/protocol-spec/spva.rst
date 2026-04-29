@@ -425,65 +425,23 @@ SPVA certificates MAY use any of these signature algorithms:
 PKCS#1 v1.5 RSA signatures are deprecated by TLS 1.3 and SHOULD NOT
 be used in newly-issued SPVA certificates.
 
-3.6. Server Name Indication (SNI) and Hostname Verification
------------------------------------------------------------
+3.6. Server Name Indication (SNI)
+---------------------------------
 
-SPVA does NOT use TLS Server Name Indication (SNI) and does NOT
-perform Web-PKI-style hostname-versus-certificate verification.
-Connection targets are ``(IP, port)`` pairs delivered by the PVA
-search reply (Section 7.2 of the PVA specification); the IP comes
-from the UDP source address of the reply and there is no DNS name
-in the connection-establishment path that a client could place in
-the TLS ``server_name`` extension. Implementations therefore do
-not call ``SSL_set_tlsext_host_name`` on outgoing TLS connections.
+SNI is not currently supported. Clients MUST NOT send the TLS
+``server_name`` extension. Servers MUST ignore it if received.
 
-Server-certificate authenticity is established through:
+Server authenticity is established by chain validation against the
+configured trust anchor (Section 4.6), cert-status PV monitoring
+(Section 7), and (when offered) OCSP stapling (Section 13).
 
-1. **Chain validation** (:rfc:`5280` path validation) against the
-   client's configured trust anchor (Section 4.6).
-2. **Cert-status validation** against the cert-status PV
-   (Section 7).
-3. **Optional OCSP stapling** if the server supplies a stapled
-   Online Certificate Status Protocol (OCSP) response in the TLS
-   handshake (Section 13).
+3.7. Session Resumption
+-----------------------
 
-A server MAY include ``dNSName`` and ``iPAddress`` Subject
-Alternative Name (SAN) entries in its certificate; SPVA exposes
-these to the application layer as connection metadata (used for
-authorization-rule matching, Section 11) but does NOT use them at
-TLS-handshake time to gate the connection. See Section 4.5 for the
-full description of how SAN entries are used.
-
-3.7. Session Resumption (Not Used)
-----------------------------------
-
-SPVA does NOT use TLS 1.3 session resumption. Every TLS connection
-between an SPVA client and an SPVA server completes a full
-handshake; no client-side session ticket cache, no Pre-Shared Key
-(PSK) reuse, and no 0-RTT (Section 3.8) is performed. A server MAY
-still emit ``NewSessionTicket`` messages (these are the OpenSSL
-default for TLS 1.3 servers), and a client MUST tolerate receiving
-them, but a conforming SPVA client MUST NOT cache the tickets and
-MUST NOT present them on a subsequent connection.
-
-The rationale is that PVA's connection-management model (PVA spec
-Section 8) treats every loss of TCP as a full disconnect that
-returns each affected channel to the SEARCHING state; recovery is
-by fresh UDP search → fresh search reply → fresh TCP connect →
-fresh TLS handshake → fresh ``CMD_CONNECTION_VALIDATION`` →
-re-create channels → re-subscribe monitors. Cross-connection TLS
-state (a session ticket bound to a specific endpoint identity)
-would not survive this flow even if implementations attempted to
-preserve it, because the post-disconnect search may resolve to a
-different IP, a different server certificate (e.g. after a server
-restart), or both.
-
-The pvxs implementation reflects this design: no session-cache
-configuration is set on the SSL context, no
-``SSL_set_session`` call is ever made on the client side, and
-session tickets received from servers are discarded (see
-``pvxs/src/clientconn.cpp`` ``Connection::startConnecting()``,
-``Connection::cleanup()``).
+Session resumption is not currently supported. Every TLS connection
+performs a full handshake. Servers MAY emit ``NewSessionTicket``
+messages; clients MUST discard them and MUST NOT present a session
+ticket or PSK on a subsequent connection.
 
 3.8. 0-RTT (Early Data)
 -----------------------
