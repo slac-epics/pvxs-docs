@@ -17,11 +17,21 @@ PVAccess (PVA) Protocol Specification
    specification, the implementation is in error and the
    specification is authoritative.
 
-   Specific implementations (notably pvxs and the
-   ``epics-base/modules/pvAccess`` C++ reference implementation)
-   were consulted in the preparation of this specification and are
-   listed under Informative References (Section 19.2); they have no
-   normative weight.
+   Three independent implementations of the protocol exist and
+   were consulted in the preparation of this specification:
+
+   - **pvxs** — modern C++ client/server library
+     (https://github.com/mdavidsaver/pvxs upstream;
+     https://github.com/slac-epics/pvxs in the slac-epics fork).
+   - **pvAccessCPP** — original C++ reference implementation,
+     integrated into EPICS Base 7 as ``modules/pvAccess``.
+   - **core-pva** — independent Java client/server implementation,
+     part of phoebus (``phoebus/core/pva``).
+
+   These three implementations are listed under Informative
+   References (Section 19.2); they have no normative weight. None
+   of them is the protocol's "canonical implementation" — the spec
+   is.
 
 Abstract
 ========
@@ -428,11 +438,25 @@ revision).
    | PVA TLS server [SPVA]  | 5076  | TCP (TLS)      | ``EPICS_PVAS_TLS_PORT``          |
    +------------------------+-------+----------------+----------------------------------+
 
-The variant ``EPICS_PVAS_*`` (with trailing 'S') is the server-side
-override; ``EPICS_PVA_*`` (without 'S') is the client-side. Both
-SHOULD be honored by their respective endpoints; pvxs treats either
-name as equivalent for client config and prefers ``EPICS_PVAS_*`` for
-server config.
+The variant ``EPICS_PVAS_*`` (with trailing 'S') is the
+server-side configuration; ``EPICS_PVA_*`` (without 'S') is the
+client-side configuration. Servers SHOULD honour both forms (with
+``EPICS_PVAS_*`` taking precedence when both are set); clients
+SHOULD honour ``EPICS_PVA_*`` and SHOULD NOT honour
+``EPICS_PVAS_*`` for variables whose meaning differs between
+client and server (notably the broadcast port: a client connecting
+to a server on a non-default broadcast port reads
+``EPICS_PVA_BROADCAST_PORT`` and ignores any
+``EPICS_PVAS_BROADCAST_PORT`` value, since the latter configures
+which port the local server *binds*, not which port a remote
+server is listening on).
+
+For ``EPICS_PVA_SERVER_PORT`` and ``EPICS_PVAS_SERVER_PORT`` the
+two forms are usually equivalent on both sides because the variable
+expresses the same TCP port number from both perspectives (a server
+binding it; a client connecting to it); implementations therefore
+typically honour both, with the client preferring the unsuffixed
+form and the server preferring the ``-S``-suffixed form.
 
 The TLS port (5076 TCP) collides with the UDP broadcast port; this
 is intentional and works because TCP and UDP are different transport
