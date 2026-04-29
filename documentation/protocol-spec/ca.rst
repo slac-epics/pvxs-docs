@@ -1819,55 +1819,56 @@ Repeater (Section 10) re-distributes them to all CA clients.
    +-----------------+----------------------------------------------+
    | ``m_postsize``  | 0                                            |
    +-----------------+----------------------------------------------+
-   | ``m_dataType``  | server TCP port (server's listening port)    |
+   | ``m_dataType``  | server protocol minor revision               |
    +-----------------+----------------------------------------------+
-   | ``m_count``     | beacon counter (V4.10+); 0 pre-V4.10         |
+   | ``m_count``     | server TCP port (server's listening port)    |
    +-----------------+----------------------------------------------+
-   | ``m_cid``       | server's IP address (V4.0–4.5; reserved 4.6+)|
+   | ``m_cid``       | beacon counter (V4.10+); 0 pre-V4.10         |
    +-----------------+----------------------------------------------+
-   | ``m_available`` | server minor revision                        |
+   | ``m_available`` | server's IPv4 address (V4.6+); 0 pre-V4.6    |
    +-----------------+----------------------------------------------+
 
-Pre-V4.6 servers placed their IPv4 address in ``m_cid``; this is
-unreliable for multi-homed servers and was deprecated. From V4.6 onward,
-clients MUST take the server's IP from the source address of the
-beacon datagram, which is correct for both single-homed and multi-homed
-servers.
+Pre-V4.6 servers MAY emit ``m_available = 0`` (or an unreliable value
+on multi-homed hosts). From V4.6 onward, clients SHOULD take the
+server's IP from ``m_available`` when non-zero, falling back to the
+source address of the beacon datagram, which is correct for both
+single-homed and multi-homed servers.
 
 9.2. Beacon Counter (V4.10+)
 ----------------------------
 
-V4.10 introduced a beacon counter in the ``m_count`` field. The server
-increments the counter for each beacon emitted; the counter wraps at
-2¹⁶ − 1. A client tracking beacons from a server can use the counter
-to:
+V4.10 introduced a beacon counter in the ``m_cid`` field. The server
+increments the counter for each beacon emitted; the counter is a
+32-bit unsigned integer and wraps at 2³² − 1. A client tracking
+beacons from a server can use the counter to:
 
 - Detect missed beacons (gaps in the sequence).
-- Detect server restart (counter resets to ``0`` or jumps by a large
-  amount).
+- Detect server restart (counter resets to ``0`` or jumps backwards).
 
-Pre-V4.10 servers always emit ``m_count = 0`` and do not provide
+Pre-V4.10 servers always emit ``m_cid = 0`` and do not provide
 miss-detection.
 
 9.3. Beacon Cadence
 -------------------
 
-A CA server's beacon cadence is governed by two parameters:
+A CA server's beacon cadence is governed by:
 
-- **Initial fast-cadence period** — short interval (typically 25 ms)
-  for the first 5 to 10 beacons after server startup. This rapidly
-  populates client search caches with the new server's
-  ``(IP, port, version)``.
-- **Steady-state period** — ``EPICS_CA_BEACON_PERIOD``
-  (default 15 seconds), used after the initial burst.
+- **Initial period** — 20 milliseconds for the first beacon after
+  server startup (or after resuming from pause).
+- **Steady-state period** — selected from environment variables in
+  this precedence order:
 
-Implementations SHOULD use the initial fast-cadence to ensure that
-clients with pending searches discover a newly-started server within a
-few hundred milliseconds.
+  1. ``EPICS_CAS_BEACON_PERIOD`` if set (server-only variable).
+  2. ``EPICS_CA_BEACON_PERIOD`` otherwise.
+  3. 15 seconds if neither is set or the value is non-positive.
 
-The fast-cadence transitions to the steady-state period via a
-geometric back-off: each successive interval is multiplied by 2 (or
-similar factor) until the steady-state period is reached.
+After each beacon the server doubles the interval, capped at the
+steady-state period. The doubling sequence (starting at 20 ms,
+capped at 15 s) is therefore: 0.02, 0.04, 0.08, 0.16, 0.32, 0.64,
+1.28, 2.56, 5.12, 10.24, 15.0, 15.0, ... seconds.
+
+If the server is paused administratively, the cadence resets to
+the initial 20 ms period on resume.
 
 9.4. Use of Beacons for Liveness Detection
 ------------------------------------------
