@@ -910,52 +910,302 @@ connection, the FieldDesc is transmitted in full and assigned a
 type ID; subsequent exchanges of the same type reference only the
 type ID.
 
-A FieldDesc starts with a single byte indicating the field kind:
+5.4.1. FieldDesc Lead Byte
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. table:: FieldDesc kind byte
+A FieldDesc starts with a single octet — the **lead byte** — which
+either is itself a complete *kind byte* (encoding the structure of
+a directly-introduced field; values ``0x00..0xDF``) or is one of
+five high-value sentinels (values ``0xFB..0xFF``) that introduce
+a registry interaction.
+
+.. table:: FieldDesc lead-byte sentinels
    :widths: auto
 
-   +---------+--------------------+-------------------------------------+
-   | Value   | Kind               | Followed by                         |
-   +=========+====================+=====================================+
-   | 0x00    | NULL_TYPE_CODE     | (no further data; rarely used)      |
-   +---------+--------------------+-------------------------------------+
-   | 0x80..  | scalar (bool,      | sub-byte distinguishes width and    |
-   | 0xBF    | numeric, string)   | signedness                          |
-   +---------+--------------------+-------------------------------------+
-   | 0x88..  | scalar array of    | sub-byte distinguishes element type |
-   | 0x8F    | a primitive        |                                     |
-   +---------+--------------------+-------------------------------------+
-   | 0xFE    | FieldDesc by ID    | Type-ID lookup against connection   |
-   |         | reference          | cache                               |
-   +---------+--------------------+-------------------------------------+
-   | 0xFD    | FieldDesc by ID +  | New type to add to cache: ID (u16)  |
-   |         | inline body        | + FieldDesc body                    |
-   +---------+--------------------+-------------------------------------+
-   | 0xFF    | NULL FieldDesc     | (no further data — null/empty)      |
-   +---------+--------------------+-------------------------------------+
+   +-------+----------------------------+-------------------------------------+
+   | Value | Meaning                    | Followed by                         |
+   +=======+============================+=====================================+
+   | 0xFF  | NULL FieldDesc             | (no further data; the type is null  |
+   |       |                            | / absent)                           |
+   +-------+----------------------------+-------------------------------------+
+   | 0xFE  | Cached FieldDesc reference | u16 type ID (per-message byte       |
+   |       | by ID                      | order). Receiver MUST resolve the   |
+   |       |                            | ID against its incoming-side type-  |
+   |       |                            | ID cache; unknown ID is a protocol  |
+   |       |                            | error.                              |
+   +-------+----------------------------+-------------------------------------+
+   | 0xFD  | New FieldDesc, store with  | u16 type ID + a kind-byte           |
+   |       | this ID                    | (``0x00..0xDF``) and the kind-      |
+   |       |                            | specific body that follows. The     |
+   |       |                            | receiver MUST add ``(ID, decoded    |
+   |       |                            | tree)`` to its incoming-side cache  |
+   |       |                            | atomically with successful decode.  |
+   +-------+----------------------------+-------------------------------------+
+   | 0xFC  | New FieldDesc with tag,    | u16 type ID + u16 tag + kind byte   |
+   |       | store with this ID         | + body. Reserved for tagged-type    |
+   |       |                            | extensions.                         |
+   +-------+----------------------------+-------------------------------------+
+   | 0xFB  | (reserved)                 | reserved; receivers MUST treat as   |
+   |       |                            | malformed.                          |
+   +-------+----------------------------+-------------------------------------+
 
-The complete sub-byte mapping (the bit-level meaning of bits 0..2
-of a scalar kind byte that distinguish the specific scalar width
-and signedness) is normative protocol detail that this revision of
-the specification leaves to a future amendment; existing
-implementations have implemented the mapping compatibly and the
-amendment will reflect the established encoding.
+A lead byte in the range ``0x00..0xDF`` is itself a kind byte
+(Section 5.4.2); the field is described inline without registry
+interaction. A lead byte in the range ``0xE0..0xFA`` is reserved
+for future protocol extension and receivers MUST treat as
+malformed.
 
-For Structure (kind 0xFD with structure bit) and Union, the body is:
+5.4.2. Kind-Byte Encoding
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A kind byte (a lead byte in the range ``0x00..0xDF``, or the
+kind byte that follows a ``0xFD`` / ``0xFC`` sentinel) encodes
+the field's *kind*, *array variant*, *scalar size*, and
+*signedness*-or-*sub-kind* in a single octet. The bit-field
+layout is:
 
 ::
 
-    String    type_id      (e.g. "epics:nt/NTScalar:1.0", possibly empty)
-    Size      field_count
-    For each field:
-        String    field_name
-        FieldDesc field_type   (may itself reference cache or be inline)
+    bit:    7   6   5   4   3   2   1   0
+           ╶───────────╴ ╶─────╴ ╶─╴ ╶─────╴
+              kind    array  X   detail
+              (3b)    (2b)  (1b)  (3b)
 
-The type ID assignment is **bidirectional**: each peer maintains its
-own outgoing-side cache (IDs it has assigned) and incoming-side cache
-(IDs the peer has assigned). The two caches are independent and MAY
-use overlapping ID values.
+- Bits **7..5** (mask ``0xE0``) — the **kind** group:
+
+  .. table:: Kind groups (bits 7..5)
+     :widths: auto
+
+     +-------------+--------------+--------------------------------------+
+     | Bits 7..5   | Mask         | Kind                                 |
+     +=============+==============+======================================+
+     | ``000``     | ``0x00``     | Boolean                              |
+     +-------------+--------------+--------------------------------------+
+     | ``001``     | ``0x20``     | Integer (signed or unsigned;         |
+     |             |              | 8/16/32/64-bit)                      |
+     +-------------+--------------+--------------------------------------+
+     | ``010``     | ``0x40``     | Real (IEEE 754; 32/64-bit)           |
+     +-------------+--------------+--------------------------------------+
+     | ``011``     | ``0x60``     | String                               |
+     +-------------+--------------+--------------------------------------+
+     | ``100``     | ``0x80``     | Compound (Structure / Union / Any)   |
+     +-------------+--------------+--------------------------------------+
+     | ``101``     | ``0xA0``     | reserved (malformed)                 |
+     +-------------+--------------+--------------------------------------+
+     | ``110``     | ``0xC0``     | reserved (malformed)                 |
+     +-------------+--------------+--------------------------------------+
+     | ``111``     | ``0xE0``     | sentinel range (not a kind byte —    |
+     |             |              | see Section 5.4.1)                   |
+     +-------------+--------------+--------------------------------------+
+
+- Bits **4..3** (mask ``0x18``) — the **array variant** for kind
+  byte interpretation:
+
+  .. table:: Array variants (bits 4..3)
+     :widths: auto
+
+     +------------+----------+----------------------------------------+
+     | Bits 4..3  | Mask val | Array variant                          |
+     +============+==========+========================================+
+     | ``00``     | ``0x00`` | Not an array (scalar)                  |
+     +------------+----------+----------------------------------------+
+     | ``01``     | ``0x08`` | Variable-length array — element count  |
+     |            |          | encoded inline with each value as a    |
+     |            |          | leading ``Size``                       |
+     +------------+----------+----------------------------------------+
+     | ``10``     | ``0x10`` | Bounded array — maximum capacity       |
+     |            |          | declared in the FieldDesc body, actual |
+     |            |          | length encoded with each value as a    |
+     |            |          | leading ``Size``                       |
+     +------------+----------+----------------------------------------+
+     | ``11``     | ``0x18`` | Fixed-length array — element count     |
+     |            |          | declared in the FieldDesc body, no per-|
+     |            |          | value length prefix                    |
+     +------------+----------+----------------------------------------+
+
+  For the Compound kind, the array variant ``01`` (mask ``0x08``)
+  promotes the element kind to *array of compound*: ``0x88`` is
+  array of structure, ``0x89`` is array of union, ``0x8A`` is
+  array of any. Compound bounded/fixed arrays are not encoded.
+
+- Bit **2** (mask ``0x04``) — kind-specific:
+
+  - For Integer (kind ``001``): ``0`` denotes signed, ``1`` denotes
+    unsigned.
+  - For Real (kind ``010``): reserved; receivers MUST treat ``1``
+    as malformed.
+  - For String (kind ``011``): reserved; receivers MUST treat
+    ``1`` as malformed.
+  - For Compound (kind ``100``): reserved; receivers MUST treat
+    ``1`` as malformed.
+
+- Bits **1..0** (mask ``0x03``) — kind-specific *detail* (scalar
+  size for numeric kinds, sub-kind for compound):
+
+  .. table:: Scalar-size encoding for Integer kind (bits 1..0)
+     :widths: auto
+
+     +-------------+----------+--------------------------------------+
+     | Bits 1..0   | Mask val | Element width                        |
+     +=============+==========+======================================+
+     | ``00``      | ``0x00`` | 8-bit                                |
+     +-------------+----------+--------------------------------------+
+     | ``01``      | ``0x01`` | 16-bit                               |
+     +-------------+----------+--------------------------------------+
+     | ``10``      | ``0x02`` | 32-bit                               |
+     +-------------+----------+--------------------------------------+
+     | ``11``      | ``0x03`` | 64-bit                               |
+     +-------------+----------+--------------------------------------+
+
+  .. table:: Scalar-size encoding for Real kind (bits 1..0)
+     :widths: auto
+
+     +-------------+----------+--------------------------------------+
+     | Bits 1..0   | Mask val | Element width                        |
+     +=============+==========+======================================+
+     | ``00``      | ``0x00`` | reserved (malformed)                 |
+     +-------------+----------+--------------------------------------+
+     | ``01``      | ``0x01`` | reserved (malformed)                 |
+     +-------------+----------+--------------------------------------+
+     | ``10``      | ``0x02`` | 32-bit (IEEE 754 single-precision)   |
+     +-------------+----------+--------------------------------------+
+     | ``11``      | ``0x03`` | 64-bit (IEEE 754 double-precision)   |
+     +-------------+----------+--------------------------------------+
+
+  .. table:: Sub-kind for Compound kind (bits 1..0)
+     :widths: auto
+
+     +-------------+----------+--------------------------------------+
+     | Bits 1..0   | Mask val | Sub-kind                             |
+     +=============+==========+======================================+
+     | ``00``      | ``0x00`` | Structure                            |
+     +-------------+----------+--------------------------------------+
+     | ``01``      | ``0x01`` | Union (discriminated)                |
+     +-------------+----------+--------------------------------------+
+     | ``10``      | ``0x02`` | Any (variant union — runtime-typed)  |
+     +-------------+----------+--------------------------------------+
+     | ``11``      | ``0x03`` | reserved (malformed)                 |
+     +-------------+----------+--------------------------------------+
+
+  For the Boolean kind (``000``), the detail bits are reserved and
+  MUST be sent as zero; the only valid Boolean kind bytes are
+  ``0x00`` (scalar bool) and ``0x08`` (variable-length array of
+  bool). For the String kind (``011``), the detail bits are
+  reserved similarly; the only valid scalar-string kind byte is
+  ``0x60`` and the only valid array-of-string kind byte is
+  ``0x68``.
+
+5.4.3. Enumerated Kind-Byte Values
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following table is the complete enumeration of kind-byte
+values produced by the bit-field encoding above, for ease of
+reference:
+
+.. table:: Kind-byte enumeration (variable-length array variants)
+   :widths: auto
+
+   +-------------+-------------+-------------+
+   | Scalar form | Array form  | Element     |
+   |             | (bit 0x08)  |             |
+   +=============+=============+=============+
+   | ``0x00``    | ``0x08``    | bool        |
+   +-------------+-------------+-------------+
+   | ``0x20``    | ``0x28``    | int8        |
+   +-------------+-------------+-------------+
+   | ``0x21``    | ``0x29``    | int16       |
+   +-------------+-------------+-------------+
+   | ``0x22``    | ``0x2A``    | int32       |
+   +-------------+-------------+-------------+
+   | ``0x23``    | ``0x2B``    | int64       |
+   +-------------+-------------+-------------+
+   | ``0x24``    | ``0x2C``    | uint8       |
+   +-------------+-------------+-------------+
+   | ``0x25``    | ``0x2D``    | uint16      |
+   +-------------+-------------+-------------+
+   | ``0x26``    | ``0x2E``    | uint32      |
+   +-------------+-------------+-------------+
+   | ``0x27``    | ``0x2F``    | uint64      |
+   +-------------+-------------+-------------+
+   | ``0x42``    | ``0x4A``    | float32     |
+   +-------------+-------------+-------------+
+   | ``0x43``    | ``0x4B``    | float64     |
+   +-------------+-------------+-------------+
+   | ``0x60``    | ``0x68``    | string      |
+   +-------------+-------------+-------------+
+   | ``0x80``    | ``0x88``    | structure   |
+   +-------------+-------------+-------------+
+   | ``0x81``    | ``0x89``    | union       |
+   +-------------+-------------+-------------+
+   | ``0x82``    | ``0x8A``    | any         |
+   +-------------+-------------+-------------+
+
+Bounded-array forms (bit ``0x10`` set) and fixed-array forms
+(bits ``0x18``) of the scalar (kinds Boolean, Integer, Real,
+String) types are formed by replacing the array bit ``0x08`` with
+``0x10`` or ``0x18`` respectively in the kind byte (e.g. ``0x30``
+is bounded-array of int16, ``0x38`` is fixed-array of int16).
+Bounded and fixed forms are NOT defined for compound kinds; a
+compound kind byte with bits ``0x10`` or ``0x18`` set is malformed.
+
+5.4.4. Kind-Byte Body
+~~~~~~~~~~~~~~~~~~~~~
+
+What follows the kind byte depends on the kind:
+
+- **Boolean** scalar (``0x00``): no body; a Boolean takes a
+  single octet wherever its value appears (Section 5.2).
+- **Integer / Real / String** scalar (``0x20..0x27``,
+  ``0x42``/``0x43``, ``0x60``): no body. The element width is
+  determined by the kind byte; values are encoded in
+  per-message byte order (Section 5.2).
+- **Variable-length array** of any scalar kind (``0x08``,
+  ``0x28..0x2F``, ``0x4A``/``0x4B``, ``0x68``): no body in the
+  FieldDesc; each value carries a leading ``Size`` (Section
+  5.1.1) giving the element count, followed by that many
+  elements.
+- **Bounded array** (kind byte with bit ``0x10`` set, scalar
+  kinds only): ``Size capacity`` follows the kind byte in the
+  FieldDesc, declaring the maximum element count. Each value
+  carries a leading ``Size`` giving the actual element count
+  (which MUST NOT exceed ``capacity``), followed by that many
+  elements.
+- **Fixed-length array** (kind byte with bits ``0x18`` set,
+  scalar kinds only): ``Size length`` follows the kind byte in
+  the FieldDesc, declaring the exact element count. Values
+  carry no per-value length prefix; exactly ``length`` elements
+  are encoded inline with each value occurrence.
+- **Structure** (``0x80``) or **Union** (``0x81``):
+
+  ::
+
+      String type_id        (e.g. "epics:nt/NTScalar:1.0";
+                             may be empty)
+      Size   field_count
+      For each of field_count fields:
+          String    field_name
+          FieldDesc field_type   (recursively; MAY itself be a
+                                  cached-ID reference 0xFE,
+                                  a new-with-ID 0xFD, or a
+                                  direct kind byte)
+
+- **Any** (``0x82``): no body. The runtime value of an "any"
+  field carries its own FieldDesc inline (a full FieldDesc lead
+  byte; Section 5.4.1) followed by the value.
+- **Array of structure / union / any** (``0x88`` / ``0x89`` /
+  ``0x8A``): same body form as the corresponding scalar
+  compound — ``type_id`` + ``field_count`` + per-field
+  ``(name, type)``. The per-value encoding is a leading ``Size``
+  (element count) followed by that many element values.
+
+5.4.5. Type-ID Cache
+~~~~~~~~~~~~~~~~~~~~
+
+The type-ID assignment is **bidirectional**: each peer maintains
+its own outgoing-side cache (IDs it has assigned) and incoming-
+side cache (IDs the peer has assigned). The two caches are
+independent and MAY use overlapping ID values. Type IDs are valid
+for the lifetime of the TCP connection only (see Section 5.6).
 
 5.5. BitSet Encoding
 --------------------
