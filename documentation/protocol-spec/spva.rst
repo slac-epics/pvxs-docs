@@ -1538,23 +1538,22 @@ disconnect followed by a fresh handshake.
 15.1. TLS Handshake Failures
 ----------------------------
 
-A failed TLS handshake (cert validation fails, cert expired, no
+A failed TLS handshake (chain validation, expired peer cert, no
 common cipher suite, etc.) MUST result in a TLS Alert per
-:rfc:`8446`. The client SHOULD log the alert and SHOULD NOT retry
-immediately; backoff per implementation.
+:rfc:`8446`. Clients SHOULD apply exponential backoff before
+retry.
 
 15.2. Cert-Status Mid-Connection
 --------------------------------
 
-If a peer's cert-status transitions during a connection, the
-endpoint applies the connection-state effect for the new status's
-class per Section 8.4. The transition takes effect within an
-implementation-defined window of the cert-status update arriving
-at the endpoint.
+A peer cert-status transition during a connection drives the
+connection-state effect per Section 8.4. The transition takes
+effect within an implementation-defined window of the update
+arriving at the endpoint.
 
-A transition into the BAD class MUST cause connection close (TCP
-RST or clean TLS close). The closing party MAY include a TLS
-Alert ``certificate_revoked`` (:rfc:`8446`) before the close.
+A transition into the BAD class MUST cause connection close
+(clean TLS close or TCP RST). The closing party MAY include a
+TLS Alert ``certificate_revoked`` (:rfc:`8446`) before the close.
 
 A transition into the SUSPENDED or UNKNOWN class MUST NOT close
 the underlying TLS socket; channel operations are paused per
@@ -1563,49 +1562,29 @@ Section 8.4 until the next transition.
 15.3. CCR Failures
 ------------------
 
-A CCR may fail with these statuses (returned in the CCR RPC
-response):
-
-- ``ERROR`` with message "verifier validation failed": the
-  authenticator could not verify the principal's identity.
-- ``ERROR`` with message "policy denied": site policy rejects the
-  CCR.
-- ``ERROR`` with message "duplicate certificate": a certificate
-  with the requested name already exists and is not in
-  ``PENDING_RENEWAL`` state.
-- ``FATAL`` with message "PVACMS internal error": an unexpected
-  PVACMS-side failure.
+A failed CCR (Section 9) is reported via the standard PVA RPC
+response with Status type ``ERROR`` or ``FATAL``. The Status
+message is implementation-defined diagnostic text and is not
+normative.
 
 ----
 
 16. Version Negotiation
 =======================
 
-16.1. SPVA Wire Version
------------------------
+This specification defines SPVA wire-protocol version 2,
+comprising PVA wire-protocol version 2 (:doc:`/protocol-spec/pva`
+Section 16), TLS 1.3 (:rfc:`8446`) as the only acceptable
+transport (Section 3.1), the cert-status and CCR PVStructure
+schemas (Sections 7.2 and 9.1), and the authentication mechanism
+(Section 6).
 
-SPVA wire-protocol version 2 is defined by:
-
-- PVA wire-protocol version 2 (:doc:`/protocol-spec/pva` Section 16).
-- TLS 1.3 (:rfc:`8446`) as the only acceptable transport.
-- The cert-status PVStructure schema and CCR PVStructure schema
-  defined in this document.
-- The set of authentication mechanisms in Section 6.
-
-16.2. TLS Version Restriction
------------------------------
-
-SPVA endpoints MUST refuse TLS 1.2 or earlier (Section 3.1). There
-is no negotiation here; TLS 1.3 is mandatory.
-
-16.3. Future Wire Versions
---------------------------
-
-Future SPVA versions MAY add new authentication mechanisms (e.g.
-hardware-token-based bootstrapping), new cert-status fields (e.g.
-hardware-attestation evidence), or new EKU restrictions. Any
-such addition that would break compatibility with this version
-MUST increment the SPVA wire-protocol version.
+There is no SPVA-level version negotiation. PVA's version
+negotiation governs the PVA layer; TLS 1.3's version negotiation
+governs the transport layer; both are constrained to single
+values by this specification. Future SPVA versions that change
+any of the above MUST increment this specification's version
+number.
 
 ----
 
@@ -1615,105 +1594,97 @@ MUST increment the SPVA wire-protocol version.
 17.1. Threat Model
 ------------------
 
-SPVA's threat model assumes:
+SPVA assumes:
 
-- The network MAY contain on-path active attackers (eavesdropping
-  + injection + modification).
+- The network MAY contain on-path active attackers (eavesdropping,
+  injection, modification).
 - The CA's private key is held in trusted infrastructure.
-- Endpoint private keys are protected by the OS keychain or HSM
-  (per site policy).
-- Authenticator credentials (passwords, Kerberos tickets) are
-  protected by their underlying mechanisms.
+- Endpoint private keys are protected per site policy.
+- Authenticator credentials (Kerberos tickets, LDAP-bind
+  credentials, etc.) are protected by their respective underlying
+  mechanisms.
 
 SPVA defends against:
 
 - Eavesdropping (TLS confidentiality).
-- Modification (TLS integrity).
+- Modification in transit (TLS integrity).
 - Identity spoofing (X.509 mutual authentication).
-- Stale credentials (cert-status monitoring + revocation).
+- Use of revoked credentials (cert-status monitoring; Section 7).
 
 SPVA does NOT defend against:
 
 - Compromise of an endpoint's private key. The attacker can
-  impersonate the endpoint until PVACMS marks the certificate
-  ``REVOKED`` and the revocation propagates through the cert-status
-  protocol. SPVA's design point here is that the impact window is
-  bounded by ``status_valid_until_date`` (default 30 minutes,
-  Section 7.2), NOT by ``notAfter`` — a long cryptographic lifetime
-  (Section 4.7.1) does not extend the post-revocation impact
-  window. The defence relies on the operator detecting the
-  compromise; SPVA itself provides the revocation-propagation
-  channel but cannot detect the compromise.
-- CA compromise (catastrophic; recoverable only by re-issuing
-  every endpoint certificate from a fresh CA).
-- Insider attacks at PVACMS (a malicious admin can issue arbitrary
+  impersonate the endpoint until the certificate is marked
+  ``REVOKED`` and the revocation reaches the affected peer (within
+  one cert-status validity window, Section 4.7.2).
+- CA compromise.
+- Insider attacks at PVACMS (a malicious operator can issue
   certificates).
-- Denial-of-service against PVACMS (no PVA connection can complete
-  without cert-status check; PVACMS down → no new connections).
+- Denial-of-service against PVACMS. PVACMS unavailability prevents
+  fresh cert-status updates; existing GOOD-class connections
+  continue with cached cert-status until ``status_valid_until_date``
+  expires, after which they transition to UNKNOWN class (Section
+  8.4); new connections involving certificates with the
+  ``SPvaCertStatusURI`` extension cannot acquire an initial
+  cert-status update and proceed in the UNKNOWN class.
 
-17.2. Cipher Suite Choice
--------------------------
-
-SPVA mandates TLS 1.3 specifically because TLS 1.2 and earlier
-versions allow choosing weak cipher suites (RC4, 3DES, DES,
-NULL-encryption, EXPORT). All TLS 1.3 cipher suites are AEAD and
-forward-secret.
-
-17.3. PSK and 0-RTT
+17.2. Cipher Suites
 -------------------
 
-SPVA forbids 0-RTT (early data) because PVA operations have
-side-effects (PUT, RPC, PROCESS) and 0-RTT is replay-vulnerable
-(:rfc:`8446` Section 8). PSK without 0-RTT is permitted as a
-performance optimisation across reconnects.
+SPVA mandates TLS 1.3 (Section 3.1) and the cipher suites of
+Section 3.3.
+
+17.3. 0-RTT (Early Data)
+------------------------
+
+SPVA forbids 0-RTT (early data; :rfc:`8446` Section 2.3 / Section
+8). PVA operations carry side-effects (PUT, RPC, PROCESS) and
+0-RTT is replay-vulnerable.
+
+Session resumption is also not supported (Section 3.7).
 
 17.4. Cert-Status Privacy
 -------------------------
 
-The cert-status PV name pattern (``<prefix>:STATUS:<skid>:<serial>``)
-allows any party with a valid PVACMS connection to enumerate live
-certificates by issuer. This is acceptable in the SPVA threat model
-(insider-trust assumption); sites with stricter privacy needs
-SHOULD restrict cert-status PV access via ACF rules to require an
-authenticated principal in the PVACMS observers role.
+The cert-status PV name pattern (``<prefix>:STATUS:<issuer-skid>:<cert-serial>``;
+Section 7.1) allows any party with PVACMS access to enumerate
+live certificates. Sites with stricter privacy needs SHOULD
+restrict cert-status PV access via authorization rules
+(Section 11).
 
 17.5. Side-Channel Considerations
 ---------------------------------
 
-SPVA's cryptographic operations are subject to standard side-channel
-considerations (timing, cache, power). Implementations SHOULD use
-constant-time crypto libraries (OpenSSL with appropriate
-configuration; pvxs uses OpenSSL by default).
+SPVA's cryptographic operations are subject to standard
+side-channel considerations (timing, cache, power). Implementations
+SHOULD use constant-time crypto libraries.
 
-17.6. Fallback to Plain PVA
----------------------------
+17.6. Downgrade via Search-Reply Suppression
+--------------------------------------------
 
-A client configured for ``["tls", "tcp"]`` fallback (Section 12) is
-vulnerable to a downgrade attack: an active attacker on the search
-path can suppress the TLS-capable server's reply and let only a
-plaintext server's reply through. Sites requiring guaranteed SPVA
-SHOULD configure clients with ``protocols = ["tls"]`` only.
+A client whose search ``protocols`` list is ``["tls", "tcp"]``
+(Section 12) is vulnerable to a downgrade attack: an active
+attacker on the UDP search path can suppress the TLS-capable
+server's reply and let only a plain-PVA server's reply through.
+A client requiring SPVA SHOULD send searches with
+``protocols = ["tls"]`` only.
 
 ----
 
 18. IANA Considerations
 =======================
 
-18.1. Port Assignment
----------------------
-
-SPVA uses TCP port 5076 by default. This is NOT IANA-registered. It
-is configurable via ``EPICS_PVAS_TLS_PORT``.
-
-18.2. URI Scheme
-----------------
+SPVA uses TCP port 5076 by default. This is NOT IANA-registered;
+it is configurable via ``EPICS_PVAS_TLS_PORT``.
 
 SPVA does not define a custom URI scheme.
 
-18.3. ALPN
-----------
+SPVA does not currently use TLS ALPN.
 
-SPVA does not currently use TLS ALPN (Section 3.9).
+The two custom X.509 OID arcs used by SPVA (``1.3.6.1.4.1.37427.1``
+for ``SPvaCertStatusURI``; see Section 4.3) are issued under the
+IANA Private Enterprise Number arc but are not currently
+IANA-registered to the EPICS community.
 
 ----
 
