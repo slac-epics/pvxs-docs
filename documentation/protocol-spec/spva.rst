@@ -466,10 +466,9 @@ MAY introduce an ``"spva/2"`` ALPN identifier.
 4.1. Certificate Format
 -----------------------
 
-SPVA endpoints use X.509 v3 certificates (:rfc:`5280`). Sections
-4.2 and 4.3 specify the required extensions: Section 4.2 lists
-the standard PKIX extensions every SPVA certificate carries, and
-Section 4.3 specifies the two SPVA-specific custom extensions.
+SPVA endpoints use X.509 v3 certificates (:rfc:`5280`). Section
+4.2 lists the standard PKIX extensions every SPVA certificate
+carries; Section 4.3 specifies the SPVA-specific custom extension.
 
 4.2. Standard PKIX Extensions
 -----------------------------
@@ -499,12 +498,12 @@ OPTIONAL.
   omitted entirely. When present, see Section 4.5 for SPVA's
   handling of its entries.
 
-4.3. SPVA Custom X.509 Extensions
----------------------------------
+4.3. SPVA Custom X.509 Extension
+--------------------------------
 
-SPVA defines two custom X.509 extensions:
+SPVA defines one custom X.509 extension:
 
-.. table:: SPVA custom X.509 extensions
+.. table:: SPVA custom X.509 extension
    :widths: auto
 
    +---------------------+----------------------------+
@@ -512,19 +511,13 @@ SPVA defines two custom X.509 extensions:
    +=====================+============================+
    | SPvaCertStatusURI   | ``1.3.6.1.4.1.37427.1``    |
    +---------------------+----------------------------+
-   | SPvaCertConfigURI   | ``1.3.6.1.4.1.72473.1``    |
-   +---------------------+----------------------------+
 
-Both are OPTIONAL. Both are issued non-critical (``critical = FALSE``).
-Both carry an ``IA5String`` value (:rfc:`5280` Section 4.2.1.6)
-holding a PV name. The two sub-arcs are not currently
-IANA-registered.
+OPTIONAL. Issued non-critical (``critical = FALSE``). Carries an
+``IA5String`` value (:rfc:`5280` Section 4.2.1.6) holding a PV
+name. The sub-arc is not currently IANA-registered.
 
-4.3.1. SPvaCertStatusURI Extension
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-OPTIONAL. Value: the PV name where the certificate-status PV for
-this certificate is published. Default form
+Value: the PV name where the certificate-status PV for this
+certificate is published. Default form
 ``<cert_pv_prefix>:STATUS:<issuer_id>:<serial>`` (Section 7.1); the
 extension's IA5String is authoritative.
 
@@ -538,34 +531,14 @@ of:
 
 A certificate without this extension MUST NOT be subscribed to.
 Connections involving such a certificate proceed without
-certificate-status monitoring; revocation, suspension, and renewal-
-hint mechanisms do not apply to that certificate.
+certificate-status monitoring; revocation, suspension, and
+renewal-hint mechanisms do not apply to that certificate.
 
-4.3.2. SPvaCertConfigURI Extension
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-OPTIONAL. Value: the PV name of the entity's configuration PV.
-Default form ``<cert_pv_prefix>:CONFIG:<issuer_id>:<skid>`` where
-``<skid>`` is the entity's own Subject Key Identifier, hex-encoded.
-
-A certificate MUST carry this extension if the entity is to receive
-per-entity runtime configuration via PVACMS (e.g. cert-store
-location, recommended renewal-threshold window, cert-status cache
-time-to-live).
-
-A certificate without this extension MUST NOT be subscribed to for
-configuration. The entity uses local / default configuration only.
-The configuration PV's content is out of scope of this
-specification.
-
-4.3.3. Compatibility
-~~~~~~~~~~~~~~~~~~~~
-
-A non-SPVA-aware verifier MAY ignore both extensions. A certificate
-carrying either or both extensions remains a fully-conformant X.509
-v3 certificate per :rfc:`5280` and is usable by non-SPVA software,
-provided the Extended Key Usage and Subject Alternative Name fields
-are appropriate for the non-SPVA use.
+A non-SPVA-aware verifier MAY ignore the extension. A certificate
+carrying it remains a fully-conformant X.509 v3 certificate per
+:rfc:`5280` and is usable by non-SPVA software, provided the
+Extended Key Usage and Subject Alternative Name fields are
+appropriate for the non-SPVA use.
 
 4.4. Subject Distinguished Name
 -------------------------------
