@@ -150,9 +150,10 @@ properties:
 These properties drive several protocol-level choices that may appear
 unusual compared with general-purpose RPC protocols:
 
-- **Fixed-size 16-octet message header** for the common case, with a
-  separate 32-octet *extended header* for messages whose payload or
-  count exceeds 16-bit limits. (See Section 4.)
+- **Fixed-size 16-octet message header** for the common case, with
+  an 8-octet *extended-header annex* (giving a 24-octet total
+  header) for messages whose payload or count exceeds 16-bit
+  limits. (See Section 4.)
 - **No message framing on UDP**: each datagram contains an integral
   number of CA messages with no length prefix beyond the per-message
   header. Implementations rely on the per-message ``m_postsize`` field.
@@ -530,11 +531,12 @@ level is permitted.
 3.4.3. Message Boundaries on TCP
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-TCP is a byte stream. A receiver MUST reassemble the byte stream into
-discrete CA messages by reading the 16-octet ``caHdr`` (or 32-octet
-extended header, Section 4.3), examining the ``m_postsize``, and
-reading exactly ``m_postsize`` octets of payload (with padding to an
-8-octet boundary; Section 4.5).
+TCP is a byte stream. A receiver MUST reassemble the byte stream
+into discrete CA messages by reading the 16-octet ``caHdr`` (or
+24-octet extended header, Section 4.3), examining the ``m_postsize``
+field (which may have been promoted to ``m_postsize_big``), and
+reading exactly that many octets of payload (with padding to an
+8-octet boundary; Section 4.4).
 
 3.4.4. Maximum TCP Message Size
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -674,13 +676,14 @@ All fields are transmitted in network byte order (big-endian).
 ----------------------------
 
 When ``m_postsize`` or ``m_count`` exceeds the 16-bit field maximum
-(0xFFFF), V4.9+ implementations use an extended 32-octet header. The
-sentinel for "extended header follows" is ``m_postsize == 0xFFFF`` AND
-``m_count == 0`` in the standard 16-octet header. Sections of the
-extended header replace the contained 16-bit fields with 32-bit
-equivalents:
+(0xFFFF), V4.9+ implementations use an extended 24-octet header.
+The sentinel for "extended header follows" is ``m_postsize ==
+0xFFFF`` AND ``m_count == 0`` in the standard 16-octet header.
+Eight additional octets (two big-endian ``uint32`` fields) appended
+immediately after the standard header carry the actual payload
+size and the actual element count:
 
-.. table:: Extended-header field layout (32 octets, V4.9+)
+.. table:: Extended-header field layout (24 octets total, V4.9+)
    :widths: auto
 
    +--------+------+--------------------+----------------------------------+
@@ -701,8 +704,6 @@ equivalents:
    | 16     | 4    | ``m_postsize_big`` | Actual payload size in octets    |
    +--------+------+--------------------+----------------------------------+
    | 20     | 4    | ``m_count_big``    | Actual element count             |
-   +--------+------+--------------------+----------------------------------+
-   | 24     | 8    | (reserved)         | Reserved; senders MUST set zero  |
    +--------+------+--------------------+----------------------------------+
 
 A V4.9+ client communicating with a V<4.9 server MUST NOT use the
@@ -1114,17 +1115,25 @@ of the search request:
    +=================+==============================================+
    | ``m_cmmd``      | 6                                            |
    +-----------------+----------------------------------------------+
-   | ``m_postsize``  | 8 (V4.9+ carries 8-octet payload) or 0       |
+   | ``m_postsize``  | 8 (V4.1+ — payload carries server minor      |
+   |                 | revision; see Payload below) or 0 (pre-V4.1) |
    +-----------------+----------------------------------------------+
    | ``m_dataType``  | server TCP port number                       |
    +-----------------+----------------------------------------------+
-   | ``m_count``     | server minor revision                        |
+   | ``m_count``     | reserved (set 0 by server, ignored by        |
+   |                 | client)                                      |
    +-----------------+----------------------------------------------+
-   | ``m_cid``       | server-chosen 32-bit (echoed back)           |
+   | ``m_cid``       | pre-V4.8: server's IPv4 address (in network  |
+   |                 | byte order). V4.8+: ``INADDR_BROADCAST``     |
+   |                 | (0xFFFFFFFF) sentinel; client MUST take      |
+   |                 | server IP from the UDP source address        |
    +-----------------+----------------------------------------------+
-   | ``m_available`` | client CID from the request                  |
+   | ``m_available`` | client CID from the request (echoed)         |
    +-----------------+----------------------------------------------+
-   | Payload         | (V4.9+ only): client minor revision (V4.11+) |
+   | Payload         | V4.1+: 8 octets. Bytes 0..1 hold the         |
+   |                 | server's minor revision in network byte      |
+   |                 | order; bytes 2..7 reserved (sender SHOULD    |
+   |                 | set zero, receiver MUST ignore).             |
    +-----------------+----------------------------------------------+
 
 The client matches the response to its outstanding request via the
@@ -1508,16 +1517,32 @@ the response is received.
    +-----------------+----------------------------------------------+
    | ``m_count``     | actual element count returned                |
    +-----------------+----------------------------------------------+
-   | ``m_cid``       | server SID                                   |
+   | ``m_cid``       | CA status code (Section 12.2):               |
+   |                 | ``ECA_NORMAL`` on success, an error code     |
+   |                 | otherwise. The ``m_cid`` slot is repurposed  |
+   |                 | in responses of this command (and of         |
+   |                 | ``CA_PROTO_WRITE_NOTIFY`` and                |
+   |                 | ``CA_PROTO_EVENT_ADD`` updates) to carry the |
+   |                 | operation's completion status rather than a  |
+   |                 | channel identifier.                          |
    +-----------------+----------------------------------------------+
    | ``m_available`` | IOI from request (echoed)                    |
    +-----------------+----------------------------------------------+
-   | Payload         | DBR-encoded value (Section 4.7)              |
+   | Payload         | DBR-encoded value (Section 4.7) on success;  |
+   |                 | zero-filled if the operation completed at    |
+   |                 | the read-reply layer with a non-normal       |
+   |                 | status.                                      |
    +-----------------+----------------------------------------------+
 
-If the read fails (e.g. type conversion impossible, channel becomes
-inaccessible mid-read), the server responds with ``CA_PROTO_ERROR``
-(Section 12.3) carrying the original IOI in ``m_available``.
+The client matches the response to its outstanding request via the
+echoed IOI in ``m_available`` and dispatches on the status in
+``m_cid``. ``m_cid`` is **not** the channel SID in responses of
+this command.
+
+If the operation fails earlier than the read-reply layer can
+construct this response (e.g. the requested DBR type is invalid),
+the server MAY instead emit ``CA_PROTO_ERROR`` (Section 12.1)
+carrying the original IOI in its ``m_available``.
 
 8.2. Write Operations
 ---------------------
@@ -1568,15 +1593,23 @@ processing chain that the write triggers on the server).
    +-----------------+----------------------------------------------+
    | ``m_count``     | echoed from request                          |
    +-----------------+----------------------------------------------+
-   | ``m_cid``       | server SID                                   |
+   | ``m_cid``       | CA status code (Section 12.2):               |
+   |                 | ``ECA_NORMAL`` on successful write           |
+   |                 | completion, an error code on failure         |
+   |                 | (e.g. ``ECA_PUTFAIL``). Same repurposing as  |
+   |                 | the ``CA_PROTO_READ_NOTIFY`` response        |
+   |                 | (Section 8.1.2).                             |
    +-----------------+----------------------------------------------+
    | ``m_available`` | IOI (echoed)                                 |
    +-----------------+----------------------------------------------+
 
-Receipt of this response indicates the server has fully processed the
-write, including any record-processing side-effects in the IOC
-database. If the write fails, the server returns ``CA_PROTO_ERROR``
-with the IOI.
+Receipt of this response indicates the server has finished
+processing the write, including any record-processing
+side-effects on the IOC. The status in ``m_cid`` reports the
+overall success or failure. If the operation fails earlier than
+the write-reply layer can construct this response, the server
+MAY instead emit ``CA_PROTO_ERROR`` (Section 12.1) carrying the
+original IOI.
 
 8.3. Subscription Operations
 ----------------------------
@@ -1671,11 +1704,18 @@ the response of ``CA_PROTO_READ_NOTIFY`` (Section 8.1.2):
    +-----------------+----------------------------------------------+
    | ``m_count``     | element count                                |
    +-----------------+----------------------------------------------+
-   | ``m_cid``       | server SID                                   |
+   | ``m_cid``       | CA status code (Section 12.2):               |
+   |                 | ``ECA_NORMAL`` on a normal update, an error  |
+   |                 | code if the channel encountered a fault. The |
+   |                 | ``m_cid`` slot is repurposed in updates to   |
+   |                 | carry the per-update completion status,      |
+   |                 | matching the ``CA_PROTO_READ_NOTIFY``        |
+   |                 | response convention (Section 8.1.2).         |
    +-----------------+----------------------------------------------+
    | ``m_available`` | subscription ID (echoed)                     |
    +-----------------+----------------------------------------------+
-   | Payload         | DBR-encoded value                            |
+   | Payload         | DBR-encoded value (Section 4.7) on a normal  |
+   |                 | update; zero-filled on a fault update.       |
    +-----------------+----------------------------------------------+
 
 A subscription emits an unbounded stream of these update messages
@@ -1706,11 +1746,17 @@ A client cancels a subscription via ``CA_PROTO_EVENT_CANCEL``
    | ``m_available`` | subscription ID                              |
    +-----------------+----------------------------------------------+
 
-The server replies with the same message form (acknowledgment); after
-this point the server MUST NOT emit further updates for the cancelled
-subscription. Any updates already in-flight (in the TCP send buffer)
-MAY arrive after the cancellation; the client MUST tolerate and
-discard them.
+The server's acknowledgment is a single ``CA_PROTO_EVENT_ADD``
+message (command 1, NOT a same-form ``CA_PROTO_EVENT_CANCEL`` echo)
+with ``m_postsize == 0`` and the original subscription ID in
+``m_available``. This zero-payload ``EVENT_ADD`` is the **final
+update** of the cancelled subscription and MUST be honored by the
+client as the signal that no further updates will arrive for that
+subscription ID. After emitting this final update the server MUST
+NOT send any further updates for the cancelled subscription. Any
+updates already in-flight (in the TCP send buffer) MAY arrive
+between ``EVENT_CANCEL`` and the final update; the client MUST
+tolerate them.
 
 8.4. CA_PROTO_READ_SYNC (Purge Old Reads)
 -----------------------------------------
