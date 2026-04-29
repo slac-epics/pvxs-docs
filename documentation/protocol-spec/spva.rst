@@ -850,32 +850,67 @@ out-of-band lookup.
 7.2. Cert-Status PVStructure Schema
 -----------------------------------
 
-The cert-status PV's value is a PVStructure with the following
-fields:
+The cert-status PV is published with type ID
+``epics:nt/NTEnum:1.0``. Its value is a PVStructure with the
+following fields:
 
 ::
 
-    structure PVACertificateStatus
-        enum_t      status               # certificate state (Section 8)
-        time_t      status_date          # when this status was set
-        time_t      status_valid_until_date  # when this status entry expires
-        time_t      status_set_at        # when the certificate was issued
-        time_t      revocation_date      # if REVOKED, when (else 0)
-        structure   ocsp                 # optional OCSP response data
-            byte[]      ocsp_bytes       # raw OCSP response (RFC 6960)
-            enum_t      ocsp_status      # GOOD / REVOKED / UNKNOWN
-            time_t      status_date
-            time_t      status_valid_until_date
-            time_t      revocation_date
+    structure (type ID "epics:nt/NTEnum:1.0")
+        struct      value                # NTEnum: cert-status state
+            int32       index            #   index into choices
+            string[]    choices          #   {UNKNOWN, VALID, PENDING,
+                                         #    PENDING_APPROVAL,
+                                         #    PENDING_RENEWAL,
+                                         #    SCHEDULED_OFFLINE,
+                                         #    EXPIRED, REVOKED}
+        struct      alarm                # NTEnum-standard alarm
+        struct      timeStamp            # NTEnum-standard timestamp
+        struct      display
+            string      description
+        u64         serial               # certificate serial number
+        string      state                # cert-status state name
+                                         #  (= choices[value.index]; convenience)
+        u64         renew_by             # per-certificate renew_by hint
+                                         #  (UTC seconds; Section 8.5)
+        bool        renewal_due          # convenience: now >= renew_by
+        struct      ocsp_status          # NTEnum: OCSP status
+            int32       index            #   index into choices
+            string[]    choices          #   {OCSP_CERTSTATUS_GOOD,
+                                         #    OCSP_CERTSTATUS_REVOKED,
+                                         #    OCSP_CERTSTATUS_UNKNOWN}
+        string      ocsp_state           # OCSP status state name
+        string      ocsp_status_date
+        string      ocsp_certified_until
+        string      ocsp_revocation_date
+        u8[]        ocsp_response        # raw OCSP response (RFC 6960);
+                                         #  empty if PVACMS does not provide it
+        string      pvacms_node_id       # PVACMS-cluster member that
+                                         #  produced this update
+        struct[]    schedule             # SCHEDULED_OFFLINE windows
+                                         #  (matches CCR.schedule, Section 9.1)
+            string      day_of_week
+            string      start_time
+            string      end_time
+        struct[]    san                  # Subject Alternative Name entries
+                                         #  carried in the certificate
+                                         #  (matches CCR.san, Section 9.1)
+            string      type
+            string      value
 
-The ``status`` enum has values from ``certstatus_t``: ``UNKNOWN``,
-``PENDING_APPROVAL``, ``PENDING``, ``VALID``, ``EXPIRED``,
-``REVOKED``, ``PENDING_RENEWAL``, ``SCHEDULED_OFFLINE``.
+The cert-status state values (the contents of ``value.choices``)
+are normative and exactly: ``UNKNOWN``, ``VALID``, ``PENDING``,
+``PENDING_APPROVAL``, ``PENDING_RENEWAL``, ``SCHEDULED_OFFLINE``,
+``EXPIRED``, ``REVOKED``. Their semantics are in Section 8.2;
+their connection-state effects are in Section 8.4.
 
-The ``ocsp`` sub-structure is populated when PVACMS provides an
-OCSP-style status response (Section 13). It allows the
-cert-status PV to act as a cache for OCSP responses, avoiding a
-separate OCSP query.
+The ``ocsp_response`` field is populated when PVACMS provides an
+OCSP-style status response; otherwise it is empty (zero-length
+byte array). Section 13 covers OCSP stapling separately.
+
+A response whose ``timeStamp`` plus the configured cert-status
+validity duration has passed MUST be treated as ``UNKNOWN`` per
+Section 8.4.
 
 7.3. Subscription Flow
 ----------------------
