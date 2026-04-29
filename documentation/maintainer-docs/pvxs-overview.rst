@@ -39,7 +39,7 @@ the context, calling ``reconfigure(newConfig)`` drops in-progress TLS
 connections and re-establishes them under the new identity without
 tearing down the surrounding pvxs::Context object. The on-the-wire
 consequences of that — what the peer sees, when status checks resume —
-are described in :doc:`/protocol-spec/cert-protocol`.
+are described in :doc:`/programmers-ref/spva-cert-management-protocol`.
 
 Public server API surface
 -------------------------
@@ -77,7 +77,7 @@ project (which is pvxs).
 See also
 --------
 
-* :doc:`/protocol-spec/cert-protocol` — the on-the-wire protocol behind
+* :doc:`/programmers-ref/spva-cert-management-protocol` — the on-the-wire protocol behind
   certificate management; the C++ types above are how pvxs / pvxs-cms
   speak that protocol.
 * :doc:`/programmers-ref/cert-management` — how an application

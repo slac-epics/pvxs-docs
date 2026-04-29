@@ -115,10 +115,10 @@ extensions = [
 ]
 
 redirects = {
-    'spva':              'protocol-spec/spva.html',
-    'spvaauth':          'protocol-spec/spvaauth.html',
-    'spvaauthorization': 'protocol-spec/spvaauthorization.html',
-    'spvacerts':         'protocol-spec/cert-protocol.html',
+    'spva':              'programmers-ref/spva-tls.html',
+    'spvaauth':          'programmers-ref/spva-authentication.html',
+    'spvaauthorization': 'programmers-ref/spva-authorization.html',
+    'spvacerts':         'programmers-ref/spva-cert-management-protocol.html',
     'configuration':     'programmers-ref/configuration.html',
     'appendix':          'programmers-ref/expert-api.html',
     'pvacms':            'user-manual/pvacms.html',

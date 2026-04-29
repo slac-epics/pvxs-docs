@@ -14,6 +14,10 @@ management from the application side, and EXPERT API additions.
    configuration
    cert-management
    expert-api
+   spva-tls
+   spva-authentication
+   spva-authorization
+   spva-cert-management-protocol
 
 .. seealso::
 

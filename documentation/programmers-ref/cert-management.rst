@@ -7,12 +7,12 @@ This page covers the application-developer view of Secure-PVAccess
 certificate management: the shape of the request a client sends and what
 it gets back. The protocol-level details (certificate format, lifecycle
 states, on-the-wire status PVStructure schema, the wire-side CCR schema)
-are in :doc:`/protocol-spec/cert-protocol` — read that first if you need
+are in :doc:`/programmers-ref/spva-cert-management-protocol` — read that first if you need
 to know what the messages look like on the wire.
 
 .. seealso::
 
-   :doc:`/protocol-spec/cert-protocol` — protocol-level certificate
+   :doc:`/programmers-ref/spva-cert-management-protocol` — protocol-level certificate
    management: keys, trust establishment, certificate format, lifecycle
    states, on-the-wire status and CCR schemas.
 
