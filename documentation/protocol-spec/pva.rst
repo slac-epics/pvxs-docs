@@ -1692,7 +1692,8 @@ packet).
 8.1. CREATE_CHANNEL Request
 ---------------------------
 
-A client opens a channel via ``CMD_CREATE_CHANNEL`` (command 7):
+A client opens one or more channels via ``CMD_CREATE_CHANNEL``
+(command 7):
 
 .. table:: CMD_CREATE_CHANNEL request payload
    :widths: auto
@@ -1700,22 +1701,26 @@ A client opens a channel via ``CMD_CREATE_CHANNEL`` (command 7):
    +-----------------+-----------------------------------------+
    | Field           | Type / value                            |
    +=================+=========================================+
-   | channel_count   | u16 (always 1; reserved for batching)   |
+   | channel_count   | u16 number of (cid, name) pairs that    |
+   |                 | follow                                  |
    +-----------------+-----------------------------------------+
-   | client_cid      | u32 client-chosen CID                   |
-   +-----------------+-----------------------------------------+
-   | channel_name    | String (PV name)                        |
+   | per channel:    | u32 client_cid                          |
+   |                 |                                         |
+   |                 | String channel_name (PV name)           |
    +-----------------+-----------------------------------------+
 
-The ``channel_count`` field is reserved for future batched
-channel-creation; current implementations MUST set it to 1.
+The protocol allows ``channel_count > 1``; implementations consulted
+in preparing this specification emit one channel per
+``CMD_CREATE_CHANNEL`` request (``channel_count = 1``) but accept
+larger counts on receive.
 
 8.2. CREATE_CHANNEL Response (Success)
 --------------------------------------
 
-The server responds:
+The server emits one ``CMD_CREATE_CHANNEL`` response per requested
+channel:
 
-.. table:: CMD_CREATE_CHANNEL response (success) payload
+.. table:: CMD_CREATE_CHANNEL response payload
    :widths: auto
 
    +-----------------+-----------------------------------------+
@@ -1723,16 +1728,31 @@ The server responds:
    +=================+=========================================+
    | client_cid      | u32 (echoed from request)               |
    +-----------------+-----------------------------------------+
-   | server_sid      | u32 server-chosen SID                   |
+   | server_sid      | u32 server-chosen SID, valid only       |
+   |                 | when status is OK                       |
    +-----------------+-----------------------------------------+
    | status          | Status (Section 15.1)                   |
    +-----------------+-----------------------------------------+
-   | access_rights   | u16 access-permission bitmask           |
+
+Access rights are **not** carried in the
+``CMD_CREATE_CHANNEL`` response. The server emits a separate
+``CMD_ACL_CHANGE`` (command 6) message immediately before the
+``CMD_CREATE_CHANNEL`` response to convey the initial permission
+set; subsequent permission changes are signalled by additional
+``CMD_ACL_CHANGE`` messages on the same connection.
+
+.. table:: CMD_ACL_CHANGE payload
+   :widths: auto
+
+   +-----------------+-----------------------------------------+
+   | Field           | Type / value                            |
+   +=================+=========================================+
+   | client_cid      | u32 (the CID whose permissions changed) |
+   +-----------------+-----------------------------------------+
+   | perm            | u8 permission bitmask (see below)       |
    +-----------------+-----------------------------------------+
 
-Access rights bitmask:
-
-.. table:: PVA channel access rights
+.. table:: PVA channel permission bits
    :widths: auto
 
    +-------+-------------+--------------------------------------+
@@ -1740,41 +1760,44 @@ Access rights bitmask:
    +=======+=============+======================================+
    | 0     | ``PUT``     | Client may PUT (write)               |
    +-------+-------------+--------------------------------------+
-   | 1     | ``PUT_GET`` | Client may PUT_GET                   |
+   | 1     | ``PUT_GET`` | Client may perform PUT-GET           |
    +-------+-------------+--------------------------------------+
-   | 2     | ``RPC``     | Channel supports RPC                 |
+   | 2     | ``RPC``     | Client may invoke RPC                |
    +-------+-------------+--------------------------------------+
 
-Read access is implicit on every successfully-created channel.
+Read access is implicit on every successfully-created channel and
+is not separately gated by ``CMD_ACL_CHANGE``.
 
 8.3. CREATE_CHANNEL Response (Failure)
 --------------------------------------
 
-If the server cannot create the channel, the response has the same
-field layout but ``status`` indicates ERROR or FATAL with a
-descriptive message. The ``server_sid`` field is undefined and
-MUST NOT be used; the client MUST treat the channel as failed.
+If the server cannot create the channel, the response carries
+``status`` indicating ERROR or FATAL with a descriptive message.
+The ``server_sid`` field MUST NOT be used by the client (the value
+is unspecified). No ``CMD_ACL_CHANGE`` is emitted for a failed
+create.
 
 8.4. DESTROY_CHANNEL Request
 ----------------------------
 
 A client closes a channel via ``CMD_DESTROY_CHANNEL`` (command 8):
 
-.. table:: CMD_DESTROY_CHANNEL request
+.. table:: CMD_DESTROY_CHANNEL request payload
    :widths: auto
 
    +-----------------+-----------------------------------------+
    | Field           | Type / value                            |
    +=================+=========================================+
-   | client_cid      | u32                                     |
-   +-----------------+-----------------------------------------+
    | server_sid      | u32                                     |
    +-----------------+-----------------------------------------+
+   | client_cid      | u32                                     |
+   +-----------------+-----------------------------------------+
 
-The server MUST respond with the same message form acknowledging,
-then release all channel state. After this exchange, the client
-MUST NOT use the SID for any further operation; the server MAY
-reuse the SID for a future channel.
+The server replies with ``CMD_DESTROY_CHANNEL`` carrying the same
+two fields in the same order, acknowledging the destroy, then
+releases all channel state. After this exchange the client MUST
+NOT use the SID for any further operation; the server MAY reuse
+the SID for a future channel.
 
 ----
 
@@ -1905,26 +1928,35 @@ a successful Put, with the same IOID, to fetch the post-write value.
 ----------------
 
 ``CMD_PUT_GET`` (command 12) atomically writes a value and returns
-the resulting value. Its Init exchanges TWO type descriptions: the
-"put structure" (input) and the "get structure" (output). Subsequent
+the resulting value. Its Init exchanges two type descriptions: the
+put structure (input) and the get structure (output). Subsequent
 operation messages carry both bitsets and both values.
 
-The full sub-command set:
+Sub-command bits follow the same convention as ``CMD_GET`` /
+``CMD_PUT`` (Section 9.1): ``0x08`` Init, ``0x10`` Destroy,
+``0x40`` Get-direction. Combinations select the operation:
 
-.. table:: CMD_PUT_GET sub-commands
+.. table:: CMD_PUT_GET sub-command meanings
    :widths: auto
 
-   +---------+--------+-----------------------------------------+
-   | Bit     | Name   | Purpose                                 |
-   +=========+========+=========================================+
-   | 0x08    | Init   | Fetch put-type and get-type             |
-   +---------+--------+-----------------------------------------+
-   | 0x40    | PutGet | Atomic put-then-get                     |
-   +---------+--------+-----------------------------------------+
-   | 0x80    | GetPut | Fetch current put structure (no put)    |
-   +---------+--------+-----------------------------------------+
-   | 0x10    | Destroy| Release operation state                 |
-   +---------+--------+-----------------------------------------+
+   +-----------------+-----------------------------------------+
+   | Sub-command bits| Operation                               |
+   +=================+=========================================+
+   | ``0x08``        | Init: fetch put-type and get-type       |
+   +-----------------+-----------------------------------------+
+   | ``0x00``        | Atomic put-then-get (default direction) |
+   +-----------------+-----------------------------------------+
+   | ``0x40``        | Get-only: fetch current value without   |
+   |                 | writing                                 |
+   +-----------------+-----------------------------------------+
+   | ``0x10``        | Destroy: release operation state        |
+   +-----------------+-----------------------------------------+
+
+Implementation note: ``CMD_PUT_GET`` is defined by this protocol
+but is not implemented by every conforming peer. Implementations
+consulted in preparing this specification differ in PUT_GET
+support; receivers MAY reject ``CMD_PUT_GET`` with a Status of
+ERROR if they do not implement it.
 
 9.5. CMD_MONITOR (Subscriptions)
 --------------------------------
@@ -1939,11 +1971,16 @@ Client sends ``CMD_MONITOR`` with sub-command ``Init`` (0x08) and
 the same PVRequest payload as ``CMD_GET`` Init. The server responds
 with the channel type description and an explicit OK status.
 
-9.5.2. Start
-~~~~~~~~~~~~
+9.5.2. Start and Stop
+~~~~~~~~~~~~~~~~~~~~~
 
-Client sends ``CMD_MONITOR`` with sub-command ``Start`` (0x44 — bit
-0x40 + bit 0x04). The server begins emitting updates.
+Sub-command bit ``0x04`` is the start/stop dispatch bit; bit
+``0x40`` distinguishes start from stop:
+
+- ``0x44`` (bit ``0x04`` + bit ``0x40``) — **Start**: server begins
+  emitting updates.
+- ``0x04`` (bit ``0x04`` alone) — **Stop**: server pauses updates;
+  the subscription remains established and can be restarted.
 
 9.5.3. Update Stream (server → client)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1962,21 +1999,27 @@ Each update is identified by IOID. A field whose bit is set in
 ``overrun_mask`` indicates the server's per-field update queue
 overflowed and one or more updates were merged.
 
-9.5.4. Pipeline Flow Control (V2)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+9.5.4. Pipeline Flow Control
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A monitor MAY operate in "pipeline" mode, where the client sends
-periodic ``CMD_MONITOR`` ack messages with sub-command ``Pipeline``
-(0x80) and a u32 ack count. The server emits at most ack_count
-updates ahead of the last acknowledged. This is the recommended
-flow-control mechanism for high-update-rate channels.
+A monitor MAY operate in "pipeline" mode, requested by setting the
+boolean ``record._options.pipeline`` to true in the Init PVRequest
+and providing ``record._options.queueSize``. In pipeline mode the
+client sends periodic ack messages by setting bit ``0x80`` in the
+``CMD_MONITOR`` sub-command and following with a ``u32`` ack count.
+The server emits at most ack_count updates ahead of the last
+acknowledged. The ack-bit (``0x80``) MAY be combined with the
+start/stop bits (``0x04``, ``0x40``) in a single message; the ack
+count u32 always follows the sub-command byte when bit ``0x80`` is
+set.
 
-9.5.5. Stop / Destroy
-~~~~~~~~~~~~~~~~~~~~~
+9.5.5. Destroy
+~~~~~~~~~~~~~~
 
-Client sends ``CMD_MONITOR`` with sub-command ``Stop`` (0x84) to
-pause updates without releasing the subscription. Sub-command
-``Destroy`` (0x10) tears down the subscription completely.
+Sub-command bit ``0x10`` (Destroy) tears down the subscription
+completely. The server releases all per-subscription state. The
+client MUST NOT use the IOID for any further operation after sending
+Destroy.
 
 9.6. CMD_RPC
 ------------
