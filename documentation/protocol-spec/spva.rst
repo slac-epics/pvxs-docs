@@ -502,110 +502,70 @@ OPTIONAL.
 4.3. SPVA Custom X.509 Extensions
 ---------------------------------
 
-In addition to the standard Public Key Infrastructure for X.509
-(PKIX) extensions of Section 4.2, SPVA defines two custom X.509
-extensions that embed the names of the per-certificate management
-Process Variables (PVs) directly into the issued certificate. This
-allows endpoints to discover the certificate-status PV and the
-configuration PV without having to construct the names from the
-issuer Subject Key Identifier and serial number — the certificate
-itself carries the Universal Resource Identifier (URI) for each.
-
-Both extensions are issued under the IANA Private Enterprise
-Number arc ``1.3.6.1.4.1`` (see :rfc:`2578`). The two enterprise
-sub-arcs used (``37427.1`` and ``72473.1``) are not yet
-IANA-registered to the EPICS community; sites deploying SPVA MUST
-treat the values given below as the normative Object Identifiers
-for these extensions, and registration with IANA is anticipated.
+SPVA defines two custom X.509 extensions:
 
 .. table:: SPVA custom X.509 extensions
    :widths: auto
 
-   +-----------------------------+----------------------------+--------------------------------------+
-   | Extension name              | Object Identifier          | Description                          |
-   +=============================+============================+======================================+
-   | SPvaCertStatusURI           | ``1.3.6.1.4.1.37427.1``    | EPICS SPVA Certificate Status URI    |
-   +-----------------------------+----------------------------+--------------------------------------+
-   | SPvaCertConfigURI           | ``1.3.6.1.4.1.72473.1``    | EPICS SPVA Certificate Config URI    |
-   +-----------------------------+----------------------------+--------------------------------------+
+   +---------------------+----------------------------+
+   | Extension name      | Object Identifier          |
+   +=====================+============================+
+   | SPvaCertStatusURI   | ``1.3.6.1.4.1.37427.1``    |
+   +---------------------+----------------------------+
+   | SPvaCertConfigURI   | ``1.3.6.1.4.1.72473.1``    |
+   +---------------------+----------------------------+
+
+Both are OPTIONAL. Both are issued non-critical (``critical = FALSE``).
+Both carry an ``IA5String`` value (:rfc:`5280` Section 4.2.1.6)
+holding a PV name. The two sub-arcs are not currently
+IANA-registered.
 
 4.3.1. SPvaCertStatusURI Extension
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Object Identifier: ``1.3.6.1.4.1.37427.1``
+OPTIONAL. Value: the PV name where the certificate-status PV for
+this certificate is published. Default form
+``<cert_pv_prefix>:STATUS:<issuer_id>:<serial>`` (Section 7.1); the
+extension's IA5String is authoritative.
 
-Critical: ``FALSE`` (a non-SPVA-aware verifier MAY ignore the
-extension safely; SPVA-aware code MUST honor it).
+A certificate MUST carry this extension if it participates in any
+of:
 
-Value type: ``IA5String`` (American Standard Code for Information
-Interchange characters; see :rfc:`5280` Section 4.2.1.6).
+- Live revocation (Section 7).
+- ``SCHEDULED_OFFLINE`` connection suspension (Section 8.4).
+- ``PENDING_RENEWAL`` connection-state behaviour (Section 8.5).
+- Renewal hint delivery (``renew_by``; Section 8.5).
 
-Value: the PV name (full URI, no transport prefix) where the
-certificate-status PV for this certificate is published. The
-default form is ``<cert_pv_prefix>:STATUS:<issuer_id>:<serial>``
-where:
-
-- ``<cert_pv_prefix>`` is the configurable Process Variable Access
-  Certificate Management Service (PVACMS) PV prefix
-  (default ``CERT``; configurable via
-  ``EPICS_PVAS_CERT_PV_PREFIX``).
-- ``<issuer_id>`` is the issuer's Subject Key Identifier, hex-
-  encoded.
-- ``<serial>`` is the certificate's serial number, hex-encoded.
-
-A site MAY use any URI form it pleases; the string in the extension
-is authoritative. The ``<prefix>:STATUS:<issuer>:<serial>``
-construction described in Section 7.1 is the conventional default,
-not a wire-protocol requirement.
-
-The extension MAY be omitted when the issuing PVACMS is configured
-with status-subscription disabled for this entity (the
-``no_status`` issuance flag); endpoints reading a certificate
-without this extension MUST treat it as having no status-monitoring
-binding and MUST decide locally whether to accept connections to or
-from that entity in the absence of certificate-status information.
+A certificate without this extension MUST NOT be subscribed to.
+Connections involving such a certificate proceed without
+certificate-status monitoring; revocation, suspension, and renewal-
+hint mechanisms do not apply to that certificate.
 
 4.3.2. SPvaCertConfigURI Extension
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Object Identifier: ``1.3.6.1.4.1.72473.1``
+OPTIONAL. Value: the PV name of the entity's configuration PV.
+Default form ``<cert_pv_prefix>:CONFIG:<issuer_id>:<skid>`` where
+``<skid>`` is the entity's own Subject Key Identifier, hex-encoded.
 
-Critical: ``FALSE``.
+A certificate MUST carry this extension if the entity is to receive
+per-entity runtime configuration via PVACMS (e.g. cert-store
+location, recommended renewal-threshold window, cert-status cache
+time-to-live).
 
-Value type: ``IA5String``.
+A certificate without this extension MUST NOT be subscribed to for
+configuration. The entity uses local / default configuration only.
+The configuration PV's content is out of scope of this
+specification.
 
-Value: the PV name of the entity's configuration PV, an SPVA-only
-PV that publishes per-entity runtime configuration the entity
-should pick up at startup or on subscription updates (for example:
-the Online Certificate Status Protocol responder URL, the
-recommended renewal-threshold window, the cert-status cache time-
-to-live). The default form is
-``<cert_pv_prefix>:CONFIG:<issuer_id>:<skid>`` where ``<skid>`` is
-the entity's own Subject Key Identifier, hex-encoded.
+4.3.3. Compatibility
+~~~~~~~~~~~~~~~~~~~~
 
-This extension is OPTIONAL. PVACMS adds it only when the issuance
-configuration provides a non-empty configuration URI base
-(``cert_config_uri_base_`` in the issuer code path); endpoints
-processing a certificate without this extension MUST NOT subscribe
-to a configuration PV for that entity. The configuration PV's
-content is out of scope of this specification (it is a deployment
-concern of PVACMS, documented in :doc:`/user-manual/pvacms`).
-
-4.3.3. Critical Bit and Backward Compatibility
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Both custom extensions are issued with the ``critical`` bit
-``FALSE`` per :rfc:`5280` Section 4.2. This means a generic X.509
-verifier (e.g. a TLS library on a non-SPVA endpoint) MAY ignore the
-extension without rejecting the certificate. SPVA-aware endpoints
-MUST honor the extensions when present.
-
-A certificate carrying these extensions remains a fully-conformant
-X.509 v3 certificate per :rfc:`5280` and may be used as such by
-non-SPVA software (e.g. the certificate is also valid for use as a
-generic Transport Layer Security server certificate, provided the
-Extended Key Usage and Subject Alternative Name fields are
-appropriate for the non-SPVA use).
+A non-SPVA-aware verifier MAY ignore both extensions. A certificate
+carrying either or both extensions remains a fully-conformant X.509
+v3 certificate per :rfc:`5280` and is usable by non-SPVA software,
+provided the Extended Key Usage and Subject Alternative Name fields
+are appropriate for the non-SPVA use.
 
 4.4. Subject Distinguished Name
 -------------------------------
