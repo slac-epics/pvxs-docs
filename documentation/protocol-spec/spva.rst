@@ -224,7 +224,7 @@ CCR (Certificate Creation Request)
 
 Certificate Subject
    The X.509 Subject Distinguished Name of the certificate. SPVA
-   constrains it to specific patterns (Section 4.3).
+   constrains it to specific patterns (Section 4.4).
 
 Cert-status PV
    A well-known PV name pattern, hosted by PVACMS, that publishes
@@ -421,7 +421,7 @@ be used in newly-issued SPVA certificates.
 A client SHALL send the TLS ``server_name`` extension (:rfc:`6066`)
 identifying the server it expects to connect to. The server's
 certificate Subject Alternative Name (SAN) MUST contain a matching
-DNS name or IP address (Section 4.4).
+DNS name or IP address (Section 4.5).
 
 3.7. Session Resumption
 -----------------------
@@ -458,29 +458,142 @@ SPVA endpoints use X.509 v3 certificates (:rfc:`5280`). All
 extensions referenced below are standard PKIX extensions; SPVA does
 not introduce custom OIDs.
 
-4.2. Required Extensions
-------------------------
+4.2. Required Standard PKIX Extensions
+--------------------------------------
 
 Every SPVA certificate MUST contain:
 
 - **Basic Constraints** (``id-ce-basicConstraints``): ``CA = FALSE``
-  for end-entity certificates; ``CA = TRUE`` for CA certificates.
-- **Key Usage** (``id-ce-keyUsage``): for end-entity certificates,
+  for entity certificates; ``CA = TRUE`` for Certification Authority
+  certificates.
+- **Key Usage** (``id-ce-keyUsage``): for entity certificates,
   the bits ``digitalSignature`` and ``keyEncipherment`` (or
-  ``keyAgreement`` for ECDSA) MUST be set; ``keyCertSign`` MUST NOT
-  be set.
+  ``keyAgreement`` for Elliptic Curve Digital Signature Algorithm)
+  MUST be set; ``keyCertSign`` MUST NOT be set.
 - **Extended Key Usage** (``id-ce-extKeyUsage``): MUST include
   ``id-kp-serverAuth`` for server certificates and
   ``id-kp-clientAuth`` for client certificates. A certificate
-  intended for both roles MUST include both EKU values.
+  intended for both roles MUST include both Extended Key Usage
+  values.
 - **Subject Alternative Name** (``id-ce-subjectAltName``):
-  Section 4.4.
+  Section 4.5.
 - **Authority Key Identifier** (``id-ce-authorityKeyIdentifier``):
-  REQUIRED for end-entity certificates.
+  REQUIRED for entity certificates.
 - **Subject Key Identifier** (``id-ce-subjectKeyIdentifier``):
   REQUIRED.
 
-4.3. Subject Distinguished Name
+4.3. SPVA Custom X.509 Extensions
+---------------------------------
+
+In addition to the standard Public Key Infrastructure for X.509
+(PKIX) extensions of Section 4.2, SPVA defines two custom X.509
+extensions that embed the names of the per-certificate management
+Process Variables (PVs) directly into the issued certificate. This
+allows endpoints to discover the certificate-status PV and the
+configuration PV without having to construct the names from the
+issuer Subject Key Identifier and serial number — the certificate
+itself carries the Universal Resource Identifier (URI) for each.
+
+Both extensions are registered under the EPICS-allocated branch of
+the IANA Private Enterprise Number arc ``1.3.6.1.4.1`` (see
+:rfc:`2578`). At the time of writing, the two enterprise sub-arcs
+used (37427 and 72473) are unassigned by IANA; canonical
+implementation source records them as TODO-register OIDs intended
+for permanent registration to the EPICS community.
+
+.. table:: SPVA custom X.509 extensions
+   :widths: auto
+
+   +------------------------------------+--------------------------------+--------------------------------------+
+   | Extension                          | Object Identifier              | Long Name                            |
+   +====================================+================================+======================================+
+   | ``NID_SPvaCertStatusURI``          | ``1.3.6.1.4.1.37427.1``        | EPICS SPVA Certificate Status URI    |
+   +------------------------------------+--------------------------------+--------------------------------------+
+   | ``NID_SPvaCertConfigURI``          | ``1.3.6.1.4.1.72473.1``        | EPICS SPVA Certificate Config URI    |
+   +------------------------------------+--------------------------------+--------------------------------------+
+
+The canonical source for these definitions is
+``pvxs-cms/src/pvacms/opensslgbl.h``.
+
+4.3.1. SPvaCertStatusURI Extension
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Object Identifier: ``1.3.6.1.4.1.37427.1``
+
+Critical: ``FALSE`` (a non-SPVA-aware verifier MAY ignore the
+extension safely; SPVA-aware code MUST honor it).
+
+Value type: ``IA5String`` (American Standard Code for Information
+Interchange characters; see :rfc:`5280` Section 4.2.1.6).
+
+Value: the PV name (full URI, no transport prefix) where the
+certificate-status PV for this certificate is published. The
+default form is ``<cert_pv_prefix>:STATUS:<issuer_id>:<serial>``
+where:
+
+- ``<cert_pv_prefix>`` is the configurable Process Variable Access
+  Certificate Management Service (PVACMS) PV prefix
+  (default ``CERT``; configurable via
+  ``EPICS_PVAS_CERT_PV_PREFIX``).
+- ``<issuer_id>`` is the issuer's Subject Key Identifier, hex-
+  encoded.
+- ``<serial>`` is the certificate's serial number, hex-encoded.
+
+A site MAY use any URI form it pleases; the string in the extension
+is authoritative. The ``<prefix>:STATUS:<issuer>:<serial>``
+construction described in Section 7.1 is the conventional default,
+not a wire-protocol requirement.
+
+The extension MAY be omitted when the issuing PVACMS is configured
+with status-subscription disabled for this entity (the
+``no_status`` issuance flag); endpoints reading a certificate
+without this extension MUST treat it as having no status-monitoring
+binding and MUST decide locally whether to accept connections to or
+from that entity in the absence of certificate-status information.
+
+4.3.2. SPvaCertConfigURI Extension
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Object Identifier: ``1.3.6.1.4.1.72473.1``
+
+Critical: ``FALSE``.
+
+Value type: ``IA5String``.
+
+Value: the PV name of the entity's configuration PV, an SPVA-only
+PV that publishes per-entity runtime configuration the entity
+should pick up at startup or on subscription updates (for example:
+the Online Certificate Status Protocol responder URL, the
+recommended renewal-threshold window, the cert-status cache time-
+to-live). The default form is
+``<cert_pv_prefix>:CONFIG:<issuer_id>:<skid>`` where ``<skid>`` is
+the entity's own Subject Key Identifier, hex-encoded.
+
+This extension is OPTIONAL. PVACMS adds it only when the issuance
+configuration provides a non-empty configuration URI base
+(``cert_config_uri_base_`` in the issuer code path); endpoints
+processing a certificate without this extension MUST NOT subscribe
+to a configuration PV for that entity. The configuration PV's
+content is out of scope of this specification (it is a deployment
+concern of PVACMS, documented in :doc:`/user-manual/pvacms`).
+
+4.3.3. Critical Bit and Backward Compatibility
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Both custom extensions are issued with the ``critical`` bit
+``FALSE`` per :rfc:`5280` Section 4.2. This means a generic X.509
+verifier (e.g. a TLS library on a non-SPVA endpoint) MAY ignore the
+extension without rejecting the certificate. SPVA-aware endpoints
+MUST honor the extensions when present.
+
+A certificate carrying these extensions remains a fully-conformant
+X.509 v3 certificate per :rfc:`5280` and may be used as such by
+non-SPVA software (e.g. the certificate is also valid for use as a
+generic Transport Layer Security server certificate, provided the
+Extended Key Usage and Subject Alternative Name fields are
+appropriate for the non-SPVA use).
+
+4.4. Subject Distinguished Name
 -------------------------------
 
 The Subject DN of an SPVA certificate identifies the principal. SPVA
@@ -501,7 +614,7 @@ sub-organisations.
 The full ``CN=…, O=…[, OU=…]`` string is the principal name used in
 ASG/ACF authorization rules (Section 11).
 
-4.4. Subject Alternative Name
+4.5. Subject Alternative Name
 -----------------------------
 
 The SAN extension carries the network identities the certificate is
@@ -519,7 +632,7 @@ certificate's SAN, if present, MAY contain ``rfc822Name`` (email)
 or ``otherName`` for site-specific principal naming, but its primary
 identity is the Subject DN.
 
-4.5. Trust Anchors
+4.6. Trust Anchors
 ------------------
 
 Each SPVA endpoint SHALL be configured with one or more trust
@@ -534,15 +647,113 @@ configured trust anchor MUST be cryptographically valid (each
 certificate's signature verifies against its issuer's public key)
 and MUST NOT contain any revoked or expired certificate.
 
-4.6. Validity Period
---------------------
+4.7. Validity Period: Cryptographic vs Operational
+--------------------------------------------------
 
-SPVA leaf certificates SHOULD have a validity period of 1 year or
-less. Certificates with longer validity SHOULD be avoided to limit
-the impact window of a private-key compromise; PVACMS is designed
-to make frequent renewal cheap (Section 10.5).
+SPVA distinguishes the **cryptographic** validity of an entity
+certificate (its X.509 ``notBefore`` and ``notAfter`` fields, fixed
+at issuance and verifiable by any standard X.509 verifier) from its
+**operational** validity (whether the cert-status protocol of
+Section 7 currently asserts the certificate is in an
+operationally-good state, Section 8.4).
 
-4.7. Key Algorithms
+Operational validity is enforced by the cert-status protocol, not
+by ``notAfter``. The two are deliberately decoupled so that
+``notAfter`` can be set very long (e.g. multiple years) without
+weakening the security posture, while operational validity is
+constrained by a much shorter window (the
+``status_valid_until_date`` field of the cert-status PVStructure;
+see Section 7.2). This decoupling is a core SPVA design choice; the
+guidance below replaces the conventional "use short ``notAfter``"
+advice that applies to PKI deployments without a live cert-status
+channel.
+
+4.7.1. Cryptographic Validity (notAfter)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The X.509 ``notAfter`` of an entity certificate marks the end of
+the certificate's cryptographic life: after this instant any X.509
+verifier MUST reject the certificate independently of any cert-
+status check. PVACMS sets ``notAfter`` from a configured default
+(``EPICS_PVACMS_CERT_VALIDITY``, with per-role overrides
+``EPICS_PVACMS_CLIENT_CERT_VALIDITY``,
+``EPICS_PVACMS_SERVER_CERT_VALIDITY``,
+``EPICS_PVACMS_IOC_CERT_VALIDITY``); the canonical implementation's
+default is ``6M`` (six months), but sites are explicitly EXPECTED
+to configure this to their preferred cryptographic lifetime, which
+MAY be much longer than six months.
+
+Sites SHOULD treat ``notAfter`` as the rotation horizon — the
+maximum time the same keypair MAY remain in service — not as the
+operational expiry. A long ``notAfter`` is acceptable and
+operationally desirable: it means a process holding a valid private
+key does not need to re-engage the certificate-issuance flow on
+every short-cycle renewal, and reduces PVACMS load.
+
+There is no protocol-level upper bound on ``notAfter``. A site MAY
+configure multi-year ``notAfter`` values where its key-protection
+policy (hardware security module, sealed keychain, or equivalent)
+warrants it. Sites with weaker key protection SHOULD configure
+shorter ``notAfter`` values to bound the impact of a key
+compromise that goes undetected long enough to outlast cert-status
+revocation propagation.
+
+4.7.2. Operational Validity
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Operational validity is the property checked by an SPVA endpoint
+when admitting or maintaining a connection (Section 5.1, Section
+7). An operationally-valid certificate is one whose cert-status
+PV currently reports a status in the operationally-good set
+(``VALID``, ``PENDING_RENEWAL``; see Section 8.4) AND whose
+status response's ``status_valid_until_date`` has not passed.
+
+The cert-status response's ``status_valid_until_date`` field
+defines the freshness window: a cached or stapled cert-status
+response is honored only until this time, after which a fresh
+response MUST be obtained. PVACMS sets ``status_valid_until_date``
+from its configured cert-status validity duration
+(``EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS``; default 30 minutes in
+the canonical implementation). Endpoints obtain fresh status
+either by maintaining a live cert-status subscription
+(Section 7.3, the typical case) or, if subscription is unavailable,
+by re-querying.
+
+This design — long cryptographic lifetime, short operational
+window — means that revocation, suspension, and policy changes
+propagate within the cert-status validity window (typically tens of
+minutes) rather than being bounded by the certificate's
+``notAfter``. A revoked certificate becomes operationally invalid
+within at most one ``status_valid_until_date`` interval after
+PVACMS records the revocation, regardless of whether the
+certificate's ``notAfter`` is days or years away.
+
+4.7.3. Renewal Hint (PENDING_RENEWAL and renew_by)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Independent of both ``notAfter`` and
+``status_valid_until_date``, each certificate MAY carry a
+**renewal hint** — a separate ``renew_by`` time at which PVACMS
+(or site policy) recommends the certificate-holder request a fresh
+certificate. The renewal hint is conveyed:
+
+- Implicitly via the cert-status state transition to
+  ``PENDING_RENEWAL`` (Section 8.3) when the renewal threshold is
+  reached.
+- Explicitly via the ``renew_by`` field of the cert-status
+  PVStructure (Section 7.2).
+
+A certificate-holder receiving ``PENDING_RENEWAL`` SHOULD initiate
+a renewal Certificate Creation Request (Section 9.4) but MAY
+continue using the current certificate for operations until the
+renewal completes; ``PENDING_RENEWAL`` is in the operationally-good
+set so existing connections are not disrupted while the holder
+arranges renewal. The renewal hint is policy-driven, not
+cryptographic: it gives the operator a controlled re-key cadence
+that is independent of (and typically much shorter than)
+``notAfter``.
+
+4.8. Key Algorithms
 -------------------
 
 End-entity SPVA certificates MAY use:
@@ -869,16 +1080,27 @@ in date and validly issued; it is just approaching expiry. Tearing
 down operational connections during the renewal window would
 disrupt service unnecessarily.
 
-8.5. Renewal Hint (V SPVA-2)
+8.5. Renewal Hint (renew_by)
 ----------------------------
 
-The cert-status PVStructure's ``status_valid_until_date`` field
-serves as a renewal hint when the certificate is in the
-``PENDING_RENEWAL`` state. The certificate-holder SHOULD initiate
-a renewal CCR before this date. Pvxs's
-``EPICS_PVA_TLS_RENEWAL_THRESHOLD`` controls how far in advance of
-expiry the status transitions to ``PENDING_RENEWAL`` (default 7
-days).
+Each certificate carries a separate **renew_by** time published in
+the cert-status PVStructure (Section 7.2's ``renew_by`` field), set
+at issuance time by the chosen authenticator. ``renew_by`` is
+distinct from ``status_valid_until_date`` (which controls cert-
+status response freshness, Section 7.2) and from ``notAfter``
+(which is the cryptographic expiry, Section 4.7.1).
+
+When the current time crosses ``renew_by``, PVACMS transitions the
+certificate's status from ``VALID`` to ``PENDING_RENEWAL``. The
+certificate-holder SHOULD initiate a renewal Certificate Creation
+Request (Section 9.4) on receiving this transition. ``renew_by``
+is therefore a per-certificate, authenticator-set policy hint, not
+a fixed global threshold; an authenticator MAY set ``renew_by``
+equal to ``notAfter`` to suppress the renewal-hint mechanism for
+certificates that should not auto-renew.
+
+See Section 4.7.3 for the relationship between ``renew_by``,
+``notAfter``, and ``status_valid_until_date``.
 
 ----
 
@@ -1335,8 +1557,16 @@ SPVA defends against:
 
 SPVA does NOT defend against:
 
-- Compromise of an endpoint's private key (the attacker can then
-  impersonate that endpoint until the certificate is revoked).
+- Compromise of an endpoint's private key. The attacker can
+  impersonate the endpoint until PVACMS marks the certificate
+  ``REVOKED`` and the revocation propagates through the cert-status
+  protocol. SPVA's design point here is that the impact window is
+  bounded by ``status_valid_until_date`` (default 30 minutes,
+  Section 7.2), NOT by ``notAfter`` — a long cryptographic lifetime
+  (Section 4.7.1) does not extend the post-revocation impact
+  window. The defence relies on the operator detecting the
+  compromise; SPVA itself provides the revocation-propagation
+  channel but cannot detect the compromise.
 - CA compromise (catastrophic; recoverable only by re-issuing
   every endpoint certificate from a fresh CA).
 - Insider attacks at PVACMS (a malicious admin can issue arbitrary
