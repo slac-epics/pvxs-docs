@@ -1362,70 +1362,72 @@ PVACMS performs these CA operations on every approved CCR:
 
 ----
 
-11. Authorization (ACF Extensions)
-==================================
+11. Authorization
+=================
 
-11.1. ASG/ACF Background
-------------------------
+11.1. Per-Connection Authorization Inputs
+-----------------------------------------
 
-EPICS uses an "Access Security Group" (ASG) configuration in an
-"Access Control File" (ACF) to control which principals may read,
-write, or otherwise act on which PVs. ASG/ACF was designed for CA
-where the principal name was advisory; SPVA elevates the principal
-name to cryptographically-verified status.
+For every TLS-authenticated connection, SPVA exposes the
+following peer-credential fields to the server's authorization
+layer. These are the protocol-level inputs an access-security
+configuration MAY match against; the configuration syntax itself
+(EPICS access security configuration files, or any other) is out
+of scope.
 
-11.2. ASG Rule Form (Standard EPICS)
-------------------------------------
+.. table:: Per-peer authorization inputs
+   :widths: auto
 
-A standard ASG rule:
+   +------------------+-----------------------------------------------+
+   | Field            | Value                                         |
+   +==================+===============================================+
+   | ``method``       | ``"x509"`` for SPVA-authenticated peers;      |
+   |                  | ``"ca"`` for plain-PVA peers presenting an    |
+   |                  | advisory user name; ``"anonymous"`` for       |
+   |                  | peers presenting no credentials.              |
+   +------------------+-----------------------------------------------+
+   | ``account``      | For ``method = "x509"``: the peer             |
+   |                  | certificate's CN value (Section 4.4). For     |
+   |                  | ``method = "ca"``: the user-name string the   |
+   |                  | peer supplied in PVA                          |
+   |                  | ``CMD_CONNECTION_VALIDATION``. For            |
+   |                  | ``method = "anonymous"``: ``"anonymous"``.    |
+   +------------------+-----------------------------------------------+
+   | ``authority``    | For ``method = "x509"``: a list (one per      |
+   |                  | line) of CN values from the peer's            |
+   |                  | certificate chain, ordered from the issuing   |
+   |                  | CA up to the root. Empty for ``method =       |
+   |                  | "ca"`` and ``method = "anonymous"``.          |
+   +------------------+-----------------------------------------------+
+   | ``peer``         | Peer network address (numeric).               |
+   +------------------+-----------------------------------------------+
+   | ``iface``        | Local interface address through which this    |
+   |                  | peer is connected (numeric); MAY be a         |
+   |                  | wildcard.                                     |
+   +------------------+-----------------------------------------------+
+   | ``san``          | Subject Alternative Name entries (Section     |
+   |                  | 4.5) extracted from the peer certificate;     |
+   |                  | each entry is ``{type, value}`` with type     |
+   |                  | ``"dns"`` or ``"ip"``. Empty if no SAN        |
+   |                  | extension is present or for non-x509 peers.   |
+   +------------------+-----------------------------------------------+
+   | ``isTLS``        | True if the connection is TLS-protected.      |
+   +------------------+-----------------------------------------------+
 
-::
+The peer certificate's issuer SKID and serial are kept in the
+endpoint runtime for cert-status monitoring (Section 7) but are
+NOT exposed to the authorization layer.
 
-    ASG(group_name) {
-        RULE(asg_level, READ|WRITE|RPC) {
-            UAG(allowed_users)
-            HAG(allowed_hosts)
-        }
-    }
-
-Where ``UAG`` is "user access group" and ``HAG`` is "host access
-group", referring to lists defined elsewhere in the ACF.
-
-11.3. SPVA Extensions
----------------------
-
-SPVA extends ASG/ACF rules with:
-
-- **Verified principal names**. The ``UAG`` membership now refers
-  to the ``CN=…, O=…`` DN extracted from the X.509 certificate
-  (Section 5.3), not the PVA ``CMD_CONNECTION_VALIDATION``
-  user-name string.
-- **Authentication-method match** (``METHOD``). A rule MAY require
-  the connection to use a specific authenticator (e.g.
-  ``METHOD=x509`` or ``METHOD=krb``).
-- **Authorisation-list match** (``AUTHORITY``). A rule MAY require
-  the certificate's issuing CA's Subject DN to match a configured
-  pattern.
-
-Example SPVA-extended ASG rule:
-
-::
-
-    ASG(spva_admin) {
-        RULE(1, WRITE) {
-            UAG(operators)            # CN=...,O=... matches operators list
-            METHOD(x509)              # only mTLS-authenticated connections
-            AUTHORITY(my-site-ca)     # cert issued by named CA
-        }
-    }
-
-11.4. ACL Change Notification
+11.2. ACL Change Notification
 -----------------------------
 
-When the ACF is reloaded at the server, PVACMS or the affected
-PVA server MAY emit ``CMD_ACL_CHANGE`` (PVA Section 13) to
-already-connected clients to update their cached access rights.
-SPVA does not change the ``CMD_ACL_CHANGE`` wire format.
+A PVA server emits ``CMD_ACL_CHANGE`` (PVA Section 13) to a
+connected client when the effective permissions for one of that
+client's open channels change. The 5-octet payload carries the
+client channel ID (CID; 4 octets) followed by a permissions
+bitmask (1 octet) with bits ``PUT = 0x01``, ``PUT_GET = 0x02``,
+and ``RPC = 0x04`` (per ``epics-docs/epics-docs#140``). SPVA does
+not change the ``CMD_ACL_CHANGE`` wire format.
 
 ----
 
