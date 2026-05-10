@@ -218,7 +218,7 @@ Sent to :ref:`pvacms` to request a new certificate. The request is a PVStructure
 The ``verifier`` sub-structure is present only when ``type`` references a
 :ref:`pvacms_type_1_auth_methods` or :ref:`pvacms_type_2_auth_methods` authenticator.
 
-Certificate Usage
------------------
+.. seealso::
 
-Clients request certificates from :ref:`pvacms` by submitting a CCR containing their public key. The process: generate a key pair, submit the CCR, receive a signed certificate, and install it at the configured keychain location.
+   :doc:`/programmers-ref/cert-management` — how a programmer drives the
+   certificate-request flow against the protocol described above.

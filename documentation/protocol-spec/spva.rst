@@ -117,7 +117,7 @@ States are the same as the server (``Init``, ``TcpOnly``, ``TcpReady``, ``TlsRea
 ``DegradedMode``). The client never exits on TLS configuration issues; trust anchor validation
 and certificate status govern initial transitions.
 
-.. image:: spva_client_tls_context.png
+.. image:: ../spva_client_tls_context.png
    :alt: SPVA Client TLS Context State Machine
    :align: center
 
@@ -155,7 +155,7 @@ Certificate status values from PVACMS: ``UNKNOWN``, ``VALID``, ``PENDING``, ``PE
 ``PENDING_RENEWAL``, ``SCHEDULED_OFFLINE``, ``EXPIRED``, ``REVOKED``.
 OCSP status values: ``GOOD``, ``REVOKED``, ``UNKNOWN``.
 
-.. image:: spva_peer_certificate_status.png
+.. image:: ../spva_peer_certificate_status.png
    :alt: SPVA Peer Certificate Status State Machine
    :align: center
 
@@ -164,14 +164,14 @@ OCSP status values: ``GOOD``, ``REVOKED``, ``UNKNOWN``.
 PVAccess Sequence Diagram
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. image:: pva_seq.png
+.. image:: ../pva_seq.png
    :alt: PVA Sequence Diagram
    :align: center
 
 Secure PVAccess Sequence Diagram
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. image:: spva_simple_seq.png
+.. image:: ../spva_simple_seq.png
    :alt: SPVA Sequence Diagram
    :align: center
 

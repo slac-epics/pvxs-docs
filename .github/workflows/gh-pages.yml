@@ -40,7 +40,7 @@ jobs:
           node-version: '20'
 
       - name: Install Python dependencies
-        run: pip install sphinx breathe
+        run: pip install sphinx breathe furo sphinx-reredirects
 
       - name: Install Mermaid CLI
         run: npm install -g @mermaid-js/mermaid-cli

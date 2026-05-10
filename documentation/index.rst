@@ -1,50 +1,49 @@
 .. _secure_pvaccess:
 
-|security| Overview
-=====================
+|security| Secure PVAccess Documentation
+==========================================
 
-Secure PVAccess (SPVA) enhances the existing PVAccess protocol by integrating :ref:`transport_layer_security` (TLS)
-with comprehensive :ref:`certificate_management`, enabling encrypted communication channels and authenticated connections
-between EPICS clients and servers (EPICS agents) - see :ref:`authn_and_authz`.
-
-For a glossary of terms see: :ref:`glossary`
-
-Key Features:
-
-- Encrypted communication using ``TLS 1.3``
-- Certificate-based authentication
-- Comprehensive certificate lifecycle management
-- Backward compatibility with existing PVAccess deployments
-- Integration with site authentication systems
-
-Note: This release requires specific unmerged changes to epics-base.
-
-See :ref:`quick_start` to get started.
-
-For PVXS library documentation see `PVXS Docs <https://slac-epics.github.io/pvxs-tls/>`_.
+For protocol implementers — wire-level transport, message encodings,
+state machines, normative protocol semantics:
 
 .. toctree::
-   :maxdepth: 3
-   :caption: Contents:
+   :maxdepth: 1
+   :caption: Protocol Specification
 
-   spva
-   configuration
-   spvaauth
-   spvaauthorization
-   spvacerts
-   pvacms
-   cli
-   spvaqstart
-   spvaqstartstd
-   spvaqstartkrb
-   spvaqstartldap
-   spvaqsgw
-   spvaglossary
-   appendix
+   protocol-spec/index
 
+For application developers using pvxs (C++), P4P (Python), or phoebus
+(Java) PVA APIs to write SPVA-aware software:
 
-Indices and tables
-==================
+.. toctree::
+   :maxdepth: 1
+   :caption: Programmers Reference
 
-* :ref:`genindex`
-* :ref:`search`
+   programmers-ref/index
+
+For network operators and IOC administrators deploying SPVA — quick-start
+recipes, PVACMS server setup, the operator-facing CLIs, gateway:
+
+.. toctree::
+   :maxdepth: 1
+   :caption: SPVA User Manual
+
+   user-manual/index
+
+For pvxs / pvxs-cms / phoebus contributors — architecture, build
+internals, design notes (placeholder — content lands in a follow-up
+change):
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Source-Code Maintainer Documentation
+
+   maintainer-docs/index
+
+Glossary of SPVA terms used across all manuals:
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Glossary
+
+   shared/spvaglossary
