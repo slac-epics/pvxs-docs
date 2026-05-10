@@ -16,8 +16,27 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-import time
+import json
 import os
+import sys
+import time
+
+# -- Variant selection ------------------------------------------------------
+#
+# DOCS_VARIANT is set by the Makefile / build-docs.sh / CI to either
+# "release" or "dev". The variant determines the version string and the
+# html_context flag that the sidebar dropdown reads. Invalid values fall
+# back to "release" with a warning.
+_VALID_VARIANTS = ("release", "dev")
+docs_variant = os.environ.get("DOCS_VARIANT", "release")
+if docs_variant not in _VALID_VARIANTS:
+    print(
+        "WARNING: DOCS_VARIANT={!r} is not one of {}; falling back to 'release'".format(
+            docs_variant, _VALID_VARIANTS
+        ),
+        file=sys.stderr,
+    )
+    docs_variant = "release"
 
 rst_prolog = """
 .. |security| raw:: html
@@ -94,8 +113,15 @@ project = 'PVXS'
 copyright = time.strftime('%Y Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC')
 author = 'Michael Davidsaver and George McIntyre'
 
-version = '1.4'
-release = '1.4.1'
+# Per Phase B, version strings depend on the selected variant. Release uses
+# the concrete version numbers; dev uses the literal "dev" so the rendered
+# pages clearly indicate they are not a released cut.
+if docs_variant == "release":
+    version = '1.4'
+    release = '1.4.1'
+else:
+    version = 'dev'
+    release = 'dev'
 
 
 # -- General configuration ---------------------------------------------------
@@ -114,28 +140,14 @@ extensions = [
     'sphinx_reredirects',
 ]
 
-redirects = {
-    'spva':              'programmers-ref/spva-tls.html',
-    'spvaauth':          'programmers-ref/spva-authentication.html',
-    'spvaauthorization': 'programmers-ref/spva-authorization.html',
-    'spvacerts':         'programmers-ref/spva-cert-management-protocol.html',
-    'configuration':     'programmers-ref/configuration.html',
-    'appendix':          'programmers-ref/expert-api.html',
-    'programmers-building': 'programmers-ref/building.html',
-    'programmers-applications': 'programmers-ref/applications.html',
-    'programmers-authenticator-plugins': 'programmers-ref/authenticator-plugins.html',
-    'programmers-performance': 'programmers-ref/performance.html',
-    'pvacms':            'user-manual/pvacms.html',
-    'cli':               'user-manual/cli.html',
-    'operation':          'user-manual/operation.html',
-    'interoperability':   'user-manual/interoperability.html',
-    'spvaqstart':        'user-manual/spvaqstart.html',
-    'spvaqstartstd':     'user-manual/spvaqstartstd.html',
-    'spvaqstartkrb':     'user-manual/spvaqstartkrb.html',
-    'spvaqstartldap':    'user-manual/spvaqstartldap.html',
-    'spvaqsgw':          'user-manual/spvaqsgw.html',
-    'spvaglossary':      'shared/spvaglossary.html',
-}
+# Legacy URL redirects: maintained as a JSON file at documentation/legacy-redirects.json
+# so CI can read the same source-of-truth when regenerating site-root stubs with the
+# explicit release/ prefix in the combine-and-deploy step (Decision 9).
+#
+# Both per-variant builds emit relative-target stubs (correct inside the variant
+# subtree); the CI job rewrites them at site root with the release/ prefix.
+with open(os.path.join(os.path.dirname(__file__), 'legacy-redirects.json')) as _f:
+    redirects = json.load(_f)
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -189,10 +201,19 @@ html_static_path = ['_static']
 html_css_files = [
     'https://fonts.googleapis.com/icon?family=Material+Icons',
     'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined',
+    'version-switcher.css',
 ]
 html_js_files = [
     'spva-search-fix.js',
+    'version-switcher.js',
 ]
+
+# html_context is passed into every Jinja template render. The sidebar
+# override (_templates/sidebar/brand.html) reads docs_variant to preselect
+# the correct dropdown option.
+html_context = {
+    "docs_variant": docs_variant,
+}
 
 html_favicon = 'favicon.png'
 

@@ -37,8 +37,10 @@ ifndef MMDC
   MMDC       := npx --yes @mermaid-js/mermaid-cli
 endif
 
-MMD_SOURCES  := $(wildcard $(DIAGRAM_DIR)/*.mmd)
-MMD_PNGS     := $(patsubst $(DIAGRAM_DIR)/%.mmd,$(DOC_DIR)/%.png,$(MMD_SOURCES))
+MMD_SOURCES      := $(wildcard $(DIAGRAM_DIR)/*.mmd)
+MMD_PNGS_RELEASE := $(patsubst $(DIAGRAM_DIR)/%.mmd,$(DOC_DIR)/release/_images/%.png,$(MMD_SOURCES))
+MMD_PNGS_DEV     := $(patsubst $(DIAGRAM_DIR)/%.mmd,$(DOC_DIR)/dev/_images/%.png,$(MMD_SOURCES))
+MMD_PNGS         := $(MMD_PNGS_RELEASE) $(MMD_PNGS_DEV)
 
 # Puppeteer config (CI-safe, no sandbox)
 PUPPETEER_CFG := $(shell mktemp)
@@ -46,9 +48,48 @@ PUPPETEER_CFG := $(shell mktemp)
 # ---------------------------------------------------------------------------
 # Default target
 # ---------------------------------------------------------------------------
+#
+# `make all` (default) builds BOTH variants into $(OUTPUT_DIR)/release and
+# $(OUTPUT_DIR)/dev, plus a tiny root-level index.html meta-refresh stub
+# pointing at /release/ so the combined OUTPUT_DIR is browsable directly
+# (matching the deployed gh-pages site shape).
+#
+# `make release` and `make dev` build a single variant into
+# $(OUTPUT_DIR)/<variant>; they're used independently by CI.
 
 .PHONY: all
-all: mermaid doxygen html
+all: release dev combined-root
+
+.PHONY: release
+release:
+	@$(MAKE) html-variant VARIANT=release
+
+.PHONY: dev
+dev:
+	@$(MAKE) html-variant VARIANT=dev
+
+# Internal target — do not invoke directly.
+.PHONY: html-variant
+html-variant: mermaid doxygen
+	@$(MAKE) html \
+	    SOURCEDIR=$(DOC_DIR)/$(VARIANT) \
+	    OUTPUT_DIR=$(OUTPUT_DIR)/$(VARIANT) \
+	    DOCS_VARIANT_OVERRIDE=$(VARIANT)
+
+# When invoked via `make release` / `make dev`, the html target inherits
+# DOCS_VARIANT_OVERRIDE; otherwise it falls through to whatever DOCS_VARIANT
+# the user set in their env.
+ifdef DOCS_VARIANT_OVERRIDE
+export DOCS_VARIANT := $(DOCS_VARIANT_OVERRIDE)
+endif
+
+# Root-level index.html meta-refresh stub so opening $(OUTPUT_DIR)/index.html
+# (or http://localhost:$(SERVE_PORT)/) lands on /release/.
+.PHONY: combined-root
+combined-root:
+	@mkdir -p $(OUTPUT_DIR)
+	@printf '<!DOCTYPE html><meta http-equiv="refresh" content="0; url=release/">\n' > $(OUTPUT_DIR)/index.html
+	@printf '\033[1;34m==>\033[0m Wrote combined root meta-refresh: %s/index.html → release/\n' "$(OUTPUT_DIR)"
 
 # ---------------------------------------------------------------------------
 # Mermaid diagram generation
@@ -57,11 +98,20 @@ all: mermaid doxygen html
 .PHONY: mermaid
 mermaid: $(MMD_PNGS)
 
-$(DOC_DIR)/%.png: $(DIAGRAM_DIR)/%.mmd
+# Mermaid output is per-variant: each .mmd is rendered into
+# documentation/release/_images/<name>.png (the canonical render) and then
+# cp'd into documentation/dev/_images/<name>.png so each Sphinx variant build
+# can resolve `.. image:: /_images/<name>.png` against its own source root.
+$(DOC_DIR)/release/_images/%.png: $(DIAGRAM_DIR)/%.mmd
+	@mkdir -p $(DOC_DIR)/release/_images
 	@printf '\033[1;34m==>\033[0m  %s → %s\n' "$<" "$@"
 	@printf '{"args":["--no-sandbox","--disable-setuid-sandbox"]}\n' > $(PUPPETEER_CFG)
 	$(MMDC) -i $< -o $@ -s 2 -p $(PUPPETEER_CFG)
 	@rm -f $(PUPPETEER_CFG)
+
+$(DOC_DIR)/dev/_images/%.png: $(DOC_DIR)/release/_images/%.png
+	@mkdir -p $(DOC_DIR)/dev/_images
+	@cp $< $@
 
 # ---------------------------------------------------------------------------
 # Doxygen — C/C++ API extraction from sibling repos
@@ -105,11 +155,19 @@ doxygen-pvxs-cms:
 # Sphinx HTML build
 # ---------------------------------------------------------------------------
 
+# SOURCEDIR is the variant subtree being built. The config dir is always
+# documentation/ (where conf.py lives), passed explicitly via `-c` so Sphinx
+# does not look for conf.py inside SOURCEDIR.
+#
+# Default SOURCEDIR is documentation/release so legacy `make html` keeps
+# working until Phase B adds the explicit `release` / `dev` Make targets.
+SOURCEDIR    ?= $(DOC_DIR)/release
+
 .PHONY: html
 html:
-	@printf '\033[1;34m==>\033[0m Building HTML: %s → %s\n' "$(DOC_DIR)" "$(OUTPUT_DIR)"
+	@printf '\033[1;34m==>\033[0m Building HTML: %s → %s (config: %s)\n' "$(SOURCEDIR)" "$(OUTPUT_DIR)" "$(DOC_DIR)"
 	@mkdir -p $(OUTPUT_DIR)
-	$(SPHINXBUILD) -b html $(SPHINXOPTS) $(DOC_DIR) $(OUTPUT_DIR)
+	$(SPHINXBUILD) -c $(DOC_DIR) -b html $(SPHINXOPTS) $(SOURCEDIR) $(OUTPUT_DIR)
 	@# Copy extra assets
 	@for f in pvalink-schema-0.json qsrv2-schema-0.json; do \
 		[ -f "$(DOC_DIR)/$$f" ] && cp "$(DOC_DIR)/$$f" "$(OUTPUT_DIR)/" || true; \
@@ -139,7 +197,8 @@ clean:
 	rm -rf $(OUTPUT_DIR)
 	rm -rf $(DOC_DIR)/_build $(DOC_DIR)/_image
 	rm -rf $(DOC_DIR)/xml
-	rm -f $(DOC_DIR)/pvxs-docs.tag $(DOC_DIR)/pvxs-docs-pvxs.tag $(DOC_DIR)/pvxs-docs-pvxs-cms.tag
+	rm -rf $(DOC_DIR)/release/_images $(DOC_DIR)/dev/_images
+	rm -f $(DOC_DIR)/pvxs-docs.tag $(DOC_DIR)/pvxs-docs-pvxs.tag $(DOC_DIR)/pvxs-docs-pvxs-cms.tag $(DOC_DIR)/pvxs-docs-epics-base.tag
 
 # ---------------------------------------------------------------------------
 # Serve locally
@@ -159,13 +218,16 @@ help:
 	@echo "SPVA Documentation Build"
 	@echo ""
 	@echo "Targets:"
-	@echo "  all      (default) Build mermaid + Doxygen + Sphinx HTML"
-	@echo "  html     Build Sphinx HTML only (skip mermaid + Doxygen)"
-	@echo "  mermaid  Regenerate Mermaid diagrams only"
-	@echo "  doxygen  Run Doxygen for all sibling repos (xml/ + tag file)"
-	@echo "  clean    Remove build output"
-	@echo "  serve    Build and serve locally on port $(SERVE_PORT)"
-	@echo "  help     Show this message"
+	@echo "  all       (default) Build BOTH variants into release/ + dev/ + root index.html"
+	@echo "  release   Build release variant into \$$(OUTPUT_DIR)/release/"
+	@echo "  dev       Build dev variant     into \$$(OUTPUT_DIR)/dev/"
+	@echo "  html      Build Sphinx HTML only against \$$(SOURCEDIR) → \$$(OUTPUT_DIR)"
+	@echo "             (default SOURCEDIR=documentation/release; set DOCS_VARIANT to flag the build)"
+	@echo "  mermaid   Regenerate Mermaid diagrams (per-variant _images/)"
+	@echo "  doxygen   Run Doxygen for all sibling repos (xml/ + tag file)"
+	@echo "  clean     Remove build output"
+	@echo "  serve     Build all and serve locally on port $(SERVE_PORT)"
+	@echo "  help      Show this message"
 	@echo ""
 	@echo "Variables:"
 	@echo "  OUTPUT_DIR   Output directory (default: ../pvxs-pages)"

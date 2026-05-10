@@ -2,26 +2,32 @@
 #
 # build-docs.sh — Build PVXS HTML documentation from RST sources
 #
-# Generates Mermaid diagrams, runs Doxygen (cross-repo C++ API extraction)
-# against the sibling epics-base, pvxs, and pvxs-cms checkouts, converts SVGs, then runs
-# Sphinx to compile the RST files into HTML. The Doxygen step produces XML
-# consumed by Breathe directives in authored RST pages plus a tag file
-# (pvxs-docs.tag) published at the site root for external cross-linking.
+# Mirrors the root Makefile. Generates Mermaid diagrams (per-variant
+# _images/), runs Doxygen against sibling epics-base / pvxs / pvxs-cms,
+# converts SVGs, then runs Sphinx to compile the variant subtree into HTML.
+# The Doxygen step produces XML consumed by Breathe directives in authored
+# RST pages plus a tag file (pvxs-docs.tag) published at the site root.
 #
-# Output directory: ../pvxs-pages  (sibling of this repository)
+# Default output directory: ../pvxs-pages  (sibling of this repository).
+# Per-variant builds write into ../pvxs-pages/release/ and ../pvxs-pages/dev/.
 #
 # Prerequisites (install once):
-#   brew install inkscape doxygen        # SVG conversion + Doxygen
+#   brew install inkscape doxygen
 #   pip install sphinx breathe furo sphinx-reredirects
-#   npm install -g @mermaid-js/mermaid-cli   # OR: npx will fetch it on the fly
-#   sibling clones at ../epics-base, ../pvxs (branch tls), and ../pvxs-cms (branch main)
+#   npm install -g @mermaid-js/mermaid-cli   # OR: npx fetches it on the fly
+#   sibling clones at ../epics-base, ../pvxs (branch tls), ../pvxs-cms (branch main)
 #
-# Usage:
-#   ./build-docs.sh            # full build (mermaid + doxygen + inkscape + sphinx)
-#   ./build-docs.sh --no-mermaid   # skip mermaid regeneration (reuse existing PNGs)
-#   ./build-docs.sh --no-doxygen   # skip Doxygen extraction (reuse existing xml/)
+# Usage (preferred):
+#   ./build-docs.sh release        # build release variant into ../pvxs-pages/release/
+#   ./build-docs.sh dev            # build dev     variant into ../pvxs-pages/dev/
+#   ./build-docs.sh all            # build BOTH variants + root meta-refresh stub
+#
+# Usage (legacy, single-variant — equivalent to `release`):
+#   ./build-docs.sh                # implicit `all`
+#   ./build-docs.sh --no-mermaid   # skip mermaid regeneration
+#   ./build-docs.sh --no-doxygen   # skip Doxygen extraction
 #   ./build-docs.sh --no-inkscape  # skip inkscape SVG conversion
-#   ./build-docs.sh --clean        # remove previous output and intermediates, then rebuild
+#   ./build-docs.sh --clean        # remove previous output and intermediates
 
 set -euo pipefail
 
@@ -32,7 +38,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOC_DIR="${SCRIPT_DIR}/documentation"
 DIAGRAM_SPECS_DIR="${DOC_DIR}/diagram_specs"
-OUTPUT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)/pvxs-pages"
+OUTPUT_DIR="${OUTPUT_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)/pvxs-pages}"
 
 PYTHON="${PYTHON:-python3}"
 INKSCAPE="${INKSCAPE:-inkscape}"
@@ -41,6 +47,7 @@ DO_MERMAID=true
 DO_DOXYGEN=true
 DO_INKSCAPE=true
 DO_CLEAN=false
+VARIANT_CMD="all"
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -48,13 +55,17 @@ DO_CLEAN=false
 
 for arg in "$@"; do
     case "${arg}" in
+        release|dev|all) VARIANT_CMD="${arg}" ;;
         --no-mermaid)  DO_MERMAID=false ;;
         --no-doxygen)  DO_DOXYGEN=false ;;
         --no-inkscape) DO_INKSCAPE=false ;;
         --clean)       DO_CLEAN=true ;;
         -h|--help)
-            echo "Usage: $0 [--no-mermaid] [--no-doxygen] [--no-inkscape] [--clean] [-h|--help]"
+            echo "Usage: $0 [release|dev|all] [--no-mermaid] [--no-doxygen] [--no-inkscape] [--clean]"
             echo ""
+            echo "  release        Build release variant only (sourced from documentation/release/)"
+            echo "  dev            Build dev     variant only (sourced from documentation/dev/)"
+            echo "  all            Build BOTH variants + root meta-refresh stub (default)"
             echo "  --no-mermaid   Skip Mermaid diagram generation (reuse existing PNGs)"
             echo "  --no-doxygen   Skip Doxygen extraction (reuse existing xml/)"
             echo "  --no-inkscape  Skip Inkscape SVG conversion"
@@ -95,6 +106,7 @@ if ${DO_CLEAN}; then
     rm -rf "${DOC_DIR}/_build"
     rm -rf "${DOC_DIR}/_image"
     rm -rf "${DOC_DIR}/xml"
+    rm -rf "${DOC_DIR}/release/_images" "${DOC_DIR}/dev/_images"
     rm -f "${DOC_DIR}/pvxs-docs.tag" "${DOC_DIR}/pvxs-docs-epics-base.tag" "${DOC_DIR}/pvxs-docs-pvxs.tag" "${DOC_DIR}/pvxs-docs-pvxs-cms.tag"
 fi
 
@@ -104,7 +116,7 @@ fi
 
 if ${DO_MERMAID}; then
     if [ -d "${DIAGRAM_SPECS_DIR}" ] && ls "${DIAGRAM_SPECS_DIR}"/*.mmd &>/dev/null; then
-        info "Generating Mermaid diagrams"
+        info "Generating Mermaid diagrams (per-variant _images/)"
 
         MMDC_CMD=""
         if require_cmd mmdc; then
@@ -113,7 +125,6 @@ if ${DO_MERMAID}; then
             MMDC_CMD="npx --yes @mermaid-js/mermaid-cli"
         fi
 
-        # Puppeteer config (disable sandbox for CI compatibility)
         PUPPETEER_CFG="$(mktemp)"
         cat > "${PUPPETEER_CFG}" <<'PCFG'
 {
@@ -122,11 +133,15 @@ if ${DO_MERMAID}; then
 PCFG
         trap 'rm -f "${PUPPETEER_CFG}"' EXIT
 
+        mkdir -p "${DOC_DIR}/release/_images" "${DOC_DIR}/dev/_images"
+
         for mmd_file in "${DIAGRAM_SPECS_DIR}"/*.mmd; do
             base_name="$(basename "${mmd_file}" .mmd)"
-            output_file="${DOC_DIR}/${base_name}.png"
-            info "  ${base_name}.mmd → ${base_name}.png"
-            ${MMDC_CMD} -i "${mmd_file}" -o "${output_file}" -s 2 -p "${PUPPETEER_CFG}"
+            release_png="${DOC_DIR}/release/_images/${base_name}.png"
+            dev_png="${DOC_DIR}/dev/_images/${base_name}.png"
+            info "  ${base_name}.mmd → release/_images/${base_name}.png + dev/_images/"
+            ${MMDC_CMD} -i "${mmd_file}" -o "${release_png}" -s 2 -p "${PUPPETEER_CFG}"
+            cp "${release_png}" "${dev_png}"
         done
     else
         info "No Mermaid diagram specs found — skipping"
@@ -195,71 +210,78 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 4 — Build HTML with Sphinx
+# Step 4 — Build HTML with Sphinx (per variant)
 # ---------------------------------------------------------------------------
 
-info "Building HTML documentation with Sphinx"
-info "  Source:  ${DOC_DIR}"
-info "  Output:  ${OUTPUT_DIR}"
-
-# Verify Sphinx is available
 if ! "${PYTHON}" -c "import sphinx" 2>/dev/null; then
     error "Sphinx not found.  Install with:  pip install sphinx breathe"
     exit 1
 fi
 
-mkdir -p "${OUTPUT_DIR}"
+build_variant() {
+    local variant="$1"
+    local source_dir="${DOC_DIR}/${variant}"
+    local variant_out="${OUTPUT_DIR}/${variant}"
 
-# Run Sphinx.
-# • -j 1           — single-process build for deterministic Breathe behavior
-# • -b html        — HTML builder
-# • -W is omitted  — Breathe warnings (from missing Doxygen XML) are non-fatal
-# • -D breathe_projects.PVXS=  — point Breathe at empty string so it warns
-#   rather than erroring on missing xml/ dir
-"${PYTHON}" -m sphinx \
-    -j 1 \
-    -b html \
-    -E \
-    "${DOC_DIR}" \
-    "${OUTPUT_DIR}"
+    info "Building ${variant} variant"
+    info "  Source:  ${source_dir}"
+    info "  Output:  ${variant_out}"
 
-# ---------------------------------------------------------------------------
-# Step 5 — Copy extra assets into the output
-# ---------------------------------------------------------------------------
+    mkdir -p "${variant_out}"
 
-info "Copying extra assets"
+    DOCS_VARIANT="${variant}" "${PYTHON}" -m sphinx \
+        -c "${DOC_DIR}" \
+        -j 1 \
+        -b html \
+        -E \
+        "${source_dir}" \
+        "${variant_out}"
 
-# JSON schema files expected by some pages
-for f in pvalink-schema-0.json qsrv2-schema-0.json; do
-    if [ -f "${DOC_DIR}/${f}" ]; then
-        cp "${DOC_DIR}/${f}" "${OUTPUT_DIR}/"
+    for f in pvalink-schema-0.json qsrv2-schema-0.json; do
+        if [ -f "${DOC_DIR}/${f}" ]; then
+            cp "${DOC_DIR}/${f}" "${variant_out}/"
+        fi
+    done
+
+    if [ -f "${DOC_DIR}/pvxs-docs.tag" ]; then
+        cp "${DOC_DIR}/pvxs-docs.tag" "${variant_out}/pvxs-docs.tag"
     fi
-done
 
-# Ensure fonts and images from _static are accessible at root level
-# (mirrors what the CI workflow does)
-if [ -d "${OUTPUT_DIR}/_static/images" ]; then
-    mkdir -p "${OUTPUT_DIR}/images"
-    cp -r "${OUTPUT_DIR}/_static/images/"* "${OUTPUT_DIR}/images/" 2>/dev/null || true
-fi
-if [ -d "${OUTPUT_DIR}/_static/fonts" ]; then
-    mkdir -p "${OUTPUT_DIR}/fonts"
-    cp -r "${OUTPUT_DIR}/_static/fonts/"* "${OUTPUT_DIR}/fonts/" 2>/dev/null || true
-fi
+    touch "${variant_out}/.nojekyll"
+}
 
-if [ -f "${DOC_DIR}/pvxs-docs.tag" ]; then
-    info "Publishing Doxygen tag file: pvxs-docs.tag"
-    cp "${DOC_DIR}/pvxs-docs.tag" "${OUTPUT_DIR}/pvxs-docs.tag"
-fi
-
-touch "${OUTPUT_DIR}/.nojekyll"
-
-# ---------------------------------------------------------------------------
-# Done
-# ---------------------------------------------------------------------------
+case "${VARIANT_CMD}" in
+    release)
+        build_variant release
+        ;;
+    dev)
+        build_variant dev
+        ;;
+    all)
+        build_variant release
+        build_variant dev
+        info "Writing combined root meta-refresh stub"
+        mkdir -p "${OUTPUT_DIR}"
+        printf '<!DOCTYPE html><meta http-equiv="refresh" content="0; url=release/">\n' \
+            > "${OUTPUT_DIR}/index.html"
+        if [ -f "${OUTPUT_DIR}/release/pvxs-docs.tag" ]; then
+            cp "${OUTPUT_DIR}/release/pvxs-docs.tag" "${OUTPUT_DIR}/pvxs-docs.tag"
+        fi
+        touch "${OUTPUT_DIR}/.nojekyll"
+        ;;
+esac
 
 info "Documentation built successfully!"
-info "  ${OUTPUT_DIR}/index.html"
+case "${VARIANT_CMD}" in
+    all)
+        info "  ${OUTPUT_DIR}/index.html       (meta-refresh → release/)"
+        info "  ${OUTPUT_DIR}/release/index.html"
+        info "  ${OUTPUT_DIR}/dev/index.html"
+        ;;
+    *)
+        info "  ${OUTPUT_DIR}/${VARIANT_CMD}/index.html"
+        ;;
+esac
 echo ""
 echo "Serve locally with:"
 echo "  ${PYTHON} -m http.server --directory \"${OUTPUT_DIR}\" 8000"

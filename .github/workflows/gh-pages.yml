@@ -1,11 +1,25 @@
-# Build SPVA documentation and deploy to GitHub Pages
+# Build SPVA documentation (release + dev variants) and deploy to GitHub Pages.
 #
-# Triggers on pushes to main branch.
-# Builds Sphinx HTML from RST sources, with Doxygen extraction of C++ API
-# reference from sibling epics-base, pvxs (branch tls), and pvxs-cms
-# (branch main)
-# checkouts. Publishes to the gh-pages environment associated with this
-# repository.
+# Triggers on pushes to main branch and manual dispatch.
+#
+# Build shape: TWO distinct top-level jobs (build-release and build-dev) run
+# in parallel. NOT a matrix job — GitHub Actions exposes only an aggregate
+# needs.<job>.result for matrix jobs, which would prevent the
+# combine-and-deploy job from gating on per-variant success.
+#
+# Each build job clones the SLAC SPVA-extended sibling repos at the
+# variant-appropriate refs:
+#
+#   build-release  pvxs-tls@tls       + pvxs-cms@main + epics-base-tls@7.0-secure-pvaccess
+#   build-dev      pvxs-tls@dev       + pvxs-cms@dev  + epics-base-tls@7.0-secure-pvaccess
+#
+# Sibling repos are slac-epics/pvxs-tls and slac-epics/epics-base-tls — NOT
+# the upstream-mirror names slac-epics/pvxs and slac-epics/epics-base, which
+# do not carry the SPVA additions.
+#
+# combine-and-deploy runs whenever build-release succeeded, regardless of
+# whether build-dev succeeded or failed. This lets dev-side Sphinx errors
+# (e.g. a half-authored new page) not block release deploys.
 
 name: Deploy Documentation
 
@@ -14,22 +28,20 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Allow only one deployment at a time
 concurrency:
   group: pages
   cancel-in-progress: false
 
-# Permissions for GitHub Pages deployment
 permissions:
   contents: read
   pages: write
   id-token: write
 
 jobs:
-  build:
+  build-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout pvxs-docs
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -48,33 +60,162 @@ jobs:
       - name: Install Doxygen
         run: sudo apt-get install -y doxygen
 
-      - name: Clone sibling pvxs (branch tls) for Doxygen extraction
-        run: git clone --depth 1 --branch tls https://github.com/slac-epics/pvxs ../pvxs
+      - name: Install Mermaid CLI
+        run: npm install -g @mermaid-js/mermaid-cli
 
-      - name: Clone sibling pvxs-cms (branch main) for Doxygen extraction
+      - name: Clone sibling pvxs (slac-epics/pvxs-tls@tls)
+        run: git clone --depth 1 --branch tls https://github.com/slac-epics/pvxs-tls ../pvxs
+
+      - name: Clone sibling pvxs-cms (slac-epics/pvxs-cms@main)
         run: git clone --depth 1 --branch main https://github.com/slac-epics/pvxs-cms ../pvxs-cms
 
-      - name: Clone sibling epics-base for Doxygen extraction
-        run: git clone --depth 1 https://github.com/slac-epics/epics-base ../epics-base
+      - name: Clone sibling epics-base (slac-epics/epics-base-tls@7.0-secure-pvaccess)
+        run: git clone --depth 1 --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls ../epics-base
+
+      - name: Build release variant
+        run: make release OUTPUT_DIR=_site
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-release
+          path: _site/release
+          if-no-files-found: error
+
+  build-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pvxs-docs
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Python dependencies
+        run: pip install sphinx breathe furo sphinx-reredirects
+
+      - name: Install Doxygen
+        run: sudo apt-get install -y doxygen
 
       - name: Install Mermaid CLI
         run: npm install -g @mermaid-js/mermaid-cli
 
-      - name: Build documentation
-        run: make OUTPUT_DIR=_site
+      - name: Clone sibling pvxs (slac-epics/pvxs-tls@dev)
+        run: git clone --depth 1 --branch dev https://github.com/slac-epics/pvxs-tls ../pvxs
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Clone sibling pvxs-cms (slac-epics/pvxs-cms@dev)
+        run: git clone --depth 1 --branch dev https://github.com/slac-epics/pvxs-cms ../pvxs-cms
+
+      - name: Clone sibling epics-base (slac-epics/epics-base-tls@7.0-secure-pvaccess)
+        run: git clone --depth 1 --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls ../epics-base
+
+      - name: Build dev variant
+        run: make dev OUTPUT_DIR=_site
+
+      - name: Upload dev artifact
+        uses: actions/upload-artifact@v4
         with:
-          path: _site
+          name: docs-dev
+          path: _site/dev
+          if-no-files-found: error
 
-  deploy:
-    needs: build
+  combine-and-deploy:
+    needs: [build-release, build-dev]
+    # Run whenever build-release succeeded, regardless of build-dev's outcome.
+    # Per-job needs.*.result access requires two distinct jobs (matrix
+    # exposes only the aggregate result, blocking this per-variant gating).
+    if: always() && needs.build-release.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Checkout pvxs-docs (for legacy-redirects.json)
+        uses: actions/checkout@v4
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-release
+          path: _site/release
+
+      - name: Download dev artifact (optional)
+        if: needs.build-dev.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-dev
+          path: _site/dev
+
+      - name: Note when dev variant is absent
+        if: needs.build-dev.result != 'success'
+        run: echo "::notice::dev variant absent from this deployment (build-dev result=${{ needs.build-dev.result }})"
+
+      - name: Write root meta-refresh index.html
+        run: |
+          cat > _site/index.html <<'EOF'
+          <!DOCTYPE html><meta http-equiv="refresh" content="0; url=release/">
+          EOF
+
+      - name: Write versions.json
+        run: |
+          if [ -d _site/dev ]; then
+            cat > _site/versions.json <<'EOF'
+          [
+            {"name":"release","url":"release/","preferred":true},
+            {"name":"dev","url":"dev/"}
+          ]
+          EOF
+          else
+            cat > _site/versions.json <<'EOF'
+          [
+            {"name":"release","url":"release/","preferred":true}
+          ]
+          EOF
+          fi
+
+      - name: Publish release pvxs-docs.tag at site root
+        run: |
+          if [ -f _site/release/pvxs-docs.tag ]; then
+            cp _site/release/pvxs-docs.tag _site/pvxs-docs.tag
+          fi
+
+      - name: Regenerate legacy-URL redirect stubs at site root
+        # Sphinx-emitted stubs inside the release variant contain a relative
+        # target (e.g. url=programmers-ref/spva-tls.html), correct WITHIN
+        # release/ but wrong when copied to site root. Regenerate the
+        # site-root stubs from legacy-redirects.json with an explicit
+        # release/ prefix on the target URL (Decision 9).
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          with open("documentation/legacy-redirects.json") as f:
+              entries = json.load(f)
+          for source, target in entries.items():
+              path = os.path.join("_site", source + ".html")
+              with open(path, "w") as out:
+                  out.write(
+                      '<!DOCTYPE html><meta http-equiv="refresh" '
+                      'content="0; url=release/{target}">\n'.format(target=target)
+                  )
+              print("wrote", path, "→ release/" + target)
+          PY
+
+      - name: Ensure .nojekyll at site root
+        run: touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

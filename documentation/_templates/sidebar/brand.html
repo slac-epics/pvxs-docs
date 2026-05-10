@@ -1,0 +1,37 @@
+{#-
+  Furo sidebar brand override for pvxs-docs dual-version build.
+
+  Extends Furo's stock brand.html, replacing only the inner brand_content
+  block so the link wrapper, classes, and hover behaviour stay intact.
+  Appends a small version-switcher <select> below the project name; the
+  preselected option reflects html_context['docs_variant'] which conf.py
+  populates from the DOCS_VARIANT env var.
+
+  Navigation on change is handled by _static/version-switcher.js (loaded
+  via html_js_files in conf.py).
+-#}
+{%- extends "!sidebar/brand.html" %}
+
+{%- block brand_content %}
+  {%- if logo_url %}
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="{{ logo_url }}" alt="Logo"/>
+  </div>
+  {%- endif %}
+  {%- if theme_light_logo and theme_dark_logo %}
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="{{ pathto('_static/' + theme_light_logo, 1) }}" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="{{ pathto('_static/' + theme_dark_logo, 1) }}" alt="Dark Logo"/>
+  </div>
+  {%- endif %}
+  {%- if not theme_sidebar_hide_name %}
+  <span class="sidebar-brand-text">{{ docstitle if docstitle else project }}</span>
+  {%- endif %}
+  <div class="pvxs-version-switcher" onclick="event.preventDefault(); event.stopPropagation();">
+    <label for="pvxs-version-select" class="pvxs-version-label">Version:</label>
+    <select id="pvxs-version-select" onchange="window.__pvxsSwitchVariant && window.__pvxsSwitchVariant(this.value)">
+      <option value="release"{% if docs_variant == 'release' %} selected{% endif %}>release</option>
+      <option value="dev"{% if docs_variant == 'dev' %} selected{% endif %}>dev</option>
+    </select>
+  </div>
+{%- endblock brand_content %}
