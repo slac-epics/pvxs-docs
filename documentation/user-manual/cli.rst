@@ -281,9 +281,10 @@ a waveform record. This ensures real TCP loopback communication, not in-process 
 executables are located via compile-time paths (``PVXPERF_EPICS_BASE`` and ``PVXPERF_PVXS``).
 
 **PVXS_PVA, SPVA, and SPVA_CERTMON** default to an in-process ``BenchmarkSource``, a custom
-``server::Source`` subclass that stamps each GET response with a ``benchCounter`` (monotonically
+:doc:`pvxs::server::Source </maintainer-docs/api-reference-pvxs-server-source>` subclass that stamps each GET response with a ``benchCounter`` (monotonically
 incrementing ``UInt64``) and ``benchTimestampNs`` (``Int64``, steady_clock nanoseconds). Unlike
-``SharedPV::buildReadonly()`` which clones a cached value, ``BenchmarkSource`` creates a fresh
+:doc:`pvxs::server::SharedPV </maintainer-docs/api-reference-pvxs-server-sharedpv>`
+which clones a cached value, ``BenchmarkSource`` creates a fresh
 response for every GET. Use ``--pvxs-server external`` to switch to a ``softIocPVX`` child process
 (pvxs-based IOC, supports TLS) for an apples-to-apples comparison with CA/EPICS_PVA.
 

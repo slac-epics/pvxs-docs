@@ -1,0 +1,11 @@
+# Per-run override for the epics-base source tree.
+# Concatenated to documentation/Doxyfile and piped into doxygen by
+# the root Makefile's "doxygen-epics-base" target.
+
+PROJECT_NAME           = "EPICS-BASE"
+# Paths are relative to documentation/ (Doxygen's CWD when invoked by the
+# Makefile's `doxygen` target). The sibling epics-base/ checkout sits two
+# levels up: documentation/ -> pvxs-docs/ -> com/slac/ -> epics-base/.
+INPUT                  = ../../epics-base/modules
+XML_OUTPUT             = xml/epics-base
+GENERATE_TAGFILE       = pvxs-docs-epics-base.tag

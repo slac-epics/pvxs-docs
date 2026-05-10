@@ -69,7 +69,9 @@ Certificate States
     :align: left
     :name: certificate-states
 
-- ``PENDING_APPROVAL``: Awaiting administrative approval
+- ``PENDING_APPROVAL``: Awaiting administrative approval. Endpoints that have not yet
+  established TLS enter ``TcpOnly`` and continue status monitoring until approval publishes
+  ``VALID``.
 - ``PENDING``: Not yet valid (before ``notBefore`` date)
 - ``VALID``: Currently valid and usable
 - ``PENDING_RENEWAL``: Valid but past its ``renew_by`` date; a renewed certificate is
@@ -78,7 +80,9 @@ Certificate States
   to prompt authenticators to renew proactively.
 - ``SCHEDULED_OFFLINE``: Certificate is within a configured offline schedule window (see
   :ref:`validity_schedules`). The certificate will return to ``VALID`` when the window
-  ends. Treated as :ref:`SUSPENDED <suspended_cert_status>` by pvxs clients.
+  ends. Treated as :ref:`SUSPENDED <suspended_cert_status>` by pvxs clients; before TLS is
+  established, the endpoint remains in ``TcpOnly`` and upgrades automatically when status
+  returns to ``VALID``.
 - ``EXPIRED``: Past ``notAfter`` date; permanently non-operational.
 - ``REVOKED``: Permanently revoked by an administrator.
 

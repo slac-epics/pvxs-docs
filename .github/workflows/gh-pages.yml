@@ -1,8 +1,11 @@
 # Build SPVA documentation and deploy to GitHub Pages
 #
 # Triggers on pushes to main branch.
-# Builds Sphinx HTML from RST sources (no Doxygen/code scanning).
-# Publishes to the gh-pages environment associated with this repository.
+# Builds Sphinx HTML from RST sources, with Doxygen extraction of C++ API
+# reference from sibling epics-base, pvxs (branch tls), and pvxs-cms
+# (branch main)
+# checkouts. Publishes to the gh-pages environment associated with this
+# repository.
 
 name: Deploy Documentation
 
@@ -41,6 +44,18 @@ jobs:
 
       - name: Install Python dependencies
         run: pip install sphinx breathe furo sphinx-reredirects
+
+      - name: Install Doxygen
+        run: sudo apt-get install -y doxygen
+
+      - name: Clone sibling pvxs (branch tls) for Doxygen extraction
+        run: git clone --depth 1 --branch tls https://github.com/slac-epics/pvxs ../pvxs
+
+      - name: Clone sibling pvxs-cms (branch main) for Doxygen extraction
+        run: git clone --depth 1 --branch main https://github.com/slac-epics/pvxs-cms ../pvxs-cms
+
+      - name: Clone sibling epics-base for Doxygen extraction
+        run: git clone --depth 1 https://github.com/slac-epics/epics-base ../epics-base
 
       - name: Install Mermaid CLI
         run: npm install -g @mermaid-js/mermaid-cli

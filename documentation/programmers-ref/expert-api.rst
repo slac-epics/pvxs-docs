@@ -15,8 +15,10 @@ Allows runtime reconfiguration of a TLS connection.  It does this by dropping al
 then re-initialising them using the given configuration.  This means checking if the certificates
 and keys exist, loading and verifying them, checking for status and status of peers, etc.
 
-- `pvxs::client::Context::reconfigure` and
-- `pvxs::server::Server::reconfigure`
+- :doc:`pvxs::client::Context </maintainer-docs/api-reference-pvxs-client-context>`
+  (``reconfigure()``)
+- :doc:`pvxs::server::Server </maintainer-docs/api-reference-pvxs-server-server>`
+  (``reconfigure()``)
 
 Example of TLS configuration reconfiguration:
 
@@ -36,10 +38,12 @@ Example of TLS configuration reconfiguration:
 ConfigCommon Expert Methods
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The following methods on ``pvxs::impl::ConfigCommon`` are available when building with
-``PVXS_ENABLE_EXPERT_API`` defined. They provide programmatic access to private configuration
-fields that control certificate status checking, stapling, request timeouts, PV prefixes,
-and keychain passwords.
+The following methods on
+:doc:`pvxs::impl::ConfigCommon </maintainer-docs/api-reference-pvxs-configcommon>`
+are available when building with ``PVXS_ENABLE_EXPERT_API`` defined.
+They provide programmatic access to private configuration fields that
+control certificate status checking, stapling, request timeouts, PV
+prefixes, and keychain passwords.
 
 Certificate Status Checking
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -132,7 +136,13 @@ This addition is based on the Wildcard PV support included in epics-base since v
 extends this support to pvxs allowing PVs to be specified as wildcard patterns.  We use this
 to provide individualised PVs for each certificate's status management.
 
-- `pvxs::server::WildcardPV`
+- ``pvxs::server::WildcardPV``
+
+.. note::
+
+   ``pvxs::server::WildcardPV`` is described here, but it does not yet
+   have a generated API-reference page because it is not currently
+   emitted in the Doxygen XML set consumed by this manual.
 
 Example of support for pattern-matched PV names:
 

@@ -4,18 +4,20 @@ SPVA User Manual
 ================
 
 For network operators and IOC administrators deploying Secure PVAccess.
-Covers quick-start recipes for each authenticator, PVACMS server setup
-and operation, the operator-facing CLIs (``pvxcert``, ``pvaperf``), and
-the Secure PVA Gateway.
+Start here if you need to know what to configure, what to start, which
+commands to run, how to issue certificates, how to use the gateway, and
+what remains compatible with existing EPICS tools.
 
 .. toctree::
    :maxdepth: 2
 
+   operation
    spvaqstart
    spvaqstartstd
    spvaqstartkrb
    spvaqstartldap
    spvaqsgw
+   interoperability
    pvacms
    cli
 

@@ -14,3 +14,9 @@
 /.baseline-warnings.log
 /.baseline-html.txt
 /.baseline-nitpicky-warnings.log
+/xml/
+/pvxs-docs.tag
+/pvxs-docs-pvxs.tag
+/pvxs-docs-pvxs-cms.tag
+/pvxs-docs-epics-base.tag
+/.doxygen-*.log
