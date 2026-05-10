@@ -28,10 +28,10 @@ Secure PVAccess (SPVA) Protocol Specification
    this specification; where an implementation's behavior differs
    from this specification the implementation is in error.
 
-   Specific implementations of SPVA — pvxs and pvxs-cms — were
-   consulted in preparing this specification and are listed under
-   Informative References (Section 19.2); they have no normative
-   weight.
+   Specific implementations of SPVA — pvxs, pvxs-cms, and phoebus
+   — were consulted in preparing this specification and are listed
+   under Informative References (Section 19.2); they have no
+   normative weight.
 
 Abstract
 ========
@@ -57,8 +57,8 @@ which defines the underlying wire protocol. Where this document is
 silent on a wire-format detail, the PVA specification applies.
 
 Pre-existing implementations of SPVA — notably pvxs (slac-epics
-fork) and pvxs-cms — and the prior implementation reference
-material at :doc:`/programmers-ref/spva-tls`,
+fork), pvxs-cms, and phoebus — and the prior implementation
+reference material at :doc:`/programmers-ref/spva-tls`,
 :doc:`/programmers-ref/spva-authentication`,
 :doc:`/programmers-ref/spva-authorization`, and
 :doc:`/programmers-ref/spva-cert-management-protocol` were
@@ -2376,6 +2376,11 @@ IANA-registered to the EPICS community.
   certificate-issuance code path), and ``src/pvacms/opensslgbl.h``
   (the custom Object Identifier definitions referenced in
   Section 4.3). Consulted in preparing this specification.
+- **phoebus implementation** — https://github.com/ControlSystemStudio/phoebus;
+  in particular the Java PVAccess implementation under
+  ``core/pva/`` providing TLS transport and cert-status PV
+  monitoring on the Java side of the SPVA ecosystem. Consulted in
+  preparing this specification.
 - :doc:`/programmers-ref/spva-tls` — pvxs's SPVA TLS implementation.
 - :doc:`/programmers-ref/spva-authentication` — pvxs's
   authentication implementation.
