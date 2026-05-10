@@ -37,8 +37,10 @@ ifndef MMDC
   MMDC       := npx --yes @mermaid-js/mermaid-cli
 endif
 
-MMD_SOURCES  := $(wildcard $(DIAGRAM_DIR)/*.mmd)
-MMD_PNGS     := $(patsubst $(DIAGRAM_DIR)/%.mmd,$(DOC_DIR)/%.png,$(MMD_SOURCES))
+MMD_SOURCES      := $(wildcard $(DIAGRAM_DIR)/*.mmd)
+MMD_PNGS_RELEASE := $(patsubst $(DIAGRAM_DIR)/%.mmd,$(DOC_DIR)/release/_images/%.png,$(MMD_SOURCES))
+MMD_PNGS_DEV     := $(patsubst $(DIAGRAM_DIR)/%.mmd,$(DOC_DIR)/dev/_images/%.png,$(MMD_SOURCES))
+MMD_PNGS         := $(MMD_PNGS_RELEASE) $(MMD_PNGS_DEV)
 
 # Puppeteer config (CI-safe, no sandbox)
 PUPPETEER_CFG := $(shell mktemp)
@@ -57,11 +59,20 @@ all: mermaid doxygen html
 .PHONY: mermaid
 mermaid: $(MMD_PNGS)
 
-$(DOC_DIR)/%.png: $(DIAGRAM_DIR)/%.mmd
+# Mermaid output is per-variant: each .mmd is rendered into
+# documentation/release/_images/<name>.png (the canonical render) and then
+# cp'd into documentation/dev/_images/<name>.png so each Sphinx variant build
+# can resolve `.. image:: /_images/<name>.png` against its own source root.
+$(DOC_DIR)/release/_images/%.png: $(DIAGRAM_DIR)/%.mmd
+	@mkdir -p $(DOC_DIR)/release/_images
 	@printf '\033[1;34m==>\033[0m  %s → %s\n' "$<" "$@"
 	@printf '{"args":["--no-sandbox","--disable-setuid-sandbox"]}\n' > $(PUPPETEER_CFG)
 	$(MMDC) -i $< -o $@ -s 2 -p $(PUPPETEER_CFG)
 	@rm -f $(PUPPETEER_CFG)
+
+$(DOC_DIR)/dev/_images/%.png: $(DOC_DIR)/release/_images/%.png
+	@mkdir -p $(DOC_DIR)/dev/_images
+	@cp $< $@
 
 # ---------------------------------------------------------------------------
 # Doxygen — C/C++ API extraction from sibling repos
@@ -105,11 +116,19 @@ doxygen-pvxs-cms:
 # Sphinx HTML build
 # ---------------------------------------------------------------------------
 
+# SOURCEDIR is the variant subtree being built. The config dir is always
+# documentation/ (where conf.py lives), passed explicitly via `-c` so Sphinx
+# does not look for conf.py inside SOURCEDIR.
+#
+# Default SOURCEDIR is documentation/release so legacy `make html` keeps
+# working until Phase B adds the explicit `release` / `dev` Make targets.
+SOURCEDIR    ?= $(DOC_DIR)/release
+
 .PHONY: html
 html:
-	@printf '\033[1;34m==>\033[0m Building HTML: %s → %s\n' "$(DOC_DIR)" "$(OUTPUT_DIR)"
+	@printf '\033[1;34m==>\033[0m Building HTML: %s → %s (config: %s)\n' "$(SOURCEDIR)" "$(OUTPUT_DIR)" "$(DOC_DIR)"
 	@mkdir -p $(OUTPUT_DIR)
-	$(SPHINXBUILD) -b html $(SPHINXOPTS) $(DOC_DIR) $(OUTPUT_DIR)
+	$(SPHINXBUILD) -c $(DOC_DIR) -b html $(SPHINXOPTS) $(SOURCEDIR) $(OUTPUT_DIR)
 	@# Copy extra assets
 	@for f in pvalink-schema-0.json qsrv2-schema-0.json; do \
 		[ -f "$(DOC_DIR)/$$f" ] && cp "$(DOC_DIR)/$$f" "$(OUTPUT_DIR)/" || true; \
@@ -139,7 +158,8 @@ clean:
 	rm -rf $(OUTPUT_DIR)
 	rm -rf $(DOC_DIR)/_build $(DOC_DIR)/_image
 	rm -rf $(DOC_DIR)/xml
-	rm -f $(DOC_DIR)/pvxs-docs.tag $(DOC_DIR)/pvxs-docs-pvxs.tag $(DOC_DIR)/pvxs-docs-pvxs-cms.tag
+	rm -rf $(DOC_DIR)/release/_images $(DOC_DIR)/dev/_images
+	rm -f $(DOC_DIR)/pvxs-docs.tag $(DOC_DIR)/pvxs-docs-pvxs.tag $(DOC_DIR)/pvxs-docs-pvxs-cms.tag $(DOC_DIR)/pvxs-docs-epics-base.tag
 
 # ---------------------------------------------------------------------------
 # Serve locally
