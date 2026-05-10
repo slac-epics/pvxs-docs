@@ -46,10 +46,10 @@ PVACMS Usage
             --ioc-dont-require-approval           Generate IOC Certificates in VALID state
             --server-dont-require-approval        Generate Server Certificates in VALID state
             --certs-dont-require-approval         Generate All Certificates in VALID state
-            --cert_validity-client <duration>     Default duration for client certificates
-            --cert_validity-server <duration>     Default duration for server certificates
-            --cert_validity-ioc <duration>        Default duration for IOC certificates
-            --cert_validity <duration>            Default duration for all certificates
+            --cert_validity-client <duration>     Default duration for client certificates; see :ref:`duration_strings`
+            --cert_validity-server <duration>     Default duration for server certificates; see :ref:`duration_strings`
+            --cert_validity-ioc <duration>        Default duration for IOC certificates; see :ref:`duration_strings`
+            --cert_validity <duration>            Default duration for all certificates; see :ref:`duration_strings`
             --disallow-custom-durations-client    Disallow custom durations for client certificates
             --disallow-custom-durations-server    Disallow custom durations for server certificates
             --disallow-custom-durations-ioc       Disallow custom durations for IOC certificates
@@ -149,8 +149,8 @@ The environment variables in the following table configure the PVACMS at runtime
 || EPICS_PVACMS_ACF                             || <path to ACF file>                        || fully qualified path to a file that will be used as the                 |
 ||                                              || e.g. ``~/.config/pva/1.5/pvacms.acf``     || ACF file that configures the permissions of PVACMS peers.               |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS       || <number of minutes>                       || Minutes that the ocsp status response will                              |
-||                                              || e.g. ``30`` or ``1d``                     || be valid before a client must re-request an update                      |
+|| EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS       || <duration string>                         || Status-response freshness duration; see                                 |
+||                                              || e.g. ``30``, ``30m``, ``1d``              || :ref:`duration_strings`.                                                |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_CERTS_REQUIRE_SUBSCRIPTION      || {``true`` (default) or ``false``}         || ``true`` if we require peers to                                         |
 ||                                              ||                                           || subscribe to certificate status for certificates to                     |
@@ -183,17 +183,17 @@ The environment variables in the following table configure the PVACMS at runtime
 || EPICS_PVACMS_DISALLOW_SERVER_CUSTOM_DURATION || {``true`` (default) or ``false`` }        || ``true`` if client provided certificate durations should be ignored     |
 ||                                              ||                                           || for Server certificate requests                                         |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERT_VALIDITY                   || <duration of the certificate>             || The duration of the certificate.  All certificates will be              |
-||                                              || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
+|| EPICS_PVACMS_CERT_VALIDITY                   || <duration string>                         || Default certificate duration for all usages; see                        |
+||                                              || e.g. ``30``, ``1d``, ``1y6M``             || :ref:`duration_strings`.                                                |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERT_VALIDITY_CLIENT            || <duration of the certificate>             || The duration of the certificate.  All Client certificates will be       |
-||                                              || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
+|| EPICS_PVACMS_CERT_VALIDITY_CLIENT            || <duration string>                         || Default certificate duration for Client certificates; see               |
+||                                              || e.g. ``30``, ``1d``, ``1y6M``             || :ref:`duration_strings`.                                                |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERT_VALIDITY_IOC               || <duration of the certificate>             || The duration of the certificate.  All IOC certificates will be          |
-||                                              || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
+|| EPICS_PVACMS_CERT_VALIDITY_IOC               || <duration string>                         || Default certificate duration for IOC certificates; see                  |
+||                                              || e.g. ``30``, ``1d``, ``1y6M``             || :ref:`duration_strings`.                                                |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CERT_VALIDITY_SERVER            || <duration of the certificate>             || The duration of the certificate.  All Server certificates will be       |
-||                                              || e.g. ``30`` or ``1d``  or ``1y6M``        || generated with this amount of time unless overridden                    |
+|| EPICS_PVACMS_CERT_VALIDITY_SERVER            || <duration string>                         || Default certificate duration for Server certificates; see               |
+||                                              || e.g. ``30``, ``1d``, ``1y6M``             || :ref:`duration_strings`.                                                |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_TLS_KEYCHAIN                    || <path to keychain file>                   || The location of the PVACMS keychain file.                               |
 ||                                              || e.g. ``~/.config/pva/1.5/pvacms.p12``     ||                                                                         |
@@ -204,7 +204,7 @@ The environment variables in the following table configure the PVACMS at runtime
 || EPICS_PVACMS_CLUSTER_PV_PREFIX               || <PV name prefix string>                   || Prefix for cluster PV names.                                            |
 ||                                              || e.g. ``CERT:CLUSTER``                     || default: ``CERT:CLUSTER``                                               |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_CLUSTER_DISCOVERY_TIMEOUT       || <number of seconds>                       || Seconds to wait for cluster discovery before bootstrapping as a          |
+|| EPICS_PVACMS_CLUSTER_DISCOVERY_TIMEOUT       || <number of seconds>                       || Seconds to wait for cluster discovery before bootstrapping as a         |
 ||                                              || e.g. ``10``                               || sole-node cluster.  default: ``10``                                     |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_HEALTH_PV_PREFIX                || <PV name string>                          || PV name for the operational health channel.                             |
@@ -236,7 +236,8 @@ Extensions to Config for PVACMS
 --------------------------------
 
 - ``cert_status_validity_mins``
-    - The number of minutes that the certificate status is valid for.
+    - The duration that the certificate status is valid for. Values accept
+      :ref:`duration_strings`; a plain number means minutes.
     - Default: 30
 - ``cert_client_require_approval``
     - If ``true`` then authstd (Standard Authenticator) generated client certificates must be approved before they can be used.
@@ -489,7 +490,7 @@ If the join RPC times out (no existing cluster is serving the CTRL PV):
 
 If the join RPC succeeds (an existing node responds):
 
-- The joiner validates the signed response (see `Join Protocol`_ below)
+- The joiner validates the signed response (see :ref:`Join Protocol <pvacms_clustering_join_protocol>` below)
   and subscribes to all peer SYNC PVs.
 
 .. _pvacms_clustering_join_protocol:
@@ -564,7 +565,7 @@ Updates are published after:
 
 Updates are **not** published on:
 
-- Time-based status transitions (see `No Sync for Time-Based Status Transitions`_ below)
+- Time-based status transitions (see :ref:`No Sync for Time-Based Status Transitions <pvacms_clustering_time_based_transitions>` below)
 - Membership removal (the CTRL PV is updated, but no sync update is sent because the departing node's data is already replicated)
 
 **Ingestion**
@@ -1014,7 +1015,9 @@ status is REVOKED, the node logs a critical error and refuses to start.
 
 **Startup Ordering: Self-Join Prevention**
 
-The CTRL channel is served by a custom ``server::Source`` (``ClusterCtrlSource``).
+The CTRL channel is served by a custom
+:doc:`pvxs::server::Source </maintainer-docs/api-reference-pvxs-server-source>`
+implementation (``ClusterCtrlSource``).
 It always claims the base monitoring PV name
 (``CERT:CLUSTER:CTRL:<issuer_id>``).  Join discovery searches a node-specific
 variant instead (``CERT:CLUSTER:CTRL:<issuer_id>:<joiner_node_id>``).

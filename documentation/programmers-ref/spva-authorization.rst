@@ -1,4 +1,5 @@
 .. _authorization:
+.. _spvaauthorization:
 
 |security| Authorization
 =========================
@@ -428,8 +429,10 @@ Legacy ``PeerInfo`` Structure
 ``Credentials`` Structure (pvxsIoc API)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ``pvxs::ioc::Credentials`` class provides the authenticated peer identity to
-IOC-side access security. It is constructed from the ``server::ClientCredentials``
+The :doc:`pvxs::ioc::Credentials </maintainer-docs/api-reference-pvxs-ioc-credentials>`
+class provides the authenticated peer identity to IOC-side access
+security. It is constructed from the
+:doc:`pvxs::server::ClientCredentials </maintainer-docs/api-reference-pvxs-server-clientcredentials>`
 delivered by pvxs on each connection:
 
 .. code-block:: c++

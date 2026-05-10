@@ -13,7 +13,8 @@ state machines, normative protocol semantics:
    protocol-spec/index
 
 For application developers using pvxs (C++), P4P (Python), or phoebus
-(Java) PVA APIs to write SPVA-aware software:
+(Java) PVA APIs to build libraries and executables, write IOCs,
+servers, clients, authenticators, and monitor SPVA-aware software:
 
 .. toctree::
    :maxdepth: 1
@@ -21,8 +22,9 @@ For application developers using pvxs (C++), P4P (Python), or phoebus
 
    programmers-ref/index
 
-For network operators and IOC administrators deploying SPVA — quick-start
-recipes, PVACMS server setup, the operator-facing CLIs, gateway:
+For network operators and IOC administrators deploying SPVA — day-to-day
+configuration, quick-start recipes, PVACMS server setup, the
+operator-facing CLIs, gateway, interoperability, and migration:
 
 .. toctree::
    :maxdepth: 1
@@ -30,20 +32,21 @@ recipes, PVACMS server setup, the operator-facing CLIs, gateway:
 
    user-manual/index
 
-For pvxs / pvxs-cms / phoebus contributors — architecture, build
-internals, design notes (placeholder — content lands in a follow-up
-change):
+For readers who need cross-repository API detail — architecture,
+build internals, design notes, and generated class/symbol reference
+material:
 
 .. toctree::
    :maxdepth: 1
-   :caption: Source-Code Maintainer Documentation
+   :caption: EPICS API Reference
 
    maintainer-docs/index
 
-Glossary of SPVA terms used across all manuals:
+Shared reference material used across all manuals:
 
 .. toctree::
    :maxdepth: 1
-   :caption: Glossary
+   :caption: Shared Reference
 
    shared/spvaglossary
+   shared/durations

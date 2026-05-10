@@ -295,10 +295,31 @@
 
 - TcpReady.
 
-  A TLS context state in which the entity's certificate was previously ``GOOD``
-  (``TlsReady``) but the most recent status is ``UNKNOWN`` (e.g. PVACMS is
-  momentarily unreachable). TCP connections are accepted while waiting for
-  status to recover to ``GOOD``.
+  The **optimistic bootstrap** TLS context state. Entered at startup when no
+  cached cert-status is available and the entity certificate's status defaults
+  to ``UNKNOWN``. TCP connections are accepted and TLS handshakes are permitted
+  to proceed, but post-handshake admission gates wait for cert-status to
+  resolve. If the first authoritative delivery is ``VALID``, the context
+  graduates to ``TlsReady`` with zero added latency. If the first delivery is
+  non-``GOOD``, the context transitions to ``TcpOnly`` or ``DegradedMode``
+  and any pre-Validated TLS connections are torn down (the **give-up rule**).
+  Also entered when a previously-``TlsReady`` context's status becomes
+  ``UNKNOWN`` (e.g. PVACMS is momentarily unreachable).
+
+.. _glossary_peer_status_store:
+
+- Peer Status Store.
+
+  A process-wide, in-memory cache of peer certificate status maintained by
+  pvxs to avoid repeating TLS handshakes to peers whose certificates are
+  known to be non-``GOOD``. Entries are keyed by peer certificate identity
+  (issuer + serial) and expire at the cert-status ``status_valid_until_date``
+  boundary. An auxiliary GUID-to-cert-identity map enables search-reply
+  filtering by server GUID. The store drives per-channel search partitioning
+  (channels targeting non-``GOOD`` peers emit ``["tcp"]``-only searches)
+  and active upgrade on peer recovery (plain-TCP connections to a
+  newly-``GOOD`` peer are torn down so channels re-search and commit to TLS).
+  See :ref:`peer_status_store`.
 
 .. _glossary_trust_anchor:
 

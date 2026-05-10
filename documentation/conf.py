@@ -121,8 +121,14 @@ redirects = {
     'spvacerts':         'programmers-ref/spva-cert-management-protocol.html',
     'configuration':     'programmers-ref/configuration.html',
     'appendix':          'programmers-ref/expert-api.html',
+    'programmers-building': 'programmers-ref/building.html',
+    'programmers-applications': 'programmers-ref/applications.html',
+    'programmers-authenticator-plugins': 'programmers-ref/authenticator-plugins.html',
+    'programmers-performance': 'programmers-ref/performance.html',
     'pvacms':            'user-manual/pvacms.html',
     'cli':               'user-manual/cli.html',
+    'operation':          'user-manual/operation.html',
+    'interoperability':   'user-manual/interoperability.html',
     'spvaqstart':        'user-manual/spvaqstart.html',
     'spvaqstartstd':     'user-manual/spvaqstartstd.html',
     'spvaqstartkrb':     'user-manual/spvaqstartkrb.html',
@@ -274,4 +280,5 @@ breathe_default_project = "PVXS"
 breathe_projects = {
     "PVXS": "xml/pvxs",
     "PVXS_CMS": "xml/pvxs-cms",
+    "EPICS_BASE": "xml/epics-base",
 }

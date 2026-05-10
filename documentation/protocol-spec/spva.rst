@@ -7,7 +7,7 @@ Secure PVAccess (SPVA) Protocol Specification
 :Status: Draft
 :Protocol Version: 2 (SPVA is layered on PVA wire-protocol version 2)
 :Default TLS Server Port: 5076 (TCP)
-:Default PVACMS Server Port: 5076 (TCP, with TLS)
+:Default Certificate Management Service Port: 5076 (TCP, with TLS)
 
 .. note::
 
@@ -41,8 +41,9 @@ cryptographic authentication, confidentiality, and integrity to the
 PVA wire protocol. SPVA replaces PVA's plaintext TCP transport with
 TLS 1.3 (:rfc:`8446`) using mutual X.509 authentication
 (:rfc:`5280`); it adds a certificate-management RPC interface
-(PVACMS) for certificate issuance, status monitoring, and lifecycle
-management; and it extends the EPICS access security file (ACF) with
+to a Certificate Management Service for certificate issuance,
+status monitoring, and lifecycle management; and it extends the
+EPICS access security file (ACF) with
 authenticated-identity-based authorization rules. SPVA preserves PVA's
 operation set, type system, and beacon mechanism unchanged. This
 document specifies SPVA wire-protocol version 2.
@@ -98,7 +99,7 @@ Table of Contents
 7. Certificate-Status Monitoring
 8. Certificate Lifecycle States
 9. Certificate Creation Request (CCR)
-10. PVACMS Service
+10. Certificate Management Service
 11. Authorization (ACF Extensions)
 12. Discovery and Search with TLS
 13. OCSP Stapling
@@ -154,13 +155,13 @@ SPVA is designed to:
 - **Be compatible with X.509 PKI** — sites with existing X.509
   infrastructure (corporate CA, IPA, freeIPA, internal AD CS) can
   reuse it.
-- **Provide a bootstrapping path** — PVACMS (Section 10) issues
-  certificates to clients and servers that do not yet have them.
-  The Certificate Creation Request (Section 9) carries an
-  authenticator-specific verifier (Kerberos GSS-API token, LDAP-
-  bind-then-sign signature, or administrator-approval-pending
-  marker) that PVACMS uses to verify the requesting principal's
-  identity at issuance time.
+- **Provide a bootstrapping path** — a Certificate Management
+  Service (Section 10) issues certificates to clients and servers
+  that do not yet have them. The Certificate Creation Request
+  (Section 9) carries an authenticator-specific verifier (Kerberos
+  GSS-API token, LDAP-bind-then-sign signature, or administrator-
+  approval-pending marker) that the Service uses to verify the
+  requesting principal's identity at issuance time.
 
 1.3. Scope
 ----------
@@ -175,15 +176,16 @@ This specification covers:
 - The connection-validation handshake additions for SPVA
   (Section 5).
 - The single SPVA authentication mechanism (Section 6.1):
-  ``x509``. The CCR issuance authenticators (Section 6.2):
-  ``authnstd``, ``authnkrb``, ``authnldap``.
+  ``x509``. The CCR issuance authenticator plugin framework
+  (Section 6.2), including the currently registered ``std``, ``krb``,
+  and ``ldap`` authenticator types.
 - The certificate-status protocol (Section 7): the cert-status
   PVStructure schema, the subscribe/publish flow, OCSP stapling
   (Section 13).
 - Certificate lifecycle states (Section 8) and the ``CCR`` (Section
   9) used to request certificate issuance.
-- The PVACMS service (Section 10): its PV namespace, its RPCs, its
-  responsibilities.
+- The Certificate Management Service (Section 10): its PV
+  namespace, its RPCs, its responsibilities.
 - ACF authorization extensions (Section 11).
 - Connection reconfiguration (Section 14) — runtime keychain
   rotation.
@@ -194,8 +196,8 @@ It does not cover:
   :doc:`/protocol-spec/pva`).
 - The pvxs C++ API or pvxs-cms C++ API (see
   :doc:`/programmers-ref/index`).
-- Operational concerns: PVACMS deployment, cluster setup,
-  certificate-store management. These are
+- Operational concerns: deployment of the Certificate Management
+  Service, cluster setup, certificate-store management. These are
   :doc:`/user-manual/pvacms`.
 - Site-specific PKI policy (root CA selection, intermediate-CA
   hierarchy, naming conventions). SPVA constrains the certificate
@@ -206,42 +208,42 @@ It does not cover:
 
 SPVA-specific terminology in addition to PVA's:
 
-PVACMS
-   The Process Variable Access Certificate Management Service. A
-   long-running service that issues, monitors, and revokes X.509
-   certificates for SPVA endpoints. PVACMS itself runs as a PVA
-   server. It exposes some of its functions as remote procedure
-   calls (RPCs) at well-known PV names — certificate creation,
-   admin scheduling and approval — and other functions as
-   conventional monitorable / readable PVs: per-certificate
-   status (subscribable), service health, service metrics,
-   issuer-cert info, and root-CA info (Section 10).
-
-CMS
-   Abbreviated PVACMS.
+Certificate Management Service
+   A long-running service that issues, monitors, and revokes X.509
+   certificates for SPVA endpoints. The Certificate Management
+   Service itself runs as a PVA server. It exposes some of its
+   functions as remote procedure calls (RPCs) at well-known PV
+   names — certificate creation, admin scheduling and approval —
+   and other functions as conventional monitorable / readable PVs:
+   per-certificate status (subscribable), service health, service
+   metrics, issuer-cert info, and root-CA info (Section 10). The
+   protocol does not mandate any specific implementation; the
+   reference implementation is PVACMS (see
+   :doc:`/user-manual/pvacms`).
 
 Authenticator
    An issuance mechanism by which a not-yet-certified principal
-   proves its identity to PVACMS in order to obtain a certificate.
-   Defined values: ``authnstd`` (administrator approval),
-   ``authnkrb`` (Kerberos GSS-API), ``authnldap`` (LDAP-bind plus
-   key signature).
+   proves its identity to the Certificate Management Service in
+   order to obtain a certificate. Defined values: ``authnstd``
+   (administrator approval), ``authnkrb`` (Kerberos GSS-API),
+   ``authnldap`` (LDAP-bind plus key signature).
 
 CCR (Certificate Creation Request)
-   A PVStructure that a principal sends to PVACMS to request
-   issuance of a certificate. Carries the principal's public key,
-   the requested subject DN, the chosen authenticator, and any
-   authenticator-specific verifier payload.
+   A PVStructure that a principal sends to the Certificate
+   Management Service to request issuance of a certificate. Carries
+   the principal's public key, the requested subject DN, the chosen
+   authenticator, and any authenticator-specific verifier payload.
 
 Certificate Subject
    The X.509 Subject Distinguished Name of the certificate. SPVA
    constrains it to specific patterns (Section 4.4).
 
 Cert-status PV
-   A well-known PV name pattern, hosted by PVACMS, that publishes
-   the current status of a specific certificate identified by its
-   issuer and serial. Subscribed by the cert-status monitor in
-   client and server runtimes.
+   A well-known PV name pattern, hosted by the Certificate
+   Management Service, that publishes the current status of a
+   specific certificate identified by its issuer and serial.
+   Subscribed by the cert-status monitor in client and server
+   runtimes.
 
 Status states
    The set ``PENDING_APPROVAL``, ``PENDING``, ``VALID``,
@@ -352,8 +354,9 @@ End-to-end SPVA connect-and-get:
 - **Tamper detection**: TLS 1.3 record MACs.
 - **Live revocation**: cert-status monitor closes connections on
   revocation/suspension.
-- **PVACMS-driven certificate lifecycle**: clients and servers can
-  request, renew, and rotate certificates via well-defined RPCs.
+- **Service-driven certificate lifecycle**: clients and servers can
+  request, renew, and rotate certificates via well-defined RPCs to
+  the Certificate Management Service.
 - **Identity-bound authorization**: the X.509 Subject's CN+O
   becomes the principal name used in ASG/ACF rules.
 
@@ -472,6 +475,60 @@ SPVA endpoints use X.509 v3 certificates (:rfc:`5280`). Section
 4.2 lists the standard PKIX extensions every SPVA certificate
 carries; Section 4.3 specifies the SPVA-specific custom extension.
 
+4.1.1. PKCS#12 Keychain Profile
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+SPVA deployments commonly distribute endpoint identity and trust
+material as a PKCS#12 (``.p12`` / ``.pfx``) keychain file. For
+interoperability with the current C++ and Java implementations, an
+SPVA keychain file SHALL use the following bag-level profile:
+
+- The endpoint's private key SHALL be stored in a
+  ``pkcs8ShroudedKeyBag``.
+- The endpoint's leaf certificate SHALL be stored in a ``certBag``.
+- The private-key bag and the matching leaf-certificate bag SHALL
+  carry the same ``localKeyId`` attribute so the pair is
+  unambiguously linked.
+- Additional issuer / intermediate / trust-anchor certificates MAY
+  be present as additional ``certBag`` entries.
+- A file used as an endpoint identity file MUST contain the private
+  key and the matching leaf certificate. A trust-only file MAY omit
+  the private key and contain only certificate bags.
+
+The bags MAY be distributed across one or more ``AuthenticatedSafe``
+containers. The interoperable layout used by OpenSSL, PVXS, PVACMS,
+and Java ``keytool`` places the ``pkcs8ShroudedKeyBag`` in one safe
+and the certificate bags in another safe.
+
+Additional bag attributes are required for interoperability:
+
+- ``friendlyName`` SHOULD be present on the private-key bag and on
+  the matching leaf-certificate bag. It is the bag alias used by
+  Java tooling. SPVA does not assign any protocol meaning to the
+  alias string itself.
+- Certificate bags that represent trust-only certificates (that is,
+  certificate bags without a matching ``localKeyId``) SHOULD carry
+  the Java-defined ``oracle-jdk-trustedkeyusage`` attribute so Java
+  keystore tooling treats them as trusted certificates.
+
+Ordering rules:
+
+- When a certificate chain is present, the leaf certificate is the
+  certificate linked to the private key by ``localKeyId``.
+- Additional chain certificates SHOULD be ordered from the issuing
+  intermediate certificate toward the trust anchor.
+
+Java considerations:
+
+- A Java implementation MUST NOT depend on any fixed alias name. It
+  SHALL inspect all aliases in the keystore.
+- A key entry intended for Java consumption SHOULD carry its
+  certificate chain in the same PKCS#12 file.
+- If a deployment uses an empty password for the PKCS#12 file, Java
+  loaders SHOULD pass the empty string password rather than ``null``;
+  a ``null`` password can cause encrypted certificate safes to be
+  skipped.
+
 4.2. Standard PKIX Extensions
 -----------------------------
 
@@ -528,8 +585,9 @@ of:
 
 - Live revocation (Section 7).
 - ``SCHEDULED_OFFLINE`` connection suspension (Section 8.4).
-- ``PENDING_RENEWAL`` connection-state behaviour (Section 8.5).
-- Renewal hint delivery (``renew_by``; Section 8.5).
+- ``PENDING_RENEWAL`` past-due connection-state behaviour
+  (Section 8.5).
+- Renewal-due hint delivery (``renewal_due``; Section 8.5).
 
 A certificate without this extension MUST NOT be subscribed to.
 Connections involving such a certificate proceed without
@@ -593,8 +651,9 @@ included for site-specific principal-naming conventions but are
 not consumed by the standard ACF rule set.
 
 The CCR (Section 9) lets the requesting principal supply SAN
-entries at issuance time; PVACMS embeds them in the issued
-certificate verbatim subject to site-policy filtering.
+entries at issuance time; the Certificate Management Service
+embeds them in the issued certificate verbatim subject to
+site-policy filtering.
 
 4.6. Trust Anchors
 ------------------
@@ -614,97 +673,269 @@ and MUST NOT contain any revoked or expired certificate.
 4.7. Validity Period: Cryptographic vs Operational
 --------------------------------------------------
 
-SPVA distinguishes the **cryptographic** validity of an entity
-certificate (its X.509 ``notBefore`` and ``notAfter`` fields, fixed
-at issuance and verifiable by any standard X.509 verifier) from its
-**operational** validity (the cert-status protocol of Section 7
-currently asserts a status mapped to a usable connection-state
-class, Section 8.4).
+SPVA distinguishes two independent notions of certificate validity.
 
-Operational validity is enforced by the cert-status protocol, not
-by ``notAfter``. The two are deliberately decoupled so that
-``notAfter`` can be set very long (e.g. multiple years) without
-weakening the security posture, while operational validity is
-constrained by a much shorter window (the
-``status_valid_until_date`` field of the cert-status PVStructure;
-see Section 7.2). This decoupling is a core SPVA design choice; the
-guidance below replaces the conventional "use short ``notAfter``"
+**Cryptographic validity** is the property an X.509 verifier checks
+against the certificate alone: the current time falls within
+``[notBefore, notAfter]``, the chain is well-formed, and signatures
+verify. The detailed rules are specified in :rfc:`5280`.
+
+**Operational validity** is the property an SPVA endpoint checks
+against the live cert-status protocol of Section 7. It is determined
+by the most recent cert-status report's ``status`` field, classified
+by Section 8.4 into one of the connection-state classes
+(``GOOD``, ``SUSPENDED``, ``UNKNOWN``, ``BAD``). Only ``GOOD``
+permits unrestricted SPVA traffic.
+
+The two notions are deliberately decoupled. ``notAfter`` MAY be
+set very long (years) without weakening the security posture
+because revocation, suspension, and renewal are signalled in real
+time over the cert-status channel rather than by waiting for
+``notAfter`` to elapse. The conventional "use short ``notAfter``"
 advice that applies to PKI deployments without a live cert-status
-channel.
+channel does not apply to SPVA.
 
-4.7.1. Cryptographic Validity (notAfter)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+This decoupling lets an SPVA deployment combine a long
+cryptographic lifetime with a short operational renewal cadence.
+A typical configuration is a cryptographic lifetime of years
+(``notAfter`` set well into the future) paired with a short
+``renew_by`` cadence (Section 4.7.3) — for example 24 hours, or
+whatever cadence site IT policy requires. Each renewal cycle
+re-authenticates the certificate-holder and extends the next
+``renew_by`` horizon within the same long cryptographic window,
+without re-issuing the keypair or certificate on each cycle.
 
-The X.509 ``notAfter`` of an entity certificate marks the end of
-the certificate's cryptographic life: after this instant any X.509
-verifier MUST reject the certificate independently of any cert-
-status check. PVACMS sets ``notAfter`` per its configured policy.
-The configuration interface is the environment variables
-``EPICS_PVACMS_CERT_VALIDITY`` (with per-role overrides
-``EPICS_PVACMS_CLIENT_CERT_VALIDITY``,
-``EPICS_PVACMS_SERVER_CERT_VALIDITY``, and
-``EPICS_PVACMS_IOC_CERT_VALIDITY``); the value is a duration. Sites
-are expected to set this to their preferred cryptographic lifetime,
-which MAY be much longer than the duration any one implementation
-defaults to.
+The same decoupling lets an SPVA deployment apply on/off
+operational validity to a long-lived certificate. The Certificate
+Management Service MAY hold the certificate's ``notAfter`` years in
+the future while toggling the cert-status between ``VALID`` and
+``SCHEDULED_OFFLINE`` (Section 4.7.4) on a schedule — for example,
+valid only during configured shift windows, or invalid during a
+planned facility downtime. The operational state changes purely
+through cert-status transitions over the live channel; the
+certificate itself is not re-issued and ``notAfter`` is not
+modified.
 
-Sites SHOULD treat ``notAfter`` as the rotation horizon — the
+4.7.1. Cryptographic Validity
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Cryptographic validity is bounded by the certificate's
+``notBefore`` and ``notAfter`` fields. Outside this interval any
+:rfc:`5280` verifier MUST reject the certificate independently of
+any cert-status check. The issuer sets these fields per its
+configured policy; sites are expected to set the configured
+cryptographic lifetime to their preferred value, which MAY be much
+longer than any one implementation's default. (Configuration of the
+reference implementation is documented in
+:doc:`/programmers-ref/cert-management`.)
+
+Sites SHOULD treat ``notAfter`` as the **rotation horizon** — the
 maximum time the same keypair MAY remain in service — not as the
-operational expiry. A long ``notAfter`` is acceptable and
-operationally desirable: it means a process holding a valid private
-key does not need to re-engage the certificate-issuance flow on
-every short-cycle renewal, and reduces PVACMS load.
+operational expiry. The short-cycle rotation that IT policy
+typically requires is provided separately by the renewal hint
+(``renewal_due``, Section 4.7.3): an endpoint observing
+``renewal_due = true`` re-authenticates promptly so the Service can
+move ``renew_by`` forward and clear the hint while the same
+certificate and keypair remain in service within the same long
+``notAfter`` window.
 
 There is no protocol-level upper bound on ``notAfter``. A site MAY
 configure multi-year ``notAfter`` values where its key-protection
 policy (hardware security module, sealed keychain, or equivalent)
 warrants it. Sites with weaker key protection SHOULD configure
-shorter ``notAfter`` values to bound the impact of a key
-compromise that goes undetected long enough to outlast cert-status
-revocation propagation.
+shorter ``notAfter`` values to bound the impact of a key compromise
+that goes undetected long enough to outlast cert-status revocation
+propagation.
+
+For all other rules governing cryptographic validity (path
+construction, name constraints, policy mapping, signature
+verification), see :rfc:`5280`.
 
 4.7.2. Operational Validity
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Operational validity is the property checked by an SPVA endpoint
-when establishing and maintaining a connection (Section 5.1,
-Section 7). The current cert-status report drives the connection's
-state per the mapping in Section 8.4; only the GOOD class permits
-unrestricted SPVA traffic. The cert-status response's
-``status_valid_until_date`` field defines the freshness window: a
-report whose ``status_valid_until_date`` has passed MUST be
-treated as ``UNKNOWN`` regardless of the underlying ``status``
-value.
+Operational validity is determined by the most recent cert-status
+report received over the cert-status PV (Section 7). The report's
+``status`` field classifies the certificate into one of four
+connection-state classes — ``GOOD``, ``SUSPENDED``, ``UNKNOWN``,
+or ``BAD`` — each with specific per-connection effects. The
+authoritative mapping from cert-status states to connection-state
+classes and the effects of each class are specified in
+Section 8.4. The state definitions are in Section 8.2.
 
-PVACMS sets ``status_valid_until_date`` per the duration
-configured by ``EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS``.
-Endpoints obtain fresh status by maintaining a live cert-status
-subscription (Section 7.3) or, if subscription is unavailable, by
-re-querying.
+A separate condition arises when no fresh status is available —
+either because the endpoint has not yet received any report, or
+because the Certificate Management Service has become unreachable
+and stopped delivering updates. The ``status_valid_until_date``
+field of the most recent report defines a **freshness horizon**:
+until that instant the last received status MAY continue to be
+used as the operational status, even if the Service is currently
+silent. Once ``status_valid_until_date`` has passed, the cached
+status MUST be treated as ``UNKNOWN`` until a fresh report arrives,
+regardless of what the cached ``status`` value was.
 
-4.7.3. Renewal Hint (PENDING_RENEWAL and renew_by)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Worked example: a client receives ``status = VALID`` with
+``status_valid_until_date`` set 30 minutes in the future, then
+loses contact with the Certificate Management Service. For the
+next 30 minutes the client still treats the certificate as
+operationally ``GOOD`` (the cached status is still within its
+freshness horizon). At the 30-minute mark, with no fresh report
+received, the client transitions the certificate to ``UNKNOWN``
+until contact is restored and a fresh report arrives.
 
-Independent of both ``notAfter`` and
-``status_valid_until_date``, each certificate MAY carry a
-**renewal hint** — a separate ``renew_by`` time at which PVACMS
-(or site policy) recommends the certificate-holder request a fresh
-certificate. The renewal hint is conveyed:
+The Certificate Management Service publishes
+``status_valid_until_date`` per its configured freshness duration.
+(Configuration of the reference implementation is documented in
+:doc:`/programmers-ref/cert-management`.) Endpoints obtain
+fresh status by maintaining a live cert-status subscription
+(Section 7.3) or, if subscription is unavailable, by re-querying.
 
-- Implicitly via the cert-status state transition to
-  ``PENDING_RENEWAL`` (Section 8.3) when the renewal threshold is
-  reached.
-- Explicitly via the ``renew_by`` field of the cert-status
-  PVStructure (Section 7.2).
+4.7.3. Renewal Cadence (``renew_by``, ``renewal_due``, and ``PENDING_RENEWAL``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A certificate-holder receiving ``PENDING_RENEWAL`` SHOULD initiate
-a renewal Certificate Creation Request (Section 9.4). While
-``PENDING_RENEWAL`` is in effect the certificate's connections are
-in the SUSPENDED class (Section 8.4): TLS sockets remain open but
-SPVA channel operations are paused; plain-TCP fallback (where
-negotiated) remains usable. The connections resume normal SPVA
-operation when the renewal completes and the cert-status
-transitions back to ``VALID``.
+Independent of ``notAfter``,
+the protocol supports a short renewal cadence under a long
+cryptographic envelope. The renewal cadence is conveyed by three
+distinct on-the-wire elements of the cert-status protocol
+(Section 7), each with its own semantics. They MUST NOT be
+conflated.
+
+``renew_by`` is a ``UInt64`` field of the cert-status
+PVStructure (Section 7.2). It carries the time at which renewal
+is due. The Certificate Management Service publishes ``renew_by``
+per its configured renewal cadence; the certificate-holder SHOULD
+use ``renew_by`` to plan its renewal request.
+
+``renewal_due`` is a ``Bool`` field of the cert-status
+PVStructure (Section 7.2) and is the **renewal hint**. The
+Certificate Management Service publishes ``renewal_due = true``
+once the current time is more than halfway between the last status
+update time and the current ``renew_by`` time. While
+``renewal_due = true`` and the ``status`` field remains ``VALID``,
+the certificate is still operationally valid (connection-state
+class ``GOOD``, Section 8.4) and SPVA traffic proceeds normally;
+the flag is purely advisory. A certificate-holder observing
+``renewal_due = true`` SHOULD initiate a renewal Certificate
+Creation Request (Section 9.4) promptly so that renewal completes
+before the past-due status is reported.
+
+Each cert-status publication that moves ``renew_by`` forward is
+itself a new cert-status update. It therefore resets the reference
+"last status update time" used by the halfway-point calculation and
+allows a fresh ``renewal_due`` hint to be emitted later in the next
+renewal interval.
+
+``PENDING_RENEWAL`` is a ``certstatus_t`` value (Section 8.3)
+returned in the ``status`` field. The Certificate Management
+Service publishes ``status = PENDING_RENEWAL`` once the renewal
+date has passed *and* the certificate-holder has not completed a
+renewal in time; the renewal is past-due. ``PENDING_RENEWAL`` is
+semantically parallel to ``PENDING_APPROVAL``: both are
+SUSPENDED-class states (Section 8.4) that name the action the
+holder MUST take to return to ``VALID`` — for ``PENDING_RENEWAL``,
+complete a renewal; for ``PENDING_APPROVAL``, obtain administrator
+approval. The per-connection effects of the SUSPENDED class are
+specified in Section 8.4.
+
+The intended sequence under nominal operation is therefore:
+
+1. ``status = VALID``, ``renewal_due = false`` — certificate is
+   operationally valid; no action required.
+2. Time passes the halfway point between the last status update and
+   ``renew_by``. The Certificate Management Service
+   publishes ``renewal_due = true``; ``status`` remains ``VALID``.
+   The certificate-holder, observing the hint, initiates renewal.
+3. The holder re-authenticates successfully. The next cert-status
+   report carries ``status = VALID`` with ``renewal_due = false``
+   and a fresh ``renew_by`` further in the future. The certificate
+   and keypair are unchanged, and operation continues
+   uninterrupted. Because that publication is itself the new last
+   status update, it resets the halfway-point calculation for the
+   next ``renewal_due`` hint.
+
+``PENDING_RENEWAL`` is the off-nominal path taken only when step 2
+does not result in a completed renewal before the Service
+escalates: the renewal is past-due, the certificate is suspended
+(connection-state class ``SUSPENDED``, Section 8.4), and the
+holder MUST complete a renewal to return the certificate to
+``VALID``. A holder in ``PENDING_RENEWAL`` MAY do this by
+submitting a renewal Certificate Creation Request again; on success
+the Service returns the certificate's status to ``VALID`` and the
+connection-state class returns from ``SUSPENDED`` to ``GOOD``.
+
+When renewal is submitted as a direct Certificate Creation Request,
+that request MUST be sent without Transport Layer Security (TLS).
+Otherwise the suspended secure session can prevent the renewal
+request from reaching the Certificate Management Service. Tools that
+exist specifically to perform authenticator-driven Certificate
+Creation Requests, such as ``authnstd`` and the other ``authnXXX``
+tools, automatically disable TLS for those renewal requests.
+
+``renew_by`` is a per-certificate, authenticator-set policy time,
+not a fixed global threshold. It is distinct from
+``status_valid_until_date`` (which controls cert-status response
+freshness, Section 7.2) and from ``notAfter`` (which is the
+cryptographic expiry, Section 4.7.1). A ``renew_by`` value of
+zero disables the renewal cadence: no ``renewal_due`` hint is
+emitted and the certificate does not transition to
+``PENDING_RENEWAL``. A Certificate Management Service MAY normalize
+``renew_by == notAfter`` to zero, because renewing at cryptographic
+expiry provides no useful operational renewal window.
+
+Worked example: a site requires 24-hour renewal re-authentication but wants to
+avoid re-engaging the full certificate-issuance flow daily.
+Certificates are issued with a 10-year ``notAfter`` and a
+``renew_by`` 24 hours in the future. After roughly 12 hours (more
+than halfway from the last status update to ``renew_by``) the
+Certificate Management Service publishes ``renewal_due = true``
+(status still ``VALID``); the certificate-holder requests a
+renewal, re-authenticates successfully, and the Service clears the
+hint and publishes a fresh 24-hour ``renew_by`` for the same
+certificate. The connection continues without interruption. Only if
+the holder fails to renew before the Service escalates does the
+status transition to ``PENDING_RENEWAL`` and connections enter the
+SUSPENDED class until renewal completes.
+
+4.7.4. Scheduled Validity (SCHEDULED_OFFLINE)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Independent of ``notAfter``, the protocol
+permits the operational validity of a certificate to be gated
+against a schedule. At configured times the Certificate Management
+Service publishes ``status = SCHEDULED_OFFLINE`` (mapped to the
+SUSPENDED connection-state class, Section 8.4); at other
+configured times it publishes ``status = VALID``. The certificate
+itself is not re-issued, its ``notAfter`` is not modified, and its
+keypair is not changed; only the live cert-status state changes.
+
+This mechanism supports two common deployment patterns:
+
+- **Shift-based access.** A certificate issued to an account that
+  is only authorised to operate during specific shift windows can
+  be left ``VALID`` during those windows and transitioned to
+  ``SCHEDULED_OFFLINE`` outside them. SPVA traffic is permitted
+  on-shift and suspended off-shift without operator intervention
+  and without certificate re-issuance.
+- **Planned facility downtime.** Ahead of a scheduled outage,
+  the Certificate Management Service transitions affected
+  certificates to ``SCHEDULED_OFFLINE`` for the duration of the
+  downtime, then back to ``VALID`` when normal operation resumes.
+
+While ``SCHEDULED_OFFLINE`` is in effect the certificate's
+connections behave as defined in Section 8.4 for the SUSPENDED
+class: TLS sockets remain open but SPVA channel operations are
+paused; plain-TCP fallback (where negotiated) remains usable.
+
+Worked example: a beam-line operator account holds a certificate
+issued with a 5-year ``notAfter``. The site policy authorises
+operation only during weekday day-shift hours. The Certificate
+Management Service publishes ``status = VALID`` from 08:00–18:00
+Monday through Friday and transitions to ``SCHEDULED_OFFLINE`` at
+18:00 on each weekday and all day on weekends. Operator
+workstations using this certificate see SPVA traffic permitted
+during shift hours and suspended otherwise; the certificate itself
+is unchanged across all such transitions for its full 5-year
+cryptographic lifetime.
 
 4.8. Key Algorithms
 -------------------
@@ -790,34 +1021,35 @@ permits it for mechanism continuation) but MUST NOT depend on it.
 ----------------------------------------
 
 Before an endpoint can present an ``x509`` certificate, the
-certificate must have been issued. PVACMS (Section 10) issues
-certificates in response to a Certificate Creation Request
-(Section 9). The CCR carries an authenticator-specific verifier
-in its ``verifier`` sub-structure that PVACMS uses to verify the
-requesting principal's identity at issuance time.
+certificate must have been issued. The Certificate Management
+Service (Section 10) issues certificates in response to a
+Certificate Creation Request (Section 9). The CCR carries an
+authenticator-specific verifier in its ``verifier`` sub-structure
+that the Service uses to verify the requesting principal's
+identity at issuance time.
 
 Three issuance authenticators are defined:
 
 - ``authnstd`` — issuance with administrator approval. The CCR is
-  submitted without external credential proof. PVACMS issues the
-  certificate in ``PENDING_APPROVAL`` state (Section 8.2). The
+  submitted without external credential proof. The Service issues
+  the certificate in ``PENDING_APPROVAL`` state (Section 8.2). The
   certificate becomes ``VALID`` only when an administrator
   performs a PUT to the certificate's status PV.
 - ``authnkrb`` — Kerberos. The principal obtains a GSS-API token
-  for the PVACMS service principal (output of
+  for the Service's principal (output of
   ``gss_init_sec_context``) plus a Message Integrity Check; both
   travel in the CCR as ``verifier.token`` and ``verifier.mic``.
-  PVACMS verifies via ``gss_accept_sec_context`` against its
+  The Service verifies via ``gss_accept_sec_context`` against its
   service keytab.
 - ``authnldap`` — LDAP. The principal performs an LDAP bind
   locally to prove identity, then signs the CCR contents with the
   principal's own private key. The signature travels in the CCR
-  as ``verifier.signature``. PVACMS verifies the signature against
-  the LDAP-bound principal's public key.
+  as ``verifier.signature``. The Service verifies the signature
+  against the LDAP-bound principal's public key.
 
-The CCR submission to PVACMS uses PVA RPC (Section 9). The
-issuance authenticators are not SPVA-protocol messages on their
-own; they are CCR ``verifier`` payloads.
+The CCR submission uses PVA RPC (Section 9). The issuance
+authenticators are not SPVA-protocol messages on their own; they
+are CCR ``verifier`` payloads.
 
 ----
 
@@ -827,8 +1059,8 @@ own; they are CCR ``verifier`` payloads.
 7.1. Cert-Status PV Naming
 --------------------------
 
-PVACMS publishes a cert-status PV per issued certificate. The PV
-name follows the pattern:
+The Certificate Management Service publishes a cert-status PV per
+issued certificate. The PV name follows the pattern:
 
 ::
 
@@ -838,14 +1070,16 @@ where:
 
 - ``<prefix>`` is the configurable cert-PV prefix (default
   ``CERT``); set via ``EPICS_PVAS_CERT_PV_PREFIX``.
-- ``<issuer-skid>`` is the hex-encoded Subject Key Identifier of
-  the certificate's issuer (the issuing CA).
-- ``<cert-serial>`` is the hex-encoded serial number of the
-  certificate.
+- ``<issuer-skid>`` is the first 8 hexadecimal characters of the
+  Subject Key Identifier of the certificate's issuer (the issuing
+  Certification Authority).
+- ``<cert-serial>`` is the certificate serial number rendered in
+  decimal and left-padded with leading zeroes to a width of 20
+  characters.
 
-This deterministic naming allows any party with a certificate to
-construct the corresponding cert-status PV name without any
-out-of-band lookup.
+Given the configured cert-PV prefix, this deterministic naming
+allows any party with a certificate to construct the corresponding
+cert-status PV name without any further out-of-band lookup.
 
 7.2. Cert-Status PVStructure Schema
 -----------------------------------
@@ -871,9 +1105,13 @@ following fields:
         u64         serial               # certificate serial number
         string      state                # cert-status state name
                                          #  (= choices[value.index]; convenience)
-        u64         renew_by             # per-certificate renew_by hint
+        u64         renew_by             # time at which renewal is due
                                          #  (UTC seconds; Section 8.5)
-        bool        renewal_due          # convenience: now >= renew_by
+        bool        renewal_due          # renewal-due hint: true once
+                                         #  now is at or beyond the halfway
+                                         #  point between the last cert-status
+                                         #  update time and renew_by
+                                         #  (Section 8.5)
         struct      ocsp_status          # NTEnum: OCSP status
             int32       index            #   index into choices
             string[]    choices          #   {OCSP_CERTSTATUS_GOOD,
@@ -884,9 +1122,10 @@ following fields:
         string      ocsp_certified_until
         string      ocsp_revocation_date
         u8[]        ocsp_response        # raw OCSP response (RFC 6960);
-                                         #  empty if PVACMS does not provide it
-        string      pvacms_node_id       # PVACMS-cluster member that
-                                         #  produced this update
+                                         #  empty if not provided
+        string      pvacms_node_id       # Certificate Management Service
+                                         #  cluster member that produced
+                                         #  this update
         struct[]    schedule             # SCHEDULED_OFFLINE windows
                                          #  (matches CCR.schedule, Section 9.1)
             string      day_of_week
@@ -904,9 +1143,10 @@ are normative and exactly: ``UNKNOWN``, ``VALID``, ``PENDING``,
 ``EXPIRED``, ``REVOKED``. Their semantics are in Section 8.2;
 their connection-state effects are in Section 8.4.
 
-The ``ocsp_response`` field is populated when PVACMS provides an
-OCSP-style status response; otherwise it is empty (zero-length
-byte array). Section 13 covers OCSP stapling separately.
+The ``ocsp_response`` field is populated when the Certificate
+Management Service provides an OCSP-style status response;
+otherwise it is empty (zero-length byte array). Section 13 covers
+OCSP stapling separately.
 
 A response whose ``timeStamp`` plus the configured cert-status
 validity duration has passed MUST be treated as ``UNKNOWN`` per
@@ -918,13 +1158,91 @@ Section 8.4.
 If the peer certificate carries the ``SPvaCertStatusURI``
 extension (Section 4.3), the endpoint reads the PV name from the
 extension and subscribes to that PV using PVA ``CMD_MONITOR``
-(PVA Section 9.5) against the PVACMS server. The subscription
-runs for the lifetime of the connection.
+(PVA Section 9.5) against the publishing PVA server. The
+subscription runs for the lifetime of the connection.
 
 Each cert-status update drives the connection's state per the
 mapping in Section 8.4. Updates and connection-state transitions
 are asynchronous; the connection is not held open or torn down
 synchronously with respect to handshake completion.
+
+When a cert-status update places the peer in the ``SUSPENDED``
+class, the TLS socket remains open but the secure PVA session is not
+fully operational. Monitor delivery is paused until the peer returns
+to ``GOOD``. ``GET`` operations MAY continue. ``PUT`` and ``RPC``
+operations MUST be rejected while the peer remains suspended. A
+connection that has not yet completed secure channel admission MUST
+enter ``TcpOnly``, continue status monitoring, and upgrade to TLS
+when the peer's cert-status returns to ``GOOD``.
+
+7.3.1. Pre-Admission Give-Up Rule
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A TLS connection that has completed the TLS handshake but has NOT
+yet completed secure channel admission (the connection is in the
+"pre-Validated" state) is subject to a **give-up rule**: if the
+first authoritative cert-status delivery for the local entity
+certificate or the peer's certificate resolves to a class other
+than ``GOOD``, the endpoint SHALL abandon the TLS attempt for that
+connection rather than waiting indefinitely for the status to
+become ``GOOD``.
+
+The give-up rule applies at each of the three admission gates where
+a pre-Validated connection waits for cert-status:
+
+- The **local-cert gate**, where the connection waits for the local
+  TLS context to reach ``TlsReady`` (own cert status ``GOOD``).
+- The **client peer-cert gate**, where a client connection waits
+  for the peer's cert-status to become ``GOOD`` before creating
+  channels.
+- The **server peer-cert gate**, where a server connection waits
+  for the peer's cert-status to become ``GOOD`` before completing
+  connection validation.
+
+On give-up, the endpoint SHALL:
+
+1. Tear down the pre-Validated TLS connection.
+2. Return attached channels to the searching state so they may
+   re-resolve over plain TCP.
+3. Log the give-up at WARN level, including the peer identity and
+   the non-``GOOD`` cert-status that triggered the give-up.
+
+The give-up rule does NOT apply to connections that have already
+completed secure channel admission (state ``Validated`` or later).
+For those connections, the existing live-transition rules of
+Section 8.4 apply — ``SUSPENDED`` keeps the TLS socket open and
+pauses operations; ``BAD`` tears down the connection.
+
+The give-up rule does NOT introduce a timeout. If no cert-status
+delivery arrives at all (the Certificate Management Service is
+unreachable and no cached status exists), the pre-Validated
+connection continues to wait. A bounded timeout for "no status
+delivery" is out of scope of this specification.
+
+The cached-status fast path (Section 7.4) reduces the frequency
+of the give-up case: a process that has previously observed
+``VALID`` for its own certificate (and the disk-cached status is
+still within its freshness horizon) boots directly into
+``TlsReady`` and never enters the optimistic ``TcpReady`` window.
+The give-up rule fires only when the cache miss path is taken and
+the first authoritative delivery is non-``GOOD``.
+
+``UNKNOWN`` is distinct from both ``SUSPENDED`` and ``BAD``. It means
+the endpoint lacks a current usable status decision, either because no
+status report has yet arrived or because the last report has aged past
+``status_valid_until_date``. ``UNKNOWN`` therefore has two operational
+cases:
+
+- before secure admission completes, the endpoint MUST treat TLS as not
+  yet ready. If plain-PVAccess fallback was negotiated, the endpoint
+  MAY continue in that plain-TCP mode while waiting for status to
+  resolve to ``GOOD``; otherwise it waits for a fresh cert-status
+  update and does not complete secure channel admission.
+- after a TLS session is already live, a transition to ``UNKNOWN`` MUST
+  preserve the underlying TLS socket and treat the session as
+  recoverable. Monitor delivery is paused until status recovers; the
+  endpoint MUST NOT treat the condition as terminal solely because the
+  Certificate Management Service is silent.
 
 If the peer certificate does not carry the ``SPvaCertStatusURI``
 extension, no subscription is installed and the connection runs
@@ -957,32 +1275,60 @@ subscription is required.
 
     [CCR submission]
             │
-            ▼
-     PENDING_APPROVAL  ◄────┐ (admin)
-            │               │
-            │ approve        │ deny
-            │                │
-            ▼                ▼
-        PENDING          REVOKED  (terminal)
+            │  (the issuer evaluates whether administrator approval
+            │   is required: a non-default authenticator's own verifier
+            │   replaces approval; for the default authenticator the
+            │   per-usage site policy ``cert_<usage>_require_approval``
+            │   may waive approval. See Section 9.x.)
             │
-            │ cert generated and delivered
-            ▼
-          VALID  ◄────────┐
-            │ │ │         │
-            │ │ └─ revoke (admin or CA policy) ─► REVOKED (terminal)
-            │ │
-            │ └─ admin pause ─► SCHEDULED_OFFLINE
+            ├─ approval required
+            │      ▼
+            │  PENDING_APPROVAL  ──── deny ──► REVOKED  (terminal)
+            │      │
+            │      │ approve
+            │      ▼
+            │  ┌───┴────────────────────────────────────────┐
+            │  │ The Certificate Management Service         │
+            └──┤ publishes the time-based status that the   │
+               │ cryptographic clock dictates at the        │
+               │ instant of issuance / approval:            │
+               │                                            │
+               │   PENDING   if now < notBefore             │
+               │   VALID     if notBefore ≤ now < notAfter  │
+               │   EXPIRED   if now ≥ notAfter   (terminal) │
+               └────────────────────────────────────────────┘
+
+    PENDING ──── now reaches notBefore ────► VALID
+
+    From VALID:
+            │
+            ├─ scheduled pause ─► SCHEDULED_OFFLINE ──► VALID  (resume)
             │                          │
-            │                          ▼ admin resume
-            │                        VALID
+            │                          ├──► REVOKED  (admin revocation)
+            │                          │
+            │                          └──► EXPIRED  (now reaches
+            │                                        notAfter; terminal)
             │
-            │ time crosses ``renew_by`` (Section 8.5)
-            ▼
-     PENDING_RENEWAL ──── renewal completed ────► VALID
+            ├─ admin revoke ─► REVOKED  (terminal)
             │
-            │ no renewal in time
-            ▼
-        EXPIRED  (terminal)
+            ├─ renewal not completed before ``renew_by``
+            │  elapsed (Section 8.5)
+            │      ▼
+            │   PENDING_RENEWAL ──► VALID    (renewal completed)
+            │       │           ──► REVOKED  (admin revocation)
+            │       │           ──► EXPIRED  (now reaches notAfter;
+            │       │                        terminal)
+            │
+            └─ now reaches notAfter ─► EXPIRED  (terminal)
+
+The Certificate Management Service emits the time-based
+transitions ``PENDING → VALID`` (at ``notBefore``) and
+``VALID → EXPIRED`` (at ``notAfter``) as courtesy notifications
+when the wall clock crosses each boundary for a certificate it
+manages. Any client holding a current cert-status response MAY
+derive the same transitions locally from the certificate's
+``notBefore`` / ``notAfter`` fields without waiting for the
+published update.
 
 8.2. State Definitions
 ----------------------
@@ -997,22 +1343,35 @@ Section 8.4; it is not duplicated here.
    +------------------------+-----------------------------------------+
    | State                  | Meaning                                 |
    +========================+=========================================+
-   | ``UNKNOWN``            | PVACMS cannot determine status (e.g.    |
-   |                        | certificate serial unknown to PVACMS,   |
-   |                        | or status response not current).        |
+   | ``UNKNOWN``            | Cert-status authority cannot determine  |
+   |                        | current status (e.g. certificate serial |
+   |                        | unknown to the authority, no status yet |
+   |                        | received, or the last status response   |
+   |                        | is no longer current).                  |
    +------------------------+-----------------------------------------+
    | ``PENDING_APPROVAL``   | CCR submitted; awaiting administrator   |
    |                        | approval.                               |
    +------------------------+-----------------------------------------+
-   | ``PENDING``            | CCR approved; certificate generation    |
-   |                        | in progress (transient state).          |
+   | ``PENDING``            | Time-based status meaning               |
+   |                        | ``now < notBefore`` (and all other      |
+   |                        | conditions for ``VALID`` hold).         |
+   |                        | Certificate is issued and approved but  |
+   |                        | not yet cryptographically valid. The    |
+   |                        | cert-status authority emits this as a   |
+   |                        | courtesy; clients MAY derive it locally |
+   |                        | from the certificate.                   |
    +------------------------+-----------------------------------------+
-   | ``VALID``              | Certificate issued, in date, not        |
-   |                        | revoked.                                |
+   | ``VALID``              | Time-based status meaning               |
+   |                        | ``notBefore ≤ now < notAfter`` and the  |
+   |                        | certificate is not revoked, not         |
+   |                        | scheduled-offline, and not past-due for |
+   |                        | renewal.                                |
    +------------------------+-----------------------------------------+
-   | ``PENDING_RENEWAL``    | Time has crossed the per-certificate    |
-   |                        | ``renew_by`` (Section 8.5); renewal     |
-   |                        | requested.                              |
+   | ``PENDING_RENEWAL``    | Renewal date (``renew_by``) has passed  |
+   |                        | and the holder has not completed a      |
+   |                        | renewal; renewal required to return to  |
+   |                        | ``VALID`` (Section 8.5). Parallel to    |
+   |                        | ``PENDING_APPROVAL``.                   |
    +------------------------+-----------------------------------------+
    | ``EXPIRED``            | Validity period (``notAfter``) has      |
    |                        | passed. Terminal.                       |
@@ -1028,25 +1387,43 @@ Section 8.4; it is not duplicated here.
 
 Permitted transitions:
 
-- ``[no entry]`` → ``PENDING_APPROVAL`` (CCR submitted, requires
-  admin approval)
-- ``[no entry]`` → ``PENDING`` (CCR auto-approved by site policy)
-- ``PENDING_APPROVAL`` → ``PENDING`` (admin approval)
+- ``[no entry]`` → ``PENDING_APPROVAL`` (CCR submitted using the
+  default authenticator AND the matching site policy
+  ``cert_<usage>_require_approval`` is true)
 - ``PENDING_APPROVAL`` → ``REVOKED`` (admin denial)
-- ``PENDING`` → ``VALID`` (certificate generated and delivered)
-- ``VALID`` → ``REVOKED`` (admin revocation or CA policy
-  revocation)
-- ``VALID`` → ``SCHEDULED_OFFLINE`` (admin pause)
-- ``SCHEDULED_OFFLINE`` → ``VALID`` (admin resume)
+- ``PENDING_APPROVAL`` → ``PENDING`` | ``VALID`` | ``EXPIRED``
+  (admin approval; the Certificate Management Service publishes
+  whichever time-based status the cryptographic clock dictates at
+  the instant of approval — ``PENDING`` if ``now < notBefore``,
+  ``VALID`` if ``notBefore ≤ now < notAfter``, ``EXPIRED`` if
+  ``now ≥ notAfter``)
+- ``[no entry]`` → ``PENDING`` | ``VALID`` | ``EXPIRED``
+  (CCR issued without a ``PENDING_APPROVAL`` step: either a
+  non-default authenticator successfully verified the request,
+  or the default authenticator's matching
+  ``cert_<usage>_require_approval`` policy is false; the Service
+  publishes whichever time-based status the cryptographic clock
+  dictates at issuance per the rule above)
+- ``PENDING`` → ``VALID`` (auto, time-based, when ``now`` reaches
+  ``notBefore``; emitted by the Service as a courtesy and
+  derivable by any client holding the certificate)
+- ``VALID`` → ``REVOKED`` (admin revocation)
+- ``VALID`` → ``SCHEDULED_OFFLINE`` (scheduled pause; schedule may
+  be defined by the holder in the CCR or set/modified/removed by an
+  administrator)
+- ``SCHEDULED_OFFLINE`` → ``VALID`` (scheduled resume)
 - ``SCHEDULED_OFFLINE`` → ``REVOKED`` (admin revocation while
   paused)
-- ``VALID`` → ``PENDING_RENEWAL`` (auto, on time crossing
-  ``renew_by``)
+- ``VALID`` → ``PENDING_RENEWAL`` (auto, when the renewal date
+  ``renew_by`` has passed and the holder has not completed a
+  renewal)
 - ``PENDING_RENEWAL`` → ``VALID`` (renewal completed)
 - ``PENDING_RENEWAL`` → ``REVOKED`` (admin revocation while
   renewing)
-- ``VALID`` or ``PENDING_RENEWAL`` → ``EXPIRED`` (auto, on
-  ``notAfter``)
+- ``VALID``, ``PENDING_RENEWAL``, or ``SCHEDULED_OFFLINE`` →
+  ``EXPIRED`` (auto, time-based, when ``now`` reaches
+  ``notAfter``; emitted by the Certificate Management Service as
+  a courtesy and derivable by any client holding the certificate)
 
 8.4. Cert-Status to Connection-State Mapping
 --------------------------------------------
@@ -1065,16 +1442,18 @@ applies for the affected peer:
    |                        |             | proceeds normally.                        |
    +------------------------+-------------+-------------------------------------------+
    | ``SCHEDULED_OFFLINE``  | SUSPENDED   | TLS socket kept open; SPVA channel        |
-   |                        |             | operations are paused. Plain-TCP fallback |
-   |                        |             | (where negotiated) remains usable. The    |
-   |                        |             | connection upgrades to GOOD on transition |
-   |                        |             | to ``VALID`` or moves to BAD on           |
-   |                        |             | revocation/expiry.                        |
+   |                        |             | monitor delivery paused; ``GET`` MAY      |
+   |                        |             | continue; ``PUT`` and ``RPC`` MUST be     |
+   |                        |             | rejected. New secure channel admission is |
+   |                        |             | deferred until transition to ``VALID``.   |
+   |                        |             | Plain-TCP fallback (where negotiated)     |
+   |                        |             | remains usable.                           |
    +------------------------+-------------+-------------------------------------------+
    | ``PENDING_RENEWAL``    | SUSPENDED   | Same as ``SCHEDULED_OFFLINE``: TLS socket |
-   |                        |             | kept, channels paused, plain-TCP fallback |
-   |                        |             | usable. Resumes on the renewal completing |
-   |                        |             | (transition to ``VALID``).                |
+   |                        |             | kept, monitors paused, ``GET`` allowed,   |
+   |                        |             | ``PUT``/``RPC`` rejected, and new secure  |
+   |                        |             | channel admission deferred until renewal  |
+   |                        |             | completes (transition to ``VALID``).      |
    +------------------------+-------------+-------------------------------------------+
    | ``REVOKED``            | BAD         | Connection MUST be closed; the endpoint   |
    |                        |             | enters degraded mode and refuses further  |
@@ -1083,44 +1462,101 @@ applies for the affected peer:
    +------------------------+-------------+-------------------------------------------+
    | ``EXPIRED``            | BAD         | Same as ``REVOKED``.                      |
    +------------------------+-------------+-------------------------------------------+
-   | ``UNKNOWN``            | UNKNOWN     | TLS not yet ready; plain-TCP fallback     |
-   |                        |             | (where negotiated) remains usable. The    |
-   |                        |             | endpoint waits for a status update that   |
-   |                        |             | resolves to GOOD, SUSPENDED, or BAD.      |
+   | ``UNKNOWN``            | UNKNOWN     | Not terminal. Before secure admission,    |
+   |                        |             | TLS is not yet ready; plain-TCP fallback  |
+   |                        |             | (where negotiated) remains usable while   |
+   |                        |             | the endpoint waits for status to resolve  |
+   |                        |             | to GOOD. After TLS is already live, the   |
+   |                        |             | TLS socket is preserved and active secure |
+   |                        |             | operations are paused until fresh status  |
+   |                        |             | arrives.                                  |
    +------------------------+-------------+-------------------------------------------+
    | ``PENDING``            | UNKNOWN     | Same as ``UNKNOWN``.                      |
    +------------------------+-------------+-------------------------------------------+
-   | ``PENDING_APPROVAL``   | UNKNOWN     | Same as ``UNKNOWN``.                      |
+   | ``PENDING_APPROVAL``   | UNKNOWN     | Before initial secure admission, enter    |
+   |                        |             | ``TcpOnly`` and keep monitoring until the |
+   |                        |             | status becomes ``VALID``.                 |
    +------------------------+-------------+-------------------------------------------+
 
 A non-current cert-status response (``status_valid_until_date``
 in the past) MUST be treated as ``UNKNOWN`` regardless of the
 underlying ``status`` field.
 
+The ``SUSPENDED`` class has one operational meaning independent of
+whether the underlying cert-status is ``SCHEDULED_OFFLINE`` or
+``PENDING_RENEWAL``:
+
+- the TLS socket stays open;
+- existing monitor subscriptions remain installed but do not deliver
+  events until the status returns to ``GOOD``;
+- ``GET`` requests MAY continue;
+- ``PUT`` and ``RPC`` requests MUST fail while suspension is in
+  effect;
+- a new secure connection or channel setup MUST NOT advance to the
+  fully admitted state until the peer's cert-status returns to
+  ``GOOD``.
+
+The ``UNKNOWN`` class has a different operational meaning from both
+``SUSPENDED`` and ``BAD``:
+
+- it is recoverable and non-terminal; it MUST NOT by itself tear down
+  the TLS session;
+- before TLS has become ready, it means secure admission is still
+  pending. The endpoint waits for a fresh cert-status update that
+  resolves to ``GOOD``; if plain-TCP fallback is available, that
+  fallback MAY continue while waiting;
+- after TLS is already live, it means the last usable status has gone
+  stale. The endpoint keeps the TLS socket open and pauses active
+  secure operations until a fresh update arrives;
+- unlike ``SUSPENDED``, ``UNKNOWN`` does not assert that the
+  certificate has been deliberately paused or is past-due for renewal;
+  it says only that no current usable status decision is available.
+
 Status-class transitions take effect within an implementation-
 defined window of the cert-status update arriving at the endpoint.
 
-8.5. Renewal Hint (renew_by)
-----------------------------
+**Pre-Validated connection behaviour.** The table above describes
+steady-state behaviour for connections that have already completed
+secure channel admission. For connections still in the
+pre-Validated state (TLS handshake complete, secure channel
+admission not yet done), the give-up rule of Section 7.3.1
+applies:
 
-Each certificate carries a separate **renew_by** time published in
-the cert-status PVStructure (Section 7.2's ``renew_by`` field), set
-at issuance time by the chosen authenticator. ``renew_by`` is
-distinct from ``status_valid_until_date`` (which controls cert-
-status response freshness, Section 7.2) and from ``notAfter``
-(which is the cryptographic expiry, Section 4.7.1).
+- ``SUSPENDED`` class (own cert): the local TLS context enters
+  ``TcpOnly``. Any pre-Validated TLS connection waiting for
+  ``TlsReady`` SHALL be torn down; attached channels return to
+  the searching state and re-resolve over plain TCP.
+  ``reconnect_for_tls_when_ready`` is set so that recovery to
+  ``VALID`` triggers a re-search that can commit to TLS.
+- ``BAD`` class (own cert): the local TLS context enters
+  ``DegradedMode``. Any pre-Validated TLS connection SHALL be
+  torn down. Channels return to searching and connect over
+  plain TCP. Recovery requires a new certificate (explicit
+  reconfiguration).
+- ``SUSPENDED`` or ``UNKNOWN`` class (peer cert, pre-Validated):
+  the pre-Validated connection SHALL be torn down; the client
+  returns the channel to searching. The server drops the
+  connection. No waiting — the peer is known to be non-``GOOD``
+  and will not become ``GOOD`` on the same handshake.
+- ``BAD`` class (peer cert, pre-Validated): same as
+  ``SUSPENDED`` — the pre-Validated connection is torn down
+  immediately.
 
-When the current time crosses ``renew_by``, PVACMS transitions the
-certificate's status from ``VALID`` to ``PENDING_RENEWAL``. The
-certificate-holder SHOULD initiate a renewal Certificate Creation
-Request (Section 9.4) on receiving this transition. ``renew_by``
-is therefore a per-certificate, authenticator-set policy hint, not
-a fixed global threshold; an authenticator MAY set ``renew_by``
-equal to ``notAfter`` to suppress the renewal-hint mechanism for
-certificates that should not auto-renew.
+This pre-Validated give-up behaviour ensures that an endpoint does
+not wait indefinitely for a cert-status that cannot become
+``GOOD`` within the current connection attempt. The channel
+re-searches and connects over plain TCP; subsequent recovery is
+handled by Section 12.5.
 
-See Section 4.7.3 for the relationship between ``renew_by``,
-``notAfter``, and ``status_valid_until_date``.
+8.5. Renewal Cadence
+--------------------
+
+The renewal cadence — ``renew_by``, ``renewal_due``, and
+``PENDING_RENEWAL`` — is specified in Section 4.7.3. That section
+is the single authoritative definition for all three on-the-wire
+elements, the nominal and off-nominal sequences, and the
+disabling rules (``renew_by == 0``). The connection-state effect
+of ``PENDING_RENEWAL`` is the ``SUSPENDED`` class (Section 8.4).
 
 ----
 
@@ -1130,18 +1566,25 @@ See Section 4.7.3 for the relationship between ``renew_by``,
 9.1. CCR PVStructure Schema
 ---------------------------
 
-A Certificate Creation Request is submitted to PVACMS via PVA RPC
-(``CMD_RPC``, PVA Section 9.6) targeting the well-known PV name
+A Certificate Creation Request is submitted via PVA RPC
+(``CMD_RPC``, PVA Section 9.6) to the Certificate Management
+Service, targeting the well-known PV name
 ``<prefix>:CREATE[:<issuer_id>]`` (default prefix ``CERT``). The
 optional trailing ``:<issuer_id>`` selects a specific issuer in
-multi-issuer PVACMS deployments; without it the deployment's
-default issuer is used. The RPC's request value is a CCR
+multi-issuer deployments. Without it, the issuer is discovered by
+using the undistinguished ``<prefix>:CREATE`` RPC endpoint. In a
+single-issuer deployment this resolves to that issuer. In a
+multi-issuer deployment, all eligible Certificate Management Service
+instances may listen on the undistinguished endpoint, so selection is
+first-responder-wins and can select an unintended issuer. Clients
+that require a particular issuer SHOULD use the explicit
+``:<issuer_id>`` suffix. The RPC's request value is a CCR
 PVStructure:
 
 ::
 
     structure CCR
-        string             type             # authenticator: "std", "krb", or "ldap"
+        string             type             # authenticator plugin selector
         string             name             # principal name (CN of Subject)
         string             country          # 2-letter ISO country code
         string             organization     # O component of Subject
@@ -1168,7 +1611,12 @@ PVStructure:
             string         type             # "dns" or "ip"
             string         value            # DNS name or IP address
 
-The ``verifier`` sub-structure is per-authenticator (Section 6.2):
+The ``type`` field selects the Certificate Management Service
+authenticator plugin that verifies the CCR. Its value is an
+extensible string namespace, not a closed enum; future deployments MAY
+define additional values such as ``jwt``. The ``verifier``
+sub-structure is interpreted by the selected authenticator (Section
+6.2). The currently registered verifier forms are:
 
 - ``type = "std"``: ``verifier`` is empty.
 - ``type = "krb"``: ``verifier = { token: byte[], mic: byte[] }``
@@ -1177,6 +1625,19 @@ The ``verifier`` sub-structure is per-authenticator (Section 6.2):
   base64-encoded signature over the CCR contents, made with the
   principal's own private key after a successful LDAP bind has
   proved identity.
+
+For ``ldap``, the client-side authenticator performs the identity
+bootstrap before sending the CCR: it binds to LDAP as the named user,
+then reads or writes that user's well-known public-key attribute in
+the user's LDAP entry. The LDAP domain administrator must permit users
+to manage that attribute. The authenticator signs the canonical CCR
+payload with the corresponding private key and carries the signature
+in ``verifier.signature``. The Certificate Management Service-side
+LDAP verifier performs an anonymous/public LDAP lookup of the same
+user entry, retrieves the registered public key, and verifies the CCR
+signature against it. A successful verification proves that the CCR
+sender both authenticated to LDAP as that user when registering the
+key and currently holds the matching private key.
 
 9.2. CCR Submission
 -------------------
@@ -1187,17 +1648,21 @@ A CCR is submitted via:
 
     Channel<RPC>: <prefix>:CREATE[:<issuer_id>]
     Request: CCR PVStructure
-    Response: structure { string cert_pem; status }
+    Response: structure { ..., string cert, ... }
 
-On success, the response contains the PEM-encoded issued
-certificate. On failure, the response Status is ERROR or FATAL
-with a descriptive message.
+On success for a fresh issuance, the response contains the
+PEM-encoded issued certificate in ``cert``. On success for a
+renewal, the response omits ``cert`` and instead returns updated
+state for the existing certificate (including its serial number,
+state, status process variable name, expiration, and, when
+applicable, the updated ``renew_by``). On failure, the response
+Status is ERROR or FATAL with a descriptive message.
 
 9.3. CCR Authorization
 ----------------------
 
-PVACMS applies site-defined policy to decide whether to approve a
-CCR. The policy MAY:
+The Certificate Management Service applies site-defined policy to
+decide whether to approve a CCR. The policy MAY:
 
 - Auto-approve any CCR matching certain ``type``+``organization``
   combinations.
@@ -1207,32 +1672,54 @@ CCR. The policy MAY:
   ``CN=admin``).
 
 The authorization policy is OUT OF SCOPE of this specification; it
-is a deployment concern of PVACMS administrators.
+is a site deployment concern.
 
 9.4. Renewal CCR
 ----------------
 
 A renewal CCR is identical to a fresh CCR but the requested
-``name``, ``organization``, etc. match an existing certificate that
-is in ``VALID`` or ``PENDING_RENEWAL`` state. PVACMS detects this
-as a renewal and SHOULD auto-approve (assuming the requesting
-principal can prove possession of the prior private key — typically
-by signing the CCR itself).
+``name``, ``organization``, ``organization_unit``, and ``country``
+match an existing certificate. The Service detects renewal by
+finding an existing certificate row with the same Subject
+Distinguished Name fields, a different serial number, a status in
+the set ``VALID``, ``PENDING_APPROVAL``, ``PENDING``, or
+``PENDING_RENEWAL``, and ``renewal_due != 0``.
+
+When a CCR is handled as a renewal, the Service updates the
+existing certificate record instead of issuing a replacement
+certificate. Specifically:
+
+- if the existing certificate is in ``PENDING_RENEWAL``, the Service
+  returns it to ``VALID`` and updates ``renew_by``;
+- if the existing certificate is already in ``VALID``,
+  ``PENDING_APPROVAL``, or ``PENDING``, the Service updates
+  ``renew_by`` if the new authenticated horizon extends it;
+- the response reuses the existing certificate's serial number and
+  omits the ``cert`` field.
+
+Renewal does not re-enter the approval workflow. The existing
+certificate's approval state is preserved: an already-``VALID``
+certificate remains approved and returns to or stays in ``VALID``
+when the renewal verifier succeeds. This is not a separate
+auto-approval decision; approval is simply not required again for an
+existing approved certificate. A site that no longer accepts the
+certificate SHOULD revoke it through the Certificate Management
+Service's administrator operation.
 
 ----
 
-10. PVACMS Service
-==================
+10. Certificate Management Service
+==================================
 
-10.1. PVACMS as a PVA Server
-----------------------------
+10.1. Service as a PVA Server
+-----------------------------
 
-PVACMS runs as a PVA server. It exposes its functions through
-two distinct kinds of well-known PVs under a configurable
-PV-name prefix (default ``CERT``):
+The Certificate Management Service runs as a PVA server. It
+exposes its functions through two distinct kinds of well-known
+PVs under a configurable PV-name prefix (default ``CERT``):
 
 - **Operational PVs** — conventional readable / monitorable PVs
-  that publish PVACMS state. Clients access them with PVA's
+  that publish service state. Clients access them with PVA's
   ``CMD_GET`` and ``CMD_MONITOR``. These cover per-certificate
   status, service health, service metrics, the issuer
   certificate's metadata, and the root Certification Authority
@@ -1242,19 +1729,19 @@ PV-name prefix (default ``CERT``):
   configuration file rules; see Section 11).
 
 - **Action PVs** — RPC entry points (PVA ``CMD_RPC``) that
-  cause PVACMS to perform a privileged operation. These cover
-  certificate creation, admin approval of pending requests,
-  admin revocation, and scheduled-operation submission.
+  cause the Service to perform a privileged operation. These
+  cover certificate creation, admin approval of pending
+  requests, admin revocation, and scheduled-operation submission.
 
-PVACMS itself is an SPVA-secured server: clients connecting to
-PVACMS MUST use Transport Layer Security (TLS), and PVACMS's own
-server certificate MUST be issued by a trust anchor common to
+The Service is itself an SPVA-secured server: clients connecting
+to it MUST use Transport Layer Security (TLS), and the Service's
+own server certificate MUST be issued by a trust anchor common to
 all participating endpoints.
 
-10.2. PVACMS PV Namespace
--------------------------
+10.2. PV Namespace
+------------------
 
-.. table:: PVACMS well-known PVs (operational)
+.. table:: Well-known PVs (operational)
    :widths: auto
 
    +-------------------------------------+----------+--------------------------------+
@@ -1279,15 +1766,24 @@ all participating endpoints.
    |                                     |          | (request rates, error rates,   |
    |                                     |          | signing latencies).            |
    +-------------------------------------+----------+--------------------------------+
-   | ``<prefix>:ISSUER:<skid>``          | GET      | Issuer certificate metadata    |
+   | ``<prefix>:ISSUER[:<skid>]``        | GET      | Issuer certificate metadata    |
    |                                     |          | (Subject Distinguished Name,   |
    |                                     |          | validity, public-key digest,   |
    |                                     |          | full chain).                   |
    +-------------------------------------+----------+--------------------------------+
-   | ``<prefix>:ROOT:<skid>``            | GET      | Root CA certificate metadata.  |
+   | ``<prefix>:ROOT[:<skid>]``          | GET      | Root Certification Authority   |
+   |                                     |          | certificate metadata.          |
    +-------------------------------------+----------+--------------------------------+
 
-.. table:: PVACMS well-known PVs (action / RPC)
+For ``ISSUER``, ``ROOT``, and ``CREATE``, the optional trailing
+``:<skid>`` / ``:<issuer_id>`` selects a specific issuer. The
+unsuffixed names are discovery forms suitable for single-issuer
+deployments. In multi-issuer deployments, more than one Certificate
+Management Service instance may answer an unsuffixed name, making the
+result first-responder-wins. Clients that require a specific issuer
+SHOULD use the issuer-qualified form.
+
+.. table:: Well-known PVs (action / RPC)
    :widths: auto
 
    +-------------------------------------+----------+--------------------------------+
@@ -1296,69 +1792,45 @@ all participating endpoints.
    | ``<prefix>:CREATE``                 | RPC      | Submit a Certificate Creation  |
    |                                     |          | Request (Section 9). Open to   |
    |                                     |          | any client whose authenticator |
-   |                                     |          | the PVACMS recognises.         |
+   |                                     |          | the Service recognises.        |
    +-------------------------------------+----------+--------------------------------+
    | ``<prefix>:SCHEDULE``               | RPC      | Submit a scheduled-operation   |
    |                                     | (admin)  | request (e.g. scheduled        |
    |                                     |          | revocation).                   |
    +-------------------------------------+----------+--------------------------------+
    | ``<prefix>:APPROVE``                | RPC      | Approve a pending CCR (drives  |
-   |                                     | (admin)  | the ``PENDING_APPROVAL`` →     |
-   |                                     |          | ``PENDING`` state transition;  |
-   |                                     |          | see Section 8.3).              |
+   |                                     | (admin)  | the ``PENDING_APPROVAL`` exit  |
+   |                                     |          | to ``PENDING`` / ``VALID`` /   |
+   |                                     |          | ``EXPIRED`` per the            |
+   |                                     |          | cryptographic clock; see       |
+   |                                     |          | Section 8.3).                  |
    +-------------------------------------+----------+--------------------------------+
    | ``<prefix>:REVOKE``                 | RPC      | Revoke an issued certificate.  |
    |                                     | (admin)  |                                |
    +-------------------------------------+----------+--------------------------------+
 
-Admin RPCs are gated by EPICS access security rules that require
-the calling principal to be in the PVACMS administrators role
-(Section 11).
+Admin RPCs are gated by the Certificate Management Service's access-
+security rules. A calling principal is an administrator exactly when
+its authenticated connection matches the rule set the Service applies
+to those admin PVs (Section 11); there is no protocol-level
+administrator certificate type.
 
 The ``<prefix>:STATUS:<skid>:<serial>`` PV is implemented as a
 *wildcard PV* — a single server-side PV pattern that
 materialises one channel per actually-issued certificate, rather
 than a fixed set of pre-registered PVs. This allows the channel
 list to grow with the certificate population without redeploying
-PVACMS.
+the Service.
 
-10.3. PVACMS Identity
----------------------
+10.3. Service Identity
+----------------------
 
-PVACMS itself has an X.509 server certificate, issued by the same
-CA chain as the endpoint certificates it issues. PVACMS's
-certificate's Subject DN typically has CN matching ``pvacms`` or
-the deployment's chosen service name; clients SHOULD verify that
-the PVACMS they connect to has the expected DN before submitting
-CCRs.
-
-10.4. PVACMS Cluster Mode
--------------------------
-
-A site MAY deploy PVACMS as a cluster of servers sharing the same
-CA-signing private key (or operating as a hot-standby). Cluster
-membership is OUT OF SCOPE of this specification; clients see only
-"PVACMS" as a single logical service. In cluster deployments,
-clients SHOULD discover the active PVACMS endpoint via DNS round-
-robin or an explicit service-discovery mechanism.
-
-10.5. PVACMS Certificate Authority Operations
----------------------------------------------
-
-PVACMS performs these CA operations on every approved CCR:
-
-1. Verify the requesting principal's identity via the CCR's
-   ``verifier`` (authenticator-specific).
-2. Generate a fresh certificate serial number (typically a 128-bit
-   random integer).
-3. Construct an X.509 certificate body matching the CCR's
-   ``name`` / ``organization`` / etc., with validity per site
-   policy (capped at the requested ``not_after``).
-4. Sign the certificate with PVACMS's CA private key.
-5. Insert the certificate's status entry into the PVACMS database
-   with state ``VALID``.
-6. Return the PEM-encoded certificate to the client in the CCR
-   response.
+The Certificate Management Service has an X.509 server
+certificate, issued by the same CA chain as the endpoint
+certificates it issues. The Service's certificate Subject DN
+carries a CN identifying the deployment's service name; clients
+SHOULD verify that the Service they connect to presents the
+expected DN before submitting CCRs.
 
 ----
 
@@ -1418,6 +1890,18 @@ The peer certificate's issuer SKID and serial are kept in the
 endpoint runtime for cert-status monitoring (Section 7) but are
 NOT exposed to the authorization layer.
 
+An *administrator* is not identified by any intrinsic certificate
+bit, extension, or dedicated protocol role. For the Certificate
+Management Service's admin PVs, administrator status is purely an
+authorization outcome: the peer presents a keychain whose
+certificate-backed connection matches the Service's access-security
+rule set for those PVs. A common rule set matches ``method =
+"x509"``, ``isTLS = true``, the ``account`` field (typically the
+certificate Subject CN), and one or more ``authority`` values from
+the certificate chain back to a shared trust anchor. However, the
+Service MAY define any rule set it chooses; the protocol does not
+mandate a particular administrator-matching policy.
+
 11.2. ACL Change Notification
 -----------------------------
 
@@ -1464,6 +1948,138 @@ A client MAY send searches with ``protocols = ["tls"]`` (no
 ``"tcp"`` fallback). Servers that cannot speak TLS will silently
 ignore the search; the client will only connect to SPVA-capable
 servers.
+
+12.4. TLS Search-Reply Filter
+------------------------------
+
+A ``CMD_SEARCH_RESPONSE`` carries exactly one protocol per reply
+(``"tls"`` or ``"tcp"``; there is no per-reply fallback). When a
+client receives a search reply with ``protocol = "tls"`` and the
+client's own local TLS context state is ``TcpOnly`` or
+``DegradedMode`` (the client has already given up on TLS for its
+own certificate; Section 7.3.1), the client SHALL discard the
+entire reply. The channel remains in the searching state; the
+next search cycle will emit a search listing only ``["tcp"]``
+(because the TLS context is no longer ready) and the server will
+respond with ``protocol = "tcp"``.
+
+This filter closes a race where a delayed TLS search reply arrives
+after the client's give-up handler has returned a channel to the
+searching state. Without the filter, the stale reply would
+re-commit the channel to TLS, trigger give-up again, and repeat
+until the in-flight reply drains.
+
+12.5. Per-Peer Status Memory and Search Partitioning
+----------------------------------------------------
+
+An implementation SHOULD maintain a process-wide, in-memory cache
+of peer certificate status (a "peer status store") to avoid
+repeated TLS handshake failures to the same non-``GOOD`` peer.
+
+**Store population.** Whenever a connection (client or server)
+receives a fresh peer cert-status delivery via the per-connection
+status subscription (Section 7.3), the endpoint records the peer
+certificate identity (issuer + serial) and the delivered status
+class in the process-wide store. The entry's expiration is the
+cert-status response's ``status_valid_until_date`` — the
+PVACMS-signed freshness boundary. When
+``status_valid_until_date`` passes, the entry expires and is
+removed on the next lookup.
+
+**Store population at handshake completion.** The store also
+records an auxiliary binding from the server's PVA GUID (present
+in the ``CMD_SEARCH_RESPONSE``; Section 12.1 of the PVA spec) to
+the peer certificate identity. This binding is populated at TLS
+handshake completion, once the peer certificate is available.
+
+**Client search-reply filter (peer cert).** When a client
+processes a ``CMD_SEARCH_RESPONSE`` with ``protocol = "tls"``,
+it SHOULD consult the peer status store using the reply's server
+GUID (via the GUID-to-peer-cert auxiliary map). If a current
+non-``GOOD`` entry exists for the peer, the client SHALL discard
+the reply. Before discarding, the client records the reply's GUID
+on the channel so that subsequent search cycles can partition
+the channel into the TCP-only bucket (Section 12.5.1). The
+channel remains in the searching state.
+
+**Server handshake-completion filter.** When a server's TLS
+handshake completes and the peer certificate is available, the
+server SHOULD consult the peer status store by the peer
+certificate identity. If a current non-``GOOD`` entry exists, the
+server SHALL reject the connection immediately (close the TCP
+socket). The peer client's symmetric store lookup will have
+recorded the non-``GOOD`` entry, so the peer client's next search
+cycle will list ``["tcp"]`` only for this channel and the server
+will respond with ``protocol = "tcp"``.
+
+12.5.1. Per-Channel Search Protocol Partitioning
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A ``CMD_SEARCH`` packet carries a process-wide protocol list
+(``["tls", "tcp"]`` or ``["tcp"]``) that applies to all channels
+in the packet. An implementation SHOULD partition channels into
+sub-buckets based on the peer status store so that channels
+targeting known non-``GOOD`` peers emit searches with
+``["tcp"]`` only:
+
+- For each channel in the searching state, the implementation
+  consults the peer status store using the channel's last-known
+  server GUID (recorded on the channel at search-reply time).
+  If the lookup returns a current non-``GOOD`` entry, the channel
+  is placed in a TCP-only sub-bucket; otherwise it remains in
+  the default sub-bucket.
+- The implementation emits one search packet for the default
+  sub-bucket (with the process-wide protocol list, typically
+  ``["tls", "tcp"]``) and one search packet for the TCP-only
+  sub-bucket (with ``["tcp"]``). Either packet is omitted if
+  its sub-bucket is empty.
+
+This partitioning ensures that a channel known to target a
+non-``GOOD`` peer stops emitting ``"tls"`` in its searches. The
+server responds with ``protocol = "tcp"`` and the channel commits
+to TCP without a wasted TLS handshake or discarded reply.
+
+Channels with no last-known GUID (first contact) are placed in
+the default sub-bucket. The first contact with a non-``GOOD``
+peer costs one wasted search round-trip; from the second search
+cycle onward the channel is correctly partitioned.
+
+When a peer's status recovers to ``GOOD`` (the store entry is
+overwritten by a fresh ``GOOD`` delivery or expires), the next
+search cycle automatically returns the channel to the default
+sub-bucket — no explicit reset is required.
+
+12.5.2. Active Upgrade on Peer Recovery
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When the peer status store observes a transition from a
+non-``GOOD`` class to ``GOOD`` for a peer certificate (detected
+by comparing the prior store entry's class against the new
+delivery's class), the implementation SHOULD tear down all
+existing plain-TCP connections to that peer. The tear-down
+returns attached channels to the searching state; the next search
+cycle places them in the default sub-bucket (because the store
+now holds ``GOOD``), the search lists ``["tls", "tcp"]``, and
+the server responds with ``protocol = "tls"``. The channels
+commit to TLS.
+
+This active-upgrade mechanism requires that at least one TLS
+connection to the recovering peer exists (so that a peer cert-
+status subscription is alive and delivering updates to the store).
+If no TLS connection exists to the peer (all channels were
+TCP-downgraded), the store entry sits until its
+``status_valid_until_date`` expires, at which point the next
+search cycle returns the channel to the default sub-bucket and
+the normal search/reply flow re-evaluates the peer. Recovery in
+this case is bounded by the OCSP validity period (typically
+minutes to hours, configurable in the Certificate Management
+Service).
+
+The active-upgrade tear-down MUST NOT tear down TLS connections.
+It applies only to plain-TCP connections whose peer certificate
+identity matches the recovered peer. This invariant ensures that
+the delivering TLS connection (whose subscription triggered the
+recovery notification) is not self-destructed.
 
 ----
 
@@ -1555,9 +2171,31 @@ A transition into the BAD class MUST cause connection close
 (clean TLS close or TCP RST). The closing party MAY include a
 TLS Alert ``certificate_revoked`` (:rfc:`8446`) before the close.
 
-A transition into the SUSPENDED or UNKNOWN class MUST NOT close
-the underlying TLS socket; channel operations are paused per
-Section 8.4 until the next transition.
+A transition into the ``UNKNOWN`` class before a secure connection is
+fully admitted keeps TLS not-ready and MAY leave plain-TCP fallback in
+service if it was negotiated. A transition into ``UNKNOWN`` after a
+TLS session is already live MUST NOT close the underlying TLS socket;
+the runtime treats the condition as recoverable and pauses active
+secure operations until a fresh cert-status update arrives.
+
+15.2.1. Pre-Validated Give-Up
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A pre-Validated TLS connection (TLS handshake complete, secure
+channel admission not yet done) that receives an authoritative
+cert-status delivery resolving to any class other than ``GOOD``
+(for either its own or the peer's certificate) SHALL abandon the
+TLS attempt per Section 7.3.1. The abandoning endpoint tears
+down the TLS connection and returns attached channels to the
+searching state. The endpoint SHOULD log the give-up at WARN
+level.
+
+The give-up applies once per connection attempt. The channels
+re-search and MAY commit to plain TCP on the next search reply.
+If the peer status store (Section 12.5) is populated, subsequent
+search cycles avoid re-attempting TLS to the same non-``GOOD``
+peer until the store entry expires or is overwritten by a
+``GOOD`` delivery.
 
 15.3. CCR Failures
 ------------------
@@ -1618,15 +2256,16 @@ SPVA does NOT defend against:
   ``REVOKED`` and the revocation reaches the affected peer (within
   one cert-status validity window, Section 4.7.2).
 - CA compromise.
-- Insider attacks at PVACMS (a malicious operator can issue
-  certificates).
-- Denial-of-service against PVACMS. PVACMS unavailability prevents
-  fresh cert-status updates; existing GOOD-class connections
-  continue with cached cert-status until ``status_valid_until_date``
-  expires, after which they transition to UNKNOWN class (Section
-  8.4); new connections involving certificates with the
-  ``SPvaCertStatusURI`` extension cannot acquire an initial
-  cert-status update and proceed in the UNKNOWN class.
+- Insider attacks at the Certificate Management Service (a
+  malicious operator can issue certificates).
+- Denial-of-service against the Certificate Management Service.
+  Service unavailability prevents fresh cert-status updates;
+  existing GOOD-class connections continue with cached cert-status
+  until ``status_valid_until_date`` expires, after which they
+  transition to UNKNOWN class (Section 8.4); new connections
+  involving certificates with the ``SPvaCertStatusURI`` extension
+  cannot acquire an initial cert-status update and proceed in the
+  UNKNOWN class.
 
 17.2. Cipher Suites
 -------------------
@@ -1647,9 +2286,9 @@ Session resumption is also not supported (Section 3.7).
 -------------------------
 
 The cert-status PV name pattern (``<prefix>:STATUS:<issuer-skid>:<cert-serial>``;
-Section 7.1) allows any party with PVACMS access to enumerate
-live certificates. Sites with stricter privacy needs SHOULD
-restrict cert-status PV access via authorization rules
+Section 7.1) allows any party with Certificate Management Service
+access to enumerate live certificates. Sites with stricter privacy
+needs SHOULD restrict cert-status PV access via authorization rules
 (Section 11).
 
 17.5. Side-Channel Considerations
@@ -1726,11 +2365,14 @@ IANA-registered to the EPICS community.
   July 2014. (For potential future ALPN use.)
 - **pvxs implementation** — https://github.com/slac-epics/pvxs;
   in particular the SPVA-specific code under ``src/secure/`` and
-  the TLS-related fields of ``ConfigCommon``. Consulted in
+  the TLS-related fields of
+  :doc:`pvxs::impl::ConfigCommon </maintainer-docs/api-reference-pvxs-configcommon>`.
+  Consulted in
   preparing this specification.
 - **pvxs-cms implementation** — https://github.com/slac-epics/pvxs-cms;
   in particular ``src/common/certstatus.h`` (the cert-status
-  PVStructure schema), ``src/common/certfactory.h`` (the
+  PVStructure schema),
+  :doc:`cms::cert::CertFactory </maintainer-docs/api-reference-pvxs-cms-certfactory>` (the
   certificate-issuance code path), and ``src/pvacms/opensslgbl.h``
   (the custom Object Identifier definitions referenced in
   Section 4.3). Consulted in preparing this specification.

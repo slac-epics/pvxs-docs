@@ -98,9 +98,17 @@ States: ``Init``, ``TcpOnly``, ``TcpReady``, ``TlsReady``, ``DegradedMode``.
   established). Plain TCP only; TLS is not advertised or accepted. The certificate status
   monitor remains active so the context upgrades automatically to ``TlsReady`` when
   the certificate becomes ``VALID``.
-- ``TcpReady``: certificate was previously ``GOOD`` (``TlsReady``) but the most recent status
-  update returned ``UNKNOWN``. TCP connections still accepted while monitoring waits for
-  status to recover.
+- ``TcpReady``: the **optimistic bootstrap state**. Entered when no cached cert-status is
+  available and the entity certificate's status defaults to ``UNKNOWN``. TCP connections
+  are accepted and TLS handshakes are permitted to proceed, but post-handshake admission
+  gates wait for cert-status to resolve. If the first authoritative cert-status delivery
+  is ``VALID``, the context graduates to ``TlsReady`` and the channel completes over TLS
+  (zero added latency). If the first delivery is non-``GOOD`` (``SUSPENDED``, ``BAD``, or
+  ``UNKNOWN``-class), the context transitions to ``TcpOnly`` or ``DegradedMode`` and any
+  pre-Validated TLS connections are torn down — channels return to searching and re-resolve
+  over plain TCP (the **give-up rule**; see :ref:`spva_protocol_spec` Section 7.3.1).
+  ``TcpReady`` is also entered when a previously-``TlsReady`` context's status becomes
+  ``UNKNOWN`` (e.g. PVACMS momentarily unreachable).
 - ``TlsReady``: certificate status is ``GOOD``; both TCP and TLS protocol requests are served.
 - ``DegradedMode``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Only TCP
   is permitted. The certificate monitor is stopped.
@@ -133,7 +141,8 @@ Status classes (internal grouping of PVACMS status values):
 - ``SUSPENDED``: certificate is temporarily non-operational but expected to recover.
   Covers ``SCHEDULED_OFFLINE`` (certificate is in a scheduled offline window) and
   ``PENDING_RENEWAL`` (certificate has passed its renewal date and a renewal is in flight).
-  Existing connections are maintained; new connections wait for recovery. See
+  Existing TLS connections are maintained; contexts that have not yet established TLS enter
+  ``TcpOnly`` and keep monitoring for recovery. See
   :ref:`suspended_cert_status`.
 - ``BAD``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Connection is
   torn down immediately; no recovery.
@@ -197,11 +206,31 @@ monitor their own entity certificate and their peer's entity certificate.
 Status response handling:
 
 - Status not yet received (``UNKNOWN``): search requests are ignored; the client retries later.
+- Status ``PENDING_APPROVAL``: if TLS is not yet established, the context enters ``TcpOnly``
+  and keeps monitoring until approval transitions the certificate to ``VALID``.
 - Status ``BAD`` (``REVOKED`` / ``EXPIRED``): the server offers only TCP; the client tears down
   the connection immediately.
 - Status ``SUSPENDED`` (``SCHEDULED_OFFLINE`` / ``PENDING_RENEWAL``): the connection layer
   enters a holding state — see :ref:`suspended_cert_status`.
 - Status ``GOOD`` (``VALID``): the server offers both TCP and TLS; the connection proceeds.
+
+**Pre-Validated connection give-up.** When a TLS connection has completed the handshake but
+has not yet completed secure channel admission (the "pre-Validated" state), the first
+authoritative cert-status delivery for either the local cert or the peer cert drives a
+deterministic exit:
+
+- ``GOOD``: the admission gate releases and the channel completes over TLS (happy path).
+- ``SUSPENDED`` / ``UNKNOWN`` class (own cert): the context enters ``TcpOnly``; all
+  pre-Validated TLS connections are torn down. Channels return to searching and
+  re-resolve over TCP.
+- ``BAD`` class (own cert): the context enters ``DegradedMode``; all pre-Validated TLS
+  connections are torn down. Channels fall back to TCP.
+- ``SUSPENDED`` / ``UNKNOWN`` / ``BAD`` class (peer cert): the specific pre-Validated
+  connection is torn down. The client returns the channel to searching; the server drops
+  the connection.
+
+This ensures no pre-Validated TLS connection waits indefinitely for a status that will not
+become ``GOOD`` on the current connection attempt.
 
 .. _suspended_cert_status:
 
@@ -211,9 +240,9 @@ SUSPENDED Certificate Status
 The ``SUSPENDED`` status class covers two certificate states that are temporarily
 non-operational but are expected to become ``VALID`` again automatically:
 
-- **``SCHEDULED_OFFLINE``**: the certificate is within a configured offline schedule window
+- ``SCHEDULED_OFFLINE``: the certificate is within a configured offline schedule window
   (see :ref:`validity_schedules`). The certificate will return to ``VALID`` when the window ends.
-- **``PENDING_RENEWAL``**: the certificate has passed its ``renew_by`` date and a renewal is
+- ``PENDING_RENEWAL``: the certificate has passed its ``renew_by`` date and a renewal is
   in flight. The certificate will return to ``VALID`` once the renewed certificate is issued.
 
 Unlike ``BAD`` (which causes immediate disconnection), ``SUSPENDED`` puts the connection layer
@@ -229,9 +258,60 @@ into a holding state:
   and TLS advertising resumes.
 
 ``SUSPENDED`` is distinct from ``BAD`` because the offline state is time-bounded and
-operator-intended. TCP fallback is not offered for ``SCHEDULED_OFFLINE``: a peer that
-knows a certificate will be back online should wait for it rather than silently downgrade
-to an unauthenticated connection.
+operator-intended. During initial connection establishment, a ``SCHEDULED_OFFLINE`` status
+places the context in ``TcpOnly`` so plain-TCP traffic can continue while status monitoring
+waits for the certificate to return to ``VALID``.
+
+.. _peer_status_store:
+
+Peer Status Store (Well-Behaved Peer Pattern)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+pvxs maintains a **process-wide, in-memory peer status store** that records peer certificate
+status across connection lifetimes. This prevents the "groundhog day" problem where a
+process repeatedly attempts TLS handshakes to a peer whose certificate is known to be
+non-``GOOD``, only to give up and fall back to TCP each time.
+
+**How it works:**
+
+- Every peer cert-status delivery (from the per-connection ``SSLPeerStatusAndMonitor``
+  subscription) updates the store with the peer's certificate identity and status class.
+- The store is keyed by peer certificate identity (issuer + serial) and maintains an
+  auxiliary GUID-to-peer-cert-identity map for search-reply filtering.
+- Entries expire when their ``status_valid_until_date`` passes (PVACMS-signed freshness;
+  no hardcoded TTL). On expiry the entry is removed and the next attempt is allowed to
+  proceed with TLS normally.
+
+**Consumers:**
+
+1. **Client search-reply filter:** when a ``CMD_SEARCH_RESPONSE`` arrives with
+   ``protocol = "tls"``, the client consults the store by the server's GUID. If a
+   current non-``GOOD`` entry exists, the reply is discarded. The channel remains in
+   searching and the server GUID is recorded on the channel for search partitioning.
+2. **Per-channel search partitioning:** ``tickSearch`` partitions searching channels into
+   a default sub-bucket (``["tls", "tcp"]``) and a TCP-only sub-bucket (``["tcp"]``) based
+   on the store. Channels whose last-known server GUID maps to a non-``GOOD`` entry are
+   placed in the TCP-only sub-bucket.
+3. **Server/client handshake-completion filter:** at TLS handshake completion, before
+   subscribing to peer status, the endpoint consults the store by the peer cert identity.
+   If a current non-``GOOD`` entry exists, the connection is rejected immediately.
+
+**Active upgrade on recovery:** when the store observes a transition from non-``GOOD``
+to ``GOOD`` for a peer (detected by comparing the prior entry's class against the new
+delivery), a recovery observer is fired. Each ``ContextImpl`` (client) and ``Server::Pvt``
+(server) registers a recovery observer that walks its connection map, finds every plain-TCP
+connection to the recovered peer, and tears it down. Channels return to searching, the next
+search cycle places them in the default sub-bucket, and they commit to TLS.
+
+If no TLS connection to the peer exists (all channels were TCP-downgraded), recovery falls
+back to the existing OCSP ``status_valid_until_date`` expiry: the entry expires, the next
+search cycle returns the channel to the default sub-bucket, and the normal search/reply
+flow re-evaluates the peer.
+
+The store is implemented as a Meyers singleton (``PeerStatusStore::instance()``), using a
+function-local static to comply with the pvxs rule against global constructors. It uses
+``epicsMutex`` per the pvxs concurrency idiom. The store is in-memory only; process restart
+wipes it and costs one wasted TLS handshake per peer to re-learn.
 
 .. _status_caching:
 

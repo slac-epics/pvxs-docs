@@ -1,27 +1,25 @@
 .. _maintainer_docs:
 
-Source-Code Maintainer Documentation
-====================================
+EPICS API Reference
+===================
 
-For contributors and maintainers of pvxs (C++), pvxs-cms, and the
-phoebus Java PVA implementation. Will cover architecture overviews,
-build internals, contributing guidelines, and design notes.
+Cross-repository API reference for pvxs (C++), pvxs-cms, epics-base,
+and the phoebus Java PVA implementation. This section combines
+generated symbol documentation with hand-authored orientation material.
 
 .. toctree::
    :maxdepth: 2
 
-   pvxs-overview
+   api-reference-epics-base
+   api-reference-pvxs
+   api-reference-pvxs-cms
 
 .. note::
 
-   Additional content lands in follow-up
-   ``pvxs-docs-maintainer-content``. The page above is a demonstration
-   of the Doxygen + Breathe pipeline introduced by
-   ``pvxs-docs-api-extraction-pipeline``; it is not full content. Until
-   the content change lands, see the per-repo design notes — for example,
+   Coverage is still expanding. Until follow-up API-reference content
+   lands, see the per-repo design notes — for example,
    ``pvxs/DESIGN-PVACMS-CLUSTER.md`` and ``phoebus/core/pva/TLS.md``.
 
 .. seealso::
 
    :doc:`/shared/spvaglossary` — definitions of SPVA terms used across pvxs documentation.
-

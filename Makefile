@@ -1,14 +1,14 @@
 # Makefile — SPVA Documentation Build
 #
 # Builds Sphinx HTML documentation from RST sources, with optional
-# Doxygen extraction of C++ API reference from sibling repos
-# (../../pvxs and ../../pvxs-cms relative to documentation/).
+# Doxygen extraction of C/C++ API reference from sibling repos
+# (../../epics-base, ../../pvxs, and ../../pvxs-cms relative to documentation/).
 #
 # Targets:
 #   make            — full build (mermaid + doxygen + sphinx)
 #   make html       — sphinx only (skip mermaid + doxygen)
 #   make mermaid    — regenerate mermaid diagrams only
-#   make doxygen    — run Doxygen for both sibling repos (xml/ + tag file)
+#   make doxygen    — run Doxygen for all sibling repos (xml/ + tag file)
 #   make clean      — remove build artifacts
 #   make serve      — build and serve locally on port 8000
 #
@@ -16,7 +16,7 @@
 #   pip install sphinx breathe furo sphinx-reredirects
 #   npm install -g @mermaid-js/mermaid-cli   (or use npx)
 #   doxygen (1.9.x apt-get on linux, 1.10.x brew on macOS)
-#   sibling clones ../../pvxs (branch tls) and ../../pvxs-cms (branch main)
+#   sibling clones ../../epics-base, ../../pvxs (branch tls), and ../../pvxs-cms (branch main)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -29,7 +29,7 @@ OUTPUT_DIR   ?= ../pvxs-pages
 DIAGRAM_DIR  := $(DOC_DIR)/diagram_specs
 SERVE_PORT   ?= 8000
 
-SPHINXOPTS   := -j auto -E
+SPHINXOPTS   := -j 1 -E
 
 # Mermaid
 MMDC         := $(shell command -v mmdc 2>/dev/null)
@@ -64,22 +64,30 @@ $(DOC_DIR)/%.png: $(DIAGRAM_DIR)/%.mmd
 	@rm -f $(PUPPETEER_CFG)
 
 # ---------------------------------------------------------------------------
-# Doxygen — C++ API extraction from sibling repos
+# Doxygen — C/C++ API extraction from sibling repos
 # ---------------------------------------------------------------------------
 #
 # Two runs share documentation/Doxyfile (the bulk of the configuration) and
 # layer on per-project overrides from documentation/Doxyfile-pvxs.local
-# and documentation/Doxyfile-pvxs-cms.local. The shared file's INPUT,
+# documentation/Doxyfile-pvxs-cms.local, and documentation/Doxyfile-epics-base.local.
+# The shared file's INPUT,
 # XML_OUTPUT, GENERATE_TAGFILE, and PROJECT_NAME are intentionally empty;
 # the per-run file fills them in. Output:
 #   documentation/xml/pvxs/         (Breathe project: PVXS — default)
 #   documentation/xml/pvxs-cms/     (Breathe project: PVXS_CMS)
-#   documentation/pvxs-docs.tag     (concatenation of the two per-project tags)
+#   documentation/xml/epics-base/   (Breathe project: EPICS_BASE)
+#   documentation/pvxs-docs.tag     (concatenation of the three per-project tags)
 
-.PHONY: doxygen doxygen-pvxs doxygen-pvxs-cms
-doxygen: doxygen-pvxs doxygen-pvxs-cms
+.PHONY: doxygen doxygen-epics-base doxygen-pvxs doxygen-pvxs-cms
+doxygen: doxygen-epics-base doxygen-pvxs doxygen-pvxs-cms
 	@printf '\033[1;34m==>\033[0m Concatenating tag files\n'
-	@cd $(DOC_DIR) && cat pvxs-docs-pvxs.tag pvxs-docs-pvxs-cms.tag > pvxs-docs.tag
+	@cd $(DOC_DIR) && cat pvxs-docs-epics-base.tag pvxs-docs-pvxs.tag pvxs-docs-pvxs-cms.tag > pvxs-docs.tag
+
+doxygen-epics-base:
+	@test -d ../epics-base || (echo "ERROR: sibling ../epics-base not present. Clone slac-epics/epics-base into the workspace (a sibling of pvxs-docs) before running doxygen." && false)
+	@printf '\033[1;34m==>\033[0m Doxygen run: epics-base\n'
+	@mkdir -p $(DOC_DIR)/xml
+	@cd $(DOC_DIR) && cat Doxyfile Doxyfile-epics-base.local | doxygen -
 
 doxygen-pvxs:
 	@test -d ../pvxs || (echo "ERROR: sibling ../pvxs not present. Clone slac-epics/pvxs branch tls into the workspace (a sibling of pvxs-docs) before running doxygen." && false)
@@ -154,7 +162,7 @@ help:
 	@echo "  all      (default) Build mermaid + Doxygen + Sphinx HTML"
 	@echo "  html     Build Sphinx HTML only (skip mermaid + Doxygen)"
 	@echo "  mermaid  Regenerate Mermaid diagrams only"
-	@echo "  doxygen  Run Doxygen for both sibling repos (xml/ + tag file)"
+	@echo "  doxygen  Run Doxygen for all sibling repos (xml/ + tag file)"
 	@echo "  clean    Remove build output"
 	@echo "  serve    Build and serve locally on port $(SERVE_PORT)"
 	@echo "  help     Show this message"

@@ -103,6 +103,9 @@ If you want a prepackaged environment, try the following.  You will need two ter
     | PVACMS [2535f0b8] Service Running     |
     +=======================================+=======================================
 
+The ``30m`` and ``6M`` values in the effective configuration use the
+shared :ref:`duration_strings` syntax.
+
 |2| Run Tools
 ----------------------
 
@@ -408,7 +411,7 @@ For MacOS
 .. code-block:: shell
 
     cd ${PROJECT_HOME}
-    git clone --branch 7.0-secure-pvaccess https://github.com/george-mcintyre/epics-base.git
+    git clone --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls.git epics-base
     cd epics-base
 
     make -j10 all
@@ -434,7 +437,7 @@ For MacOS
     PVXS_ENABLE_PVACMS = YES
     EOF
 
-    git clone --recursive  --branch tls https://github.com/george-mcintyre/pvxs.git
+    git clone --recursive --branch tls https://github.com/slac-epics/pvxs-tls.git pvxs
     cd pvxs
 
     make -j10 all
@@ -584,6 +587,9 @@ For MacOS
     +---------------------------------------+---------------------------------------
     | PVACMS [2535f0b8] Service Running     |
     +=======================================+=======================================
+
+The ``30m`` and ``6M`` values in the effective configuration use the
+shared :ref:`duration_strings` syntax.
 
 .. note::
 

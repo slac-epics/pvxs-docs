@@ -176,12 +176,8 @@ Common Environment Variables for all Authenticators
 +--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
 | Name                                       | Keys and Values                    | Description                                                           |
 +============================================+====================================+=======================================================================+
-|| EPICS_PVA_AUTH_CERT_VALIDITY_MIN          || <number of minutes>               || Amount of minutes before the certificate expires.                    |
-||                                           || e.g. ``1y`` for 1 year            || e.g. 1d or 1y 2w 1d or 24h                                           |
-||                                           ||                                   || Where:                                                               |
-||                                           ||                                   ||   1y = 365 days                                                      |
-||                                           ||                                   ||   1M = 30 days                                                       |
-||                                           ||                                   ||   1w = 7 days                                                        |
+|| EPICS_PVA_AUTH_CERT_VALIDITY_MINS         || <duration string>                 || Requested certificate duration; see :ref:`duration_strings`.         |
+||                                           || e.g. ``30``, ``1d``, ``1y6M``     || A plain number means minutes.                                        |
 +--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
 || EPICS_PVA_AUTH_NAME                       || {name to use}                     || Name to use in new certificates                                      |
 ||                                           || e.g. ``archiver``                 ||                                                                      |
@@ -286,7 +282,7 @@ Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine th
       (-o | --organization) <organization>       Specify organisation name for the certificate. Default <hostname>
             --ou <org-unit>                      Specify organisational unit for the certificate. Default <blank>
       (-c | --country) <country>                 Specify country for the certificate. Default locale setting if detectable otherwise `US`
-      (-t | --time) <minutes>                    Duration of the certificate in minutes.  e.g. 30 or 1d or 1y3M2d4m
+      (-t | --time) <duration>                   Duration of the certificate. e.g. 30 or 1d or 1y3M2d4m
             --san <type=value>                   Subject Alternative Name entry (repeatable, e.g. ip=10.0.0.1 or dns=ioc01.example.com)
             --server-san <type=value>            Server SAN entry (repeatable, for ioc usage)
             --schedule <day,HH:MM,HH:MM>         Validity schedule window (repeatable). day=0-6 (Sun-Sat) or *. Times are UTC
@@ -299,6 +295,8 @@ Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine th
       (-i | --issuer) <issuer_id>                 The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening
       (-v | --verbose)                            Verbose mode
       (-d | --debug)                              Debug mode
+
+The ``-t`` / ``--time`` value accepts :ref:`duration_strings`.
 
 
 **Examples**
@@ -561,12 +559,12 @@ or client processes.
 
 The design avoids this by decoupling the two lifetimes:
 
-- The **certificate ``not_after``** (hard expiry) is set to the PVACMS configured
+- The certificate ``not_after`` (hard expiry) is set to the PVACMS configured
   default (``EPICS_PVACMS_CERT_VALIDITY``, default 6 months). This is the outer
   bound on the certificate's life; connections remain valid as long as the
   certificate is ``VALID``, regardless of ticket state.
 
-- The **certificate ``renew_by``** is capped by PVACMS to ``now + remaining_ticket_lifetime``
+- The certificate ``renew_by`` is capped by PVACMS to ``now + remaining_ticket_lifetime``
   at issuance time. This is the soft deadline: the certificate enters
   ``PENDING_RENEWAL`` if a renewal CCR has not arrived by this date.
 
@@ -785,18 +783,12 @@ the connection. The SPVA design addresses this with two complementary mechanisms
 Specifying Certificate Duration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-All authenticators accept a ``-t`` / ``--time`` flag (or ``EPICS_AUTH_CERT_VALIDITY_MINS``
-environment variable) to request a specific validity period. Duration strings use
-combined components:
-
-- ``y`` — years, ``M`` — months, ``w`` — weeks, ``d`` — days,
-  ``h`` — hours, ``m`` — minutes, ``s`` — seconds
-
-Examples: ``30`` (minutes), ``1d``, ``6M``, ``1y6M``, ``2y3M15d``.
-
-Duration calculations account for daylight saving, leap years, and calendar
-boundaries. PVACMS may override the requested duration if a default or maximum
-is configured (see below).
+All authenticators accept a ``-t`` / ``--time`` flag, and the shared
+``EPICS_PVA_AUTH_CERT_VALIDITY_MINS`` environment variable, to request a
+specific validity period. These inputs accept :ref:`duration_strings`;
+for example ``30`` (minutes), ``1d``, ``6M``, ``1y6M``, or
+``2y3M15d``. PVACMS may override the requested duration if a default or
+maximum is configured (see below).
 
 PVACMS can set default validity and prevent clients from requesting custom
 durations:
@@ -807,13 +799,13 @@ durations:
 
    * - CLI flag
      - Environment variable
-   * - ``--cert-validity <duration>``
+   * - ``--cert_validity <duration>``
      - ``EPICS_PVACMS_CERT_VALIDITY``
-   * - ``--cert-validity-client <duration>``
+   * - ``--cert_validity-client <duration>``
      - ``EPICS_PVACMS_CERT_VALIDITY_CLIENT``
-   * - ``--cert-validity-server <duration>``
+   * - ``--cert_validity-server <duration>``
      - ``EPICS_PVACMS_CERT_VALIDITY_SERVER``
-   * - ``--cert-validity-ioc <duration>``
+   * - ``--cert_validity-ioc <duration>``
      - ``EPICS_PVACMS_CERT_VALIDITY_IOC``
    * - ``--disallow-custom-durations``
      - ``EPICS_PVACMS_DISALLOW_CUSTOM_DURATION=YES``
@@ -897,7 +889,7 @@ Key properties of renewal:
 - The ``renew_by`` date is extended to ``now + new_authenticated_lifetime``.
 - For Kerberos, this tracks the new ticket's remaining lifetime.
 - For standard authenticator, prior-approval is inherited automatically (see
-  :ref:`authnstd_prior_approval`).
+  :ref:`Prior-approval inheritance <authnstd_prior_approval>`).
 - Multiple successive renewals are supported; there is no limit on renewal count.
 
 .. _authnkrb_lifetime:

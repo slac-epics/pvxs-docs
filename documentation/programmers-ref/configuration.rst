@@ -93,8 +93,11 @@ The following environment variables control SPVA behavior.
 API Configuration Options
 -------------------------
 
-The following configuration options are available in both `pvxs::server::Config` and `pvxs::client::Config`
-via their public base class `pvxs::impl::ConfigCommon`:
+The following configuration options are available in both
+:doc:`pvxs::server::Config </maintainer-docs/api-reference-pvxs-server-config>` and
+:doc:`pvxs::client::Config </maintainer-docs/api-reference-pvxs-client-config>`
+via their public base class
+:doc:`pvxs::impl::ConfigCommon </maintainer-docs/api-reference-pvxs-configcommon>`:
 
 - `pvxs::impl::ConfigCommon::expiration_behaviour` - Set certificate expiration behavior
 - `pvxs::impl::ConfigCommon::tls_keychain_file` - Set keychain file path

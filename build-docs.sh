@@ -3,7 +3,7 @@
 # build-docs.sh — Build PVXS HTML documentation from RST sources
 #
 # Generates Mermaid diagrams, runs Doxygen (cross-repo C++ API extraction)
-# against the sibling pvxs and pvxs-cms checkouts, converts SVGs, then runs
+# against the sibling epics-base, pvxs, and pvxs-cms checkouts, converts SVGs, then runs
 # Sphinx to compile the RST files into HTML. The Doxygen step produces XML
 # consumed by Breathe directives in authored RST pages plus a tag file
 # (pvxs-docs.tag) published at the site root for external cross-linking.
@@ -14,7 +14,7 @@
 #   brew install inkscape doxygen        # SVG conversion + Doxygen
 #   pip install sphinx breathe furo sphinx-reredirects
 #   npm install -g @mermaid-js/mermaid-cli   # OR: npx will fetch it on the fly
-#   sibling clones at ../pvxs (branch tls) and ../pvxs-cms (branch main)
+#   sibling clones at ../epics-base, ../pvxs (branch tls), and ../pvxs-cms (branch main)
 #
 # Usage:
 #   ./build-docs.sh            # full build (mermaid + doxygen + inkscape + sphinx)
@@ -95,7 +95,7 @@ if ${DO_CLEAN}; then
     rm -rf "${DOC_DIR}/_build"
     rm -rf "${DOC_DIR}/_image"
     rm -rf "${DOC_DIR}/xml"
-    rm -f "${DOC_DIR}/pvxs-docs.tag" "${DOC_DIR}/pvxs-docs-pvxs.tag" "${DOC_DIR}/pvxs-docs-pvxs-cms.tag"
+    rm -f "${DOC_DIR}/pvxs-docs.tag" "${DOC_DIR}/pvxs-docs-epics-base.tag" "${DOC_DIR}/pvxs-docs-pvxs.tag" "${DOC_DIR}/pvxs-docs-pvxs-cms.tag"
 fi
 
 # ---------------------------------------------------------------------------
@@ -136,15 +136,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 2 — Doxygen extraction from sibling pvxs and pvxs-cms checkouts
+# Step 2 — Doxygen extraction from sibling epics-base, pvxs, and pvxs-cms checkouts
 # ---------------------------------------------------------------------------
 
 if ${DO_DOXYGEN}; then
     if require_cmd doxygen; then
-        if [ -d "${SCRIPT_DIR}/../pvxs" ] && [ -d "${SCRIPT_DIR}/../pvxs-cms" ]; then
+        if [ -d "${SCRIPT_DIR}/../epics-base" ] && [ -d "${SCRIPT_DIR}/../pvxs" ] && [ -d "${SCRIPT_DIR}/../pvxs-cms" ]; then
             info "Running Doxygen (cross-repo C++ API extraction)"
 
             mkdir -p "${DOC_DIR}/xml"
+
+            info "  epics-base (../epics-base)"
+            (cd "${DOC_DIR}" && cat Doxyfile Doxyfile-epics-base.local | doxygen -)
 
             info "  pvxs (../pvxs)"
             (cd "${DOC_DIR}" && cat Doxyfile Doxyfile-pvxs.local | doxygen -)
@@ -153,9 +156,9 @@ if ${DO_DOXYGEN}; then
             (cd "${DOC_DIR}" && cat Doxyfile Doxyfile-pvxs-cms.local | doxygen -)
 
             info "  Concatenating tag files into pvxs-docs.tag"
-            (cd "${DOC_DIR}" && cat pvxs-docs-pvxs.tag pvxs-docs-pvxs-cms.tag > pvxs-docs.tag)
+            (cd "${DOC_DIR}" && cat pvxs-docs-epics-base.tag pvxs-docs-pvxs.tag pvxs-docs-pvxs-cms.tag > pvxs-docs.tag)
         else
-            warn "Sibling repos not present (../pvxs and/or ../pvxs-cms) — skipping Doxygen."
+            warn "Sibling repos not present (../epics-base and/or ../pvxs and/or ../pvxs-cms) — skipping Doxygen."
             warn "Maintainer-manual API-reference pages will render with empty Breathe directives."
         fi
     else
@@ -208,13 +211,13 @@ fi
 mkdir -p "${OUTPUT_DIR}"
 
 # Run Sphinx.
-# • -j auto        — parallel build
+# • -j 1           — single-process build for deterministic Breathe behavior
 # • -b html        — HTML builder
 # • -W is omitted  — Breathe warnings (from missing Doxygen XML) are non-fatal
 # • -D breathe_projects.PVXS=  — point Breathe at empty string so it warns
 #   rather than erroring on missing xml/ dir
 "${PYTHON}" -m sphinx \
-    -j auto \
+    -j 1 \
     -b html \
     -E \
     "${DOC_DIR}" \
