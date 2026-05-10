@@ -1,0 +1,22 @@
+{
+  "spva": "programmers-ref/spva-tls.html",
+  "spvaauth": "programmers-ref/spva-authentication.html",
+  "spvaauthorization": "programmers-ref/spva-authorization.html",
+  "spvacerts": "programmers-ref/spva-cert-management-protocol.html",
+  "configuration": "programmers-ref/configuration.html",
+  "appendix": "programmers-ref/expert-api.html",
+  "programmers-building": "programmers-ref/building.html",
+  "programmers-applications": "programmers-ref/applications.html",
+  "programmers-authenticator-plugins": "programmers-ref/authenticator-plugins.html",
+  "programmers-performance": "programmers-ref/performance.html",
+  "pvacms": "user-manual/pvacms.html",
+  "cli": "user-manual/cli.html",
+  "operation": "user-manual/operation.html",
+  "interoperability": "user-manual/interoperability.html",
+  "spvaqstart": "user-manual/spvaqstart.html",
+  "spvaqstartstd": "user-manual/spvaqstartstd.html",
+  "spvaqstartkrb": "user-manual/spvaqstartkrb.html",
+  "spvaqstartldap": "user-manual/spvaqstartldap.html",
+  "spvaqsgw": "user-manual/spvaqsgw.html",
+  "spvaglossary": "shared/spvaglossary.html"
+}

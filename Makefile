@@ -48,9 +48,48 @@ PUPPETEER_CFG := $(shell mktemp)
 # ---------------------------------------------------------------------------
 # Default target
 # ---------------------------------------------------------------------------
+#
+# `make all` (default) builds BOTH variants into $(OUTPUT_DIR)/release and
+# $(OUTPUT_DIR)/dev, plus a tiny root-level index.html meta-refresh stub
+# pointing at /release/ so the combined OUTPUT_DIR is browsable directly
+# (matching the deployed gh-pages site shape).
+#
+# `make release` and `make dev` build a single variant into
+# $(OUTPUT_DIR)/<variant>; they're used independently by CI.
 
 .PHONY: all
-all: mermaid doxygen html
+all: release dev combined-root
+
+.PHONY: release
+release:
+	@$(MAKE) html-variant VARIANT=release
+
+.PHONY: dev
+dev:
+	@$(MAKE) html-variant VARIANT=dev
+
+# Internal target — do not invoke directly.
+.PHONY: html-variant
+html-variant: mermaid doxygen
+	@$(MAKE) html \
+	    SOURCEDIR=$(DOC_DIR)/$(VARIANT) \
+	    OUTPUT_DIR=$(OUTPUT_DIR)/$(VARIANT) \
+	    DOCS_VARIANT_OVERRIDE=$(VARIANT)
+
+# When invoked via `make release` / `make dev`, the html target inherits
+# DOCS_VARIANT_OVERRIDE; otherwise it falls through to whatever DOCS_VARIANT
+# the user set in their env.
+ifdef DOCS_VARIANT_OVERRIDE
+export DOCS_VARIANT := $(DOCS_VARIANT_OVERRIDE)
+endif
+
+# Root-level index.html meta-refresh stub so opening $(OUTPUT_DIR)/index.html
+# (or http://localhost:$(SERVE_PORT)/) lands on /release/.
+.PHONY: combined-root
+combined-root:
+	@mkdir -p $(OUTPUT_DIR)
+	@printf '<!DOCTYPE html><meta http-equiv="refresh" content="0; url=release/">\n' > $(OUTPUT_DIR)/index.html
+	@printf '\033[1;34m==>\033[0m Wrote combined root meta-refresh: %s/index.html → release/\n' "$(OUTPUT_DIR)"
 
 # ---------------------------------------------------------------------------
 # Mermaid diagram generation
@@ -179,13 +218,16 @@ help:
 	@echo "SPVA Documentation Build"
 	@echo ""
 	@echo "Targets:"
-	@echo "  all      (default) Build mermaid + Doxygen + Sphinx HTML"
-	@echo "  html     Build Sphinx HTML only (skip mermaid + Doxygen)"
-	@echo "  mermaid  Regenerate Mermaid diagrams only"
-	@echo "  doxygen  Run Doxygen for all sibling repos (xml/ + tag file)"
-	@echo "  clean    Remove build output"
-	@echo "  serve    Build and serve locally on port $(SERVE_PORT)"
-	@echo "  help     Show this message"
+	@echo "  all       (default) Build BOTH variants into release/ + dev/ + root index.html"
+	@echo "  release   Build release variant into \$$(OUTPUT_DIR)/release/"
+	@echo "  dev       Build dev variant     into \$$(OUTPUT_DIR)/dev/"
+	@echo "  html      Build Sphinx HTML only against \$$(SOURCEDIR) → \$$(OUTPUT_DIR)"
+	@echo "             (default SOURCEDIR=documentation/release; set DOCS_VARIANT to flag the build)"
+	@echo "  mermaid   Regenerate Mermaid diagrams (per-variant _images/)"
+	@echo "  doxygen   Run Doxygen for all sibling repos (xml/ + tag file)"
+	@echo "  clean     Remove build output"
+	@echo "  serve     Build all and serve locally on port $(SERVE_PORT)"
+	@echo "  help      Show this message"
 	@echo ""
 	@echo "Variables:"
 	@echo "  OUTPUT_DIR   Output directory (default: ../pvxs-pages)"

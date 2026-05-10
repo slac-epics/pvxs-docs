@@ -1,0 +1,31 @@
+.pvxs-version-switcher {
+    margin-top: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+}
+
+.pvxs-version-switcher .pvxs-version-label {
+    color: var(--color-sidebar-brand-text, #888);
+    font-weight: 400;
+    user-select: none;
+}
+
+.pvxs-version-switcher select {
+    flex: 1;
+    padding: 0.125rem 0.375rem;
+    font: inherit;
+    color: var(--color-sidebar-brand-text, inherit);
+    background: var(--color-sidebar-background, transparent);
+    border: 1px solid var(--color-sidebar-search-border, rgba(128, 128, 128, 0.35));
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+
+.pvxs-version-switcher select:hover,
+.pvxs-version-switcher select:focus {
+    border-color: var(--color-brand-primary, #2962ff);
+    outline: none;
+}
