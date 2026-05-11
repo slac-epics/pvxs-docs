@@ -39,30 +39,6 @@ mutual-authentication handshakes, and its status is monitored against
 PVACMS for the lifetime of the connection (see
 :ref:`certificate_status_message`).
 
-Renewing from ``PENDING_RENEWAL``
----------------------------------
-
-If a certificate reaches ``PENDING_RENEWAL``, the holder can still
-recover it by submitting a renewal Certificate Creation Request
-again. On success, PVACMS updates the existing certificate record,
-returns the cert-status to ``VALID``, and the connection-state class
-returns from ``SUSPENDED`` to ``GOOD``.
-
-There is one important transport rule when performing that renewal
-directly: the renewal Certificate Creation Request must be sent
-without Transport Layer Security (TLS). While the certificate is in
-``PENDING_RENEWAL``, the secure connection using that certificate is
-in the ``SUSPENDED`` class, and that suspended state can prevent the
-renewal request from getting through if it is sent over the same
-secure path.
-
-The authenticator helper tools handle this for you. The shared CCR
-path used by ``authnstd`` and the other ``authnXXX`` tools disables
-TLS automatically before sending the Certificate Creation Request
-(``pvxs-cms/src/authn/ccrmanager.cpp`` sets ``tls_disabled = true``),
-so renewal from ``PENDING_RENEWAL`` works without any extra manual
-transport override when those tools are used.
-
 PVACMS-specific behaviour
 -------------------------
 

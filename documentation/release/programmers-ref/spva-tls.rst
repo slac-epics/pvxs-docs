@@ -68,8 +68,8 @@ depth is limited to 5 levels. The ALPN protocol identifier is ``pva/1``.
 An agent uses TLS if a certificate, trust anchor, and private key are present at the path given by
 ``EPICS_PVA_TLS_KEYCHAIN``. Default paths:
 
-- ``~/.config/pva/1.5/client.p12`` for clients
-- ``~/.config/pva/1.5/server.p12`` for servers
+- ``~/.config/pva/1.4/client.p12`` for clients
+- ``~/.config/pva/1.4/server.p12`` for servers
 
 For server-only authenticated TLS:
 
@@ -90,25 +90,10 @@ State Machines
 
 *Server TLS Context State Machine:*
 
-States: ``Init``, ``TcpOnly``, ``TcpReady``, ``TlsReady``, ``DegradedMode``.
+States: ``Init``, ``TlsReady``, ``DegradedMode``.
 
-- ``Init``: initial state; loads and validates certificates.
-- ``TcpOnly``: certificate exists but is not yet operationally usable (e.g. ``PENDING``,
-  ``PENDING_APPROVAL``, ``SCHEDULED_OFFLINE``, or ``PENDING_RENEWAL`` before TLS was ever
-  established). Plain TCP only; TLS is not advertised or accepted. The certificate status
-  monitor remains active so the context upgrades automatically to ``TlsReady`` when
-  the certificate becomes ``VALID``.
-- ``TcpReady``: the **optimistic bootstrap state**. Entered when no cached cert-status is
-  available and the entity certificate's status defaults to ``UNKNOWN``. TCP connections
-  are accepted and TLS handshakes are permitted to proceed, but post-handshake admission
-  gates wait for cert-status to resolve. If the first authoritative cert-status delivery
-  is ``VALID``, the context graduates to ``TlsReady`` and the channel completes over TLS
-  (zero added latency). If the first delivery is non-``GOOD`` (``SUSPENDED``, ``BAD``, or
-  ``UNKNOWN``-class), the context transitions to ``TcpOnly`` or ``DegradedMode`` and any
-  pre-Validated TLS connections are torn down — channels return to searching and re-resolve
-  over plain TCP (the **give-up rule**; see :ref:`spva_protocol_spec` Section 7.3.1).
-  ``TcpReady`` is also entered when a previously-``TlsReady`` context's status becomes
-  ``UNKNOWN`` (e.g. PVACMS momentarily unreachable).
+- ``Init``: initial state; loads and validates certificates. The context remains in ``Init``
+  until cert-status resolution completes.
 - ``TlsReady``: certificate status is ``GOOD``; both TCP and TLS protocol requests are served.
 - ``DegradedMode``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Only TCP
   is permitted. The certificate monitor is stopped.
@@ -121,9 +106,9 @@ Transitions are driven by certificate validity, status monitoring results, and :
 
 *Client TLS Context State Machine:*
 
-States are the same as the server (``Init``, ``TcpOnly``, ``TcpReady``, ``TlsReady``,
-``DegradedMode``). The client never exits on TLS configuration issues; trust anchor validation
-and certificate status govern initial transitions.
+States are the same as the server (``Init``, ``TlsReady``, ``DegradedMode``). The client never
+exits on TLS configuration issues; trust anchor validation and certificate status govern
+initial transitions.
 
 .. image:: /_images/spva_client_tls_context.png
    :alt: SPVA Client TLS Context State Machine
@@ -138,12 +123,6 @@ Status classes (internal grouping of PVACMS status values):
 - ``UNKNOWN``: status not yet received or indeterminate. Connections wait; operations are
   not yet permitted.
 - ``GOOD``: certificate status is ``VALID``. TLS proceeds normally.
-- ``SUSPENDED``: certificate is temporarily non-operational but expected to recover.
-  Covers ``SCHEDULED_OFFLINE`` (certificate is in a scheduled offline window) and
-  ``PENDING_RENEWAL`` (certificate has passed its renewal date and a renewal is in flight).
-  Existing TLS connections are maintained; contexts that have not yet established TLS enter
-  ``TcpOnly`` and keep monitoring for recovery. See
-  :ref:`suspended_cert_status`.
 - ``BAD``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Connection is
   torn down immediately; no recovery.
 
@@ -161,7 +140,7 @@ Transitions are driven by status updates from :ref:`pvacms` and PVACMS availabil
    peer. This avoids burning PVACMS channels on certificates that cannot recover.
 
 Certificate status values from PVACMS: ``UNKNOWN``, ``VALID``, ``PENDING``, ``PENDING_APPROVAL``,
-``PENDING_RENEWAL``, ``SCHEDULED_OFFLINE``, ``EXPIRED``, ``REVOKED``.
+``EXPIRED``, ``REVOKED``.
 OCSP status values: ``GOOD``, ``REVOKED``, ``UNKNOWN``.
 
 .. image:: /_images/spva_peer_certificate_status.png
@@ -206,12 +185,8 @@ monitor their own entity certificate and their peer's entity certificate.
 Status response handling:
 
 - Status not yet received (``UNKNOWN``): search requests are ignored; the client retries later.
-- Status ``PENDING_APPROVAL``: if TLS is not yet established, the context enters ``TcpOnly``
-  and keeps monitoring until approval transitions the certificate to ``VALID``.
 - Status ``BAD`` (``REVOKED`` / ``EXPIRED``): the server offers only TCP; the client tears down
   the connection immediately.
-- Status ``SUSPENDED`` (``SCHEDULED_OFFLINE`` / ``PENDING_RENEWAL``): the connection layer
-  enters a holding state — see :ref:`suspended_cert_status`.
 - Status ``GOOD`` (``VALID``): the server offers both TCP and TLS; the connection proceeds.
 
 **Pre-Validated connection give-up.** When a TLS connection has completed the handshake but
@@ -220,139 +195,24 @@ authoritative cert-status delivery for either the local cert or the peer cert dr
 deterministic exit:
 
 - ``GOOD``: the admission gate releases and the channel completes over TLS (happy path).
-- ``SUSPENDED`` / ``UNKNOWN`` class (own cert): the context enters ``TcpOnly``; all
-  pre-Validated TLS connections are torn down. Channels return to searching and
-  re-resolve over TCP.
 - ``BAD`` class (own cert): the context enters ``DegradedMode``; all pre-Validated TLS
   connections are torn down. Channels fall back to TCP.
-- ``SUSPENDED`` / ``UNKNOWN`` / ``BAD`` class (peer cert): the specific pre-Validated
-  connection is torn down. The client returns the channel to searching; the server drops
-  the connection.
+- ``BAD`` class (peer cert): the specific pre-Validated connection is torn down. The client
+  returns the channel to searching; the server drops the connection.
 
 This ensures no pre-Validated TLS connection waits indefinitely for a status that will not
 become ``GOOD`` on the current connection attempt.
-
-.. _suspended_cert_status:
-
-SUSPENDED Certificate Status
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The ``SUSPENDED`` status class covers two certificate states that are temporarily
-non-operational but are expected to become ``VALID`` again automatically:
-
-- ``SCHEDULED_OFFLINE``: the certificate is within a configured offline schedule window
-  (see :ref:`validity_schedules`). The certificate will return to ``VALID`` when the window ends.
-- ``PENDING_RENEWAL``: the certificate has passed its ``renew_by`` date and a renewal is
-  in flight. The certificate will return to ``VALID`` once the renewed certificate is issued.
-
-Unlike ``BAD`` (which causes immediate disconnection), ``SUSPENDED`` puts the connection layer
-into a holding state:
-
-- **If TLS was already established** (``TlsReady`` context): the TLS socket stays open.
-  Existing ``GET``/``PUT``/``RPC`` operations receive a ``SUSPENDED`` error; monitors are
-  paused. When the certificate transitions back to ``VALID``, operations resume automatically
-  with no reconnect and no new TLS handshake.
-- **If TLS was not yet established** (``Init`` / ``TcpOnly`` / ``TcpReady`` context): the
-  context enters ``TcpOnly`` so plain-TCP connections are not blocked, but TLS is not
-  advertised. When the certificate returns to ``VALID``, the context upgrades to ``TlsReady``
-  and TLS advertising resumes.
-
-``SUSPENDED`` is distinct from ``BAD`` because the offline state is time-bounded and
-operator-intended. During initial connection establishment, a ``SCHEDULED_OFFLINE`` status
-places the context in ``TcpOnly`` so plain-TCP traffic can continue while status monitoring
-waits for the certificate to return to ``VALID``.
-
-.. _peer_status_store:
-
-Peer Status Store (Well-Behaved Peer Pattern)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-pvxs maintains a **process-wide, in-memory peer status store** that records peer certificate
-status across connection lifetimes. This prevents the "groundhog day" problem where a
-process repeatedly attempts TLS handshakes to a peer whose certificate is known to be
-non-``GOOD``, only to give up and fall back to TCP each time.
-
-**How it works:**
-
-- Every peer cert-status delivery (from the per-connection ``SSLPeerStatusAndMonitor``
-  subscription) updates the store with the peer's certificate identity and status class.
-- The store is keyed by peer certificate identity (issuer + serial) and maintains an
-  auxiliary GUID-to-peer-cert-identity map for search-reply filtering.
-- Entries expire when their ``status_valid_until_date`` passes (PVACMS-signed freshness;
-  no hardcoded TTL). On expiry the entry is removed and the next attempt is allowed to
-  proceed with TLS normally.
-
-**Consumers:**
-
-1. **Client search-reply filter:** when a ``CMD_SEARCH_RESPONSE`` arrives with
-   ``protocol = "tls"``, the client consults the store by the server's GUID. If a
-   current non-``GOOD`` entry exists, the reply is discarded. The channel remains in
-   searching and the server GUID is recorded on the channel for search partitioning.
-2. **Per-channel search partitioning:** ``tickSearch`` partitions searching channels into
-   a default sub-bucket (``["tls", "tcp"]``) and a TCP-only sub-bucket (``["tcp"]``) based
-   on the store. Channels whose last-known server GUID maps to a non-``GOOD`` entry are
-   placed in the TCP-only sub-bucket.
-3. **Server/client handshake-completion filter:** at TLS handshake completion, before
-   subscribing to peer status, the endpoint consults the store by the peer cert identity.
-   If a current non-``GOOD`` entry exists, the connection is rejected immediately.
-
-**Active upgrade on recovery:** when the store observes a transition from non-``GOOD``
-to ``GOOD`` for a peer (detected by comparing the prior entry's class against the new
-delivery), a recovery observer is fired. Each ``ContextImpl`` (client) and ``Server::Pvt``
-(server) registers a recovery observer that walks its connection map, finds every plain-TCP
-connection to the recovered peer, and tears it down. Channels return to searching, the next
-search cycle places them in the default sub-bucket, and they commit to TLS.
-
-If no TLS connection to the peer exists (all channels were TCP-downgraded), recovery falls
-back to the existing OCSP ``status_valid_until_date`` expiry: the entry expires, the next
-search cycle returns the channel to the default sub-bucket, and the normal search/reply
-flow re-evaluates the peer.
-
-The store is implemented as a Meyers singleton (``PeerStatusStore::instance()``), using a
-function-local static to comply with the pvxs rule against global constructors. It uses
-``epicsMutex`` per the pvxs concurrency idiom. The store is in-memory only; process restart
-wipes it and costs one wasted TLS handshake per peer to re-learn.
 
 .. _status_caching:
 
 Status Caching
 ^^^^^^^^^^^^^^
 
-Certificate status is cached at two levels: in-memory and on disk.
-
-**In-memory caching** — Agents subscribe to peer certificate status via :ref:`pvacms`.  Status
-transitions trigger connection re-evaluation.  The most recent status is held in memory for the
-lifetime of the subscription and reused within its validity period.  Servers staple their cached
-status during the TLS handshake; clients may consume stapled status in lieu of an initial
-:ref:`pvacms` request.
-
-**Disk caching** — Signed OCSP responses are persisted to disk so that certificate status is
-available immediately on process restart, eliminating the cold-start window where status would
-otherwise be ``UNKNOWN`` until the first PV subscription update arrives from :ref:`pvacms`.
-
-On ``subscribe()``, the ``CertStatusManager`` checks for a cached OCSP response file.  If one
-exists, the signed response is loaded, verified against the trusted store, and — if still
-current — delivered to the callback immediately.  The PV subscription is still established to
-receive future updates.  On each subscription update, the new signed OCSP response bytes are
-written to the cache file using atomic write (temp file + ``rename()``) to prevent partial reads.
-
-Cache files are stored as individual ``<cert_id>.ocsp`` files (one per certificate, ~2 KB each)
-under the XDG data directory:
-
-.. code-block:: text
-
-    ${XDG_DATA_HOME}/pva/1.5/status_cache/
-    (typically ~/.local/share/pva/1.5/status_cache/)
-
-Cache files are cryptographically self-validating — a corrupted or tampered file simply fails
-OCSP verification and is discarded.  Expired cache files are deleted on load.  The cache
-directory is created with owner-only permissions (``0700``) on first write.  Advisory file
-locking ensures safe concurrent access from multiple processes sharing the same directory.
-
-Configuration (see :ref:`environment_variables`):
-
-- ``EPICS_PVA_STATUS_CACHE_DIR`` — override the default cache directory path.
-- ``EPICS_PVA_NO_STATUS_CACHE=YES`` — disable disk caching entirely.
+Agents subscribe to peer certificate status via :ref:`pvacms`. Status transitions trigger
+connection re-evaluation. The most recent status is held in memory for the lifetime of the
+subscription and reused within its validity period. Servers staple their cached status during
+the TLS handshake; clients may consume stapled status in lieu of an initial :ref:`pvacms`
+request.
 
 In non-OpenSSL builds, all cache operations are no-ops.
 
@@ -390,7 +250,6 @@ Debug Logging
 Debug log categories:
 
 - ``pvxs.certs.auth``          - Authenticators
-- ``pvxs.certs.cache``         - OCSP Status Disk Cache
 - ``pvxs.auth.cfg``            - Authn configuration
 - ``pvxs.auth.cms``            - CMS
 - ``pvxs.auth.krb``            - Kerberos Authenticator
@@ -422,7 +281,7 @@ Keychain-File Storage
 
 Keychain file paths follow the `XDG_CONFIG_HOME <https://specifications.freedesktop.org/basedir-spec/latest/>`_
 standard. When ``XDG_CONFIG_HOME`` is unset, it defaults to ``~/.config``. The full default path is
-``~/.config/pva/1.5/``, with ``client.p12`` for clients and ``server.p12`` for servers.
+``~/.config/pva/1.4/``, with ``client.p12`` for clients and ``server.p12`` for servers.
 
 Each keychain file contains the certificate, private key, and CA chain including the root certificate.
 Files are protected with mode ``400``. The agent reconfigures automatically on certificate updates.

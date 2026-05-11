@@ -41,7 +41,7 @@ keychain:
 
 .. code-block:: shell
 
-   export EPICS_PVA_TLS_KEYCHAIN=$HOME/.config/pva/1.5/client.p12
+   export EPICS_PVA_TLS_KEYCHAIN=$HOME/.config/pva/1.4/client.p12
    export EPICS_PVA_ADDR_LIST="pvacms-host ioc-host"
    export EPICS_PVA_AUTO_ADDR_LIST=NO
 
@@ -85,7 +85,7 @@ For secure operation the process needs a server keychain:
 
 .. code-block:: shell
 
-   export EPICS_PVAS_TLS_KEYCHAIN=$HOME/.config/pva/1.5/server.p12
+   export EPICS_PVAS_TLS_KEYCHAIN=$HOME/.config/pva/1.4/server.p12
    export EPICS_PVAS_TLS_OPTIONS="client_cert=require"
 
 Set ``client_cert=optional`` only when the server intentionally supports
@@ -150,9 +150,8 @@ Monitoring certificate status
 -----------------------------
 
 Most applications should let pvxs manage certificate status internally.
-The connection layer subscribes to status process variables, caches signed
-status responses on disk, and reacts to ``VALID``, ``UNKNOWN``,
-``SUSPENDED``, and ``BAD`` status classes as described in
+The connection layer subscribes to status process variables and reacts
+to ``VALID``, ``UNKNOWN``, and ``BAD`` status classes as described in
 :doc:`spva-tls`.
 
 Applications that need operator visibility should expose their own health

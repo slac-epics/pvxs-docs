@@ -9,7 +9,7 @@
 
   The set of extensions to the PVAccess protocol that add TLS 1.3 transport
   encryption, mutual X.509 certificate authentication, certificate lifecycle
-  management (via PVACMS), and fine-grained access control (via SAG/METHOD/AUTHORITY
+  management (via PVACMS), and fine-grained access control (via METHOD/AUTHORITY
   ACF predicates). SPVA is the umbrella term for the combination of pvxs TLS
   transport, pvxs-cms certificate authority tools, and EPICS Base access-security
   extensions described in this documentation.
@@ -121,8 +121,8 @@
 
   A PVAccess channel published by PVACMS for each managed certificate, named
   ``CERT:STATUS:<issuer_id>:<serial>``. Clients and servers subscribe to this
-  PV to receive live certificate status updates (``VALID``, ``PENDING_RENEWAL``,
-  ``SCHEDULED_OFFLINE``, ``REVOKED``, etc.) and the ``renewal_due`` hint.
+  PV to receive live certificate status updates (``VALID``, ``REVOKED``,
+  ``EXPIRED``, etc.).
   The SPVA status monitoring extension embedded in the X.509 certificate provides
   the PV name so that peers can subscribe automatically on first connection.
 
@@ -193,57 +193,14 @@
   servers can staple them in the TLS handshake so clients receive an immediately
   trusted status without contacting PVACMS at connection time.
 
-.. _glossary_pending_renewal:
-
-- ``PENDING_RENEWAL``.
-
-  A certificate status indicating that the certificate's ``renew_by`` deadline
-  has passed without a renewal CCR being received. The certificate is still
-  technically valid (``not_after`` has not been reached) but is treated as
-  ``SUSPENDED`` by pvxs: no new TLS connections are established, but existing
-  mTLS connections remain open. The status automatically returns to ``VALID``
-  when a valid renewal CCR arrives.
-
 .. _glossary_pvacms:
 
 - PVACMS — PVAccess Certificate Management System.
 
   The certificate authority server provided by the ``pvxs-cms`` module. PVACMS
-  issues, stores, renews, and revokes X.509 certificates for EPICS agents. It
+  issues, stores, and revokes X.509 certificates for EPICS agents. It
   publishes certificate status over PVAccess (``CERT:STATUS``, ``CERT:HEALTH``,
   ``CERT:METRICS``) and accepts certificate management commands via ``pvxcert``.
-
-.. _glossary_renewal_daemon:
-
-- Renewal daemon (``authn<method> -D``).
-
-  A long-running mode of the SPVA authenticator tools (``authnstd -D``,
-  ``authnkrb -D``, ``authnldap -D``) that monitors the entity's own
-  ``CERT:STATUS`` PV and automatically submits a renewal CCR when
-  ``renewal_due = true`` is received. The renewal extends the ``renew_by``
-  deadline on the existing certificate without issuing a new certificate or
-  modifying the keychain file.
-
-.. _glossary_renewal_due:
-
-- ``renewal_due``.
-
-  A boolean field in the ``CERT:STATUS`` PV, set to ``true`` by PVACMS when the
-  current time passes the midpoint between the last status-date and the
-  ``renew_by`` deadline. It is a proactive hint: the certificate is still
-  ``VALID``, but authenticators (and the renewal daemon) should submit a CCR
-  now to avoid the certificate entering ``PENDING_RENEWAL``.
-
-.. _glossary_renew_by:
-
-- ``renew_by``.
-
-  A soft expiry date embedded in a certificate's PVACMS database record and
-  broadcast on its ``CERT:STATUS`` PV. When ``now >= renew_by``, the certificate
-  transitions to ``PENDING_RENEWAL``. For Kerberos-authenticated certificates,
-  ``renew_by`` is set to ``now + remaining_ticket_lifetime`` at issuance,
-  effectively tying the SPVA certificate's renewal cycle to the Kerberos ticket
-  lifecycle.
 
 .. _glossary_pkcs12:
 
@@ -261,65 +218,7 @@
 
   The PKCS#12 files are referenced by environment variables described in the :ref:`configuration`.
 
-.. _glossary_sag:
 
-- SAG — SAN Access Group.
-
-  An EPICS access-security predicate (defined in an ACF file alongside ``UAG``
-  and ``HAG``) that restricts access based on Subject Alternative Name (SAN)
-  entries from the client's TLS certificate. ``SAG`` entries can match IP
-  addresses (exact or CIDR subnet) and DNS names (exact or glob). A client
-  without SANs — e.g. a plain-TCP connection — automatically fails the SAG
-  predicate. See :ref:`spvaauthorization` for the full syntax.
-
-.. _glossary_scheduled_offline:
-
-- ``SCHEDULED_OFFLINE``.
-
-  A certificate status indicating that the certificate is within a configured
-  offline schedule window (see :ref:`validity_schedules`). The certificate is
-  operationally suspended during the window and returns to ``VALID``
-  automatically when the window ends. Treated as ``SUSPENDED`` by pvxs.
-
-.. _glossary_tcponly:
-
-- TcpOnly.
-
-  A TLS context state in which the entity has a certificate but it is not yet
-  operationally usable (status ``PENDING``, ``PENDING_APPROVAL``,
-  ``SCHEDULED_OFFLINE``, or ``PENDING_RENEWAL`` before TLS was ever established).
-  Plain-TCP connections are accepted while the status monitor waits for ``VALID``.
-  Once confirmed, the context upgrades automatically to ``TlsReady``.
-
-.. _glossary_tcpready:
-
-- TcpReady.
-
-  The **optimistic bootstrap** TLS context state. Entered at startup when no
-  cached cert-status is available and the entity certificate's status defaults
-  to ``UNKNOWN``. TCP connections are accepted and TLS handshakes are permitted
-  to proceed, but post-handshake admission gates wait for cert-status to
-  resolve. If the first authoritative delivery is ``VALID``, the context
-  graduates to ``TlsReady`` with zero added latency. If the first delivery is
-  non-``GOOD``, the context transitions to ``TcpOnly`` or ``DegradedMode``
-  and any pre-Validated TLS connections are torn down (the **give-up rule**).
-  Also entered when a previously-``TlsReady`` context's status becomes
-  ``UNKNOWN`` (e.g. PVACMS is momentarily unreachable).
-
-.. _glossary_peer_status_store:
-
-- Peer Status Store.
-
-  A process-wide, in-memory cache of peer certificate status maintained by
-  pvxs to avoid repeating TLS handshakes to peers whose certificates are
-  known to be non-``GOOD``. Entries are keyed by peer certificate identity
-  (issuer + serial) and expire at the cert-status ``status_valid_until_date``
-  boundary. An auxiliary GUID-to-cert-identity map enables search-reply
-  filtering by server GUID. The store drives per-channel search partitioning
-  (channels targeting non-``GOOD`` peers emit ``["tcp"]``-only searches)
-  and active upgrade on peer recovery (plain-TCP connections to a
-  newly-``GOOD`` peer are torn down so channels re-search and commit to TLS).
-  See :ref:`peer_status_store`.
 
 .. _glossary_trust_anchor:
 

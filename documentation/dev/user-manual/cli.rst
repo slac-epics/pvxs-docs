@@ -608,7 +608,7 @@ The following results were collected on Apple Silicon using the command:
    * - EPICS Base
      - R7.0.10
    * - PVXS
-     - 1.5.0
+     - 1.5.1
    * - OpenSSL
      - 3.6.1
    * - Transport
