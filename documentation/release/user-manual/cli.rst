@@ -104,10 +104,10 @@ Examples
    pvxcert
 
    # Query from an explicit keychain file
-   pvxcert -f ~/.config/pva/1.5/client.p12
+   pvxcert -f ~/.config/pva/1.4/client.p12
 
    # Verbose X.509 dump — full chain, all extensions, all SANs (-X / --dump)
-   pvxcert -X -f ~/.config/pva/1.5/client.p12
+   pvxcert -X -f ~/.config/pva/1.4/client.p12
 
    # Query a password-protected keychain file
    pvxcert -p -f /path/to/server.p12
@@ -159,7 +159,7 @@ Example status output:
    pvxcert -R 27975e6b:07246297371190731775
 
    # Revoke own certificate from keychain file (owner, no cert_id needed)
-   pvxcert -R -f ~/.config/pva/1.5/client.p12
+   pvxcert -R -f ~/.config/pva/1.4/client.p12
 
    # Revoke own certificate from $EPICS_PVA_TLS_KEYCHAIN (owner)
    pvxcert -R
@@ -591,7 +591,7 @@ The following results were collected on Apple Silicon using the command:
    * - EPICS Base
      - R7.0.10
    * - PVXS
-     - 1.5.0
+     - 1.4.1
    * - OpenSSL
      - 3.6.1
    * - Transport

@@ -68,8 +68,8 @@ depth is limited to 5 levels. The ALPN protocol identifier is ``pva/1``.
 An agent uses TLS if a certificate, trust anchor, and private key are present at the path given by
 ``EPICS_PVA_TLS_KEYCHAIN``. Default paths:
 
-- ``~/.config/pva/1.5/client.p12`` for clients
-- ``~/.config/pva/1.5/server.p12`` for servers
+- ``~/.config/pva/1.4/client.p12`` for clients
+- ``~/.config/pva/1.4/server.p12`` for servers
 
 For server-only authenticated TLS:
 
@@ -281,7 +281,7 @@ Keychain-File Storage
 
 Keychain file paths follow the `XDG_CONFIG_HOME <https://specifications.freedesktop.org/basedir-spec/latest/>`_
 standard. When ``XDG_CONFIG_HOME`` is unset, it defaults to ``~/.config``. The full default path is
-``~/.config/pva/1.5/``, with ``client.p12`` for clients and ``server.p12`` for servers.
+``~/.config/pva/1.4/``, with ``client.p12`` for clients and ``server.p12`` for servers.
 
 Each keychain file contains the certificate, private key, and CA chain including the root certificate.
 Files are protected with mode ``400``. The agent reconfigures automatically on certificate updates.

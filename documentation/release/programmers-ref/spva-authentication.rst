@@ -416,7 +416,7 @@ Source: ``/examples/docker/spva_krb``
 
 - users (both unix and kerberos principals)
 
-  - ``pvacms`` - service principal with private keytab file for authentication in ``~/.config/pva/1.5/pvacms.keytab``
+  - ``pvacms`` - service principal with private keytab file for authentication in ``~/.config/pva/1.4/pvacms.keytab``
   - ``admin`` - principal with password "secret" (includes a configured PVACMS administrator certificate)
   - ``softioc`` - service principal with password "secret"
   - ``client`` - principal with password "secret"
@@ -492,7 +492,7 @@ Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine th
 | Env. *authnldap*   | Env. *pvacms*            | Params. *authldap*       | Params. *pvacms*         | Keys and Values                       | Description                                                |
 +====================+==========================+==========================+==========================+=======================================+============================================================+
 || EPICS_AUTH_LDAP   ||                         ||                         ||                         || {location of password file}          || file containing password for the given LDAP user account  |
-|| _ACCOUNT_PWD_FILE ||                         ||                         ||                         || e.g. ``~/.config/pva/1.5/ldap.pass`` ||                                                           |
+|| _ACCOUNT_PWD_FILE ||                         ||                         ||                         || e.g. ``~/.config/pva/1.4/ldap.pass`` ||                                                           |
 +--------------------+--------------------------+--------------------------+--------------------------+---------------------------------------+------------------------------------------------------------+
 ||                   ||                         || ``-p``                  ||                         || {LDAP account password}              || password for the given LDAP user account                  |
 ||                   ||                         || ``--password``          ||                         || e.g. ``secret``                      ||                                                           |

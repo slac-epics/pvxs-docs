@@ -80,7 +80,7 @@ If you want a prepackaged environment, try the following.  You will need four te
 
 .. code-block:: console
 
-    Keychain file created   : /home/softioc/.config/pva/1.5/server.p12
+    Keychain file created   : /home/softioc/.config/pva/1.4/server.p12
     Certificate identifier  : 47530d89:15756710596521133410
 
 |4| Client
@@ -100,7 +100,7 @@ If you want a prepackaged environment, try the following.  You will need four te
 
 .. code-block:: console
 
-    Keychain file created   : /home/client/.config/pva/1.5/client.p12
+    Keychain file created   : /home/client/.config/pva/1.4/client.p12
     Certificate identifier  : 47530d89:7450074183745406049
 
 
@@ -173,11 +173,11 @@ If you want a prepackaged environment, try the following.  You will need four te
     EPICS_PVA_BROADCAST_PORT=5076
     EPICS_PVA_CONN_TMO=30
     EPICS_PVA_SERVER_PORT=5075
-    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.5/client.p12
+    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.4/client.p12
     EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp
     EPICS_PVA_TLS_PORT=5076
-    XDG_CONFIG_HOME=/home/client/.config/pva/1.5
-    XDG_DATA_HOME=/home/client/.local/share/pva/1.5
+    XDG_CONFIG_HOME=/home/client/.config/pva/1.4
+    XDG_DATA_HOME=/home/client/.local/share/pva/1.4
     # TLS x509:47530d89:7450074183745406049:EPICS Root Certificate Authority/softioc@172.17.0.2:33809
     test:enumExample from 172.17.0.2:33809
     struct "epics:nt/NTEnum:1.0" {
@@ -311,12 +311,12 @@ log back in as pvacms with environment set by ``.bashrc``
   - create PVACMS certificate database
 
     - creates database if does not exist
-    - at location pointed to by ``EPICS_PVACMS_DB`` or ``${XDG_DATA_HOME}/pva/1.5/certs.db`` by default
+    - at location pointed to by ``EPICS_PVACMS_DB`` or ``${XDG_DATA_HOME}/pva/1.4/certs.db`` by default
 
   - creates root Certificate Authority certificate if does not exist
 
     - creates root Certificate Authority certificate if does not exist,
-    - at location specified by ``EPICS_CERT_AUTH_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.5/cert_auth.p12`` by default
+    - at location specified by ``EPICS_CERT_AUTH_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.4/cert_auth.p12`` by default
     - with ``CN`` specified by ``EPICS_CERT_AUTH_NAME``
     - with  ``O`` specified by ``EPICS_CERT_AUTH_ORGANIZATION``
     - with ``OU`` specified by ``EPICS_CERT_AUTH_ORGANIZATIONAL_UNIT``
@@ -325,12 +325,12 @@ log back in as pvacms with environment set by ``.bashrc``
   - create the default ACF file that controls permissions for the PVACMS service
 
     - creates default ACF (or yaml) file
-    - at location pointed to by ``EPICS_PVACMS_ACF`` or ``${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf`` by default
+    - at location pointed to by ``EPICS_PVACMS_ACF`` or ``${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf`` by default
 
   - create the default admin client certificate that can be used to access PVACMS admin functions like ``REVOKE`` and ``APPROVE``
 
     - creates default admin client certificate
-    - at location specified by ``EPICS_ADMIN_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.5/admin.p12`` by default
+    - at location specified by ``EPICS_ADMIN_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.4/admin.p12`` by default
 
 .. code-block:: shell
 
@@ -338,10 +338,10 @@ log back in as pvacms with environment set by ``.bashrc``
 
 .. code-block:: console
 
-    Certificate DB created  : /home/pvacms/.local/share/pva/1.5/certs.db
-    Keychain file created   : /home/pvacms/.config/pva/1.5/cert_auth.p12
-    Created Default ACF file: /home/pvacms/.config/pva/1.5/pvacms.acf
-    Keychain file created   : /home/pvacms/.config/pva/1.5/admin.p12
+    Certificate DB created  : /home/pvacms/.local/share/pva/1.4/certs.db
+    Keychain file created   : /home/pvacms/.config/pva/1.4/cert_auth.p12
+    Created Default ACF file: /home/pvacms/.config/pva/1.4/pvacms.acf
+    Keychain file created   : /home/pvacms/.config/pva/1.4/admin.p12
 
 .. code-block:: shell
 
@@ -408,10 +408,10 @@ log back in as pvacms with environment set by ``.bashrc``
 
 .. code-block:: shell
 
-    mkdir -p ~admin/.config/pva/1.5
-    cp -pr ~pvacms/.config/pva/1.5/admin.p12 ~admin/.config/pva/1.5/client.p12
-    chown admin ~admin/.config/pva/1.5/client.p12
-    chmod 400 ~admin/.config/pva/1.5/client.p12
+    mkdir -p ~admin/.config/pva/1.4
+    cp -pr ~pvacms/.config/pva/1.4/admin.p12 ~admin/.config/pva/1.4/client.p12
+    chown admin ~admin/.config/pva/1.4/client.p12
+    chmod 400 ~admin/.config/pva/1.4/client.p12
 
 .. _spva_qs_std_server:
 
@@ -545,7 +545,7 @@ log back in as pvacms with environment set by ``.bashrc``
   - create the pvacms server certificate
 
     - creates pvacms server certificate
-    - at location specified by ``EPICS_PVACMS_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.5/pvacms.p12`` by default
+    - at location specified by ``EPICS_PVACMS_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.4/pvacms.p12`` by default
 
   - start pvacms with verbose logging off
 
@@ -555,7 +555,7 @@ log back in as pvacms with environment set by ``.bashrc``
 
 .. code-block:: console
 
-    Keychain file created   : /home/pvacms/.config/pva/1.5/pvacms.p12
+    Keychain file created   : /home/pvacms/.config/pva/1.4/pvacms.p12
     PVACMS [46093d7c] Service Running
 
 .. note::
@@ -587,7 +587,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
 - create a softioc server certificate
 
   - creates softioc server certificate
-  - at location specified by ``EPICS_PVAS_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.5/server.p12`` by default
+  - at location specified by ``EPICS_PVAS_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.4/server.p12`` by default
 
 .. code-block:: shell
 
@@ -598,7 +598,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
 
 .. code-block:: console
 
-    Keychain file created   : /home/softioc/.config/pva/1.5/server.p12
+    Keychain file created   : /home/softioc/.config/pva/1.4/server.p12
     Certificate identifier  : 46093d7c:13415272142438558829
 
 .. note::
@@ -711,7 +711,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
 - create a client certificate
 
   - creates a client certificate
-  - at location specified by ``EPICS_PVA_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.5/client.p12`` by default
+  - at location specified by ``EPICS_PVA_TLS_KEYCHAIN`` or ``${XDG_CONFIG_HOME}/pva/1.4/client.p12`` by default
 
 .. code-block:: shell
 
@@ -722,7 +722,7 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
 
 .. code-block:: console
 
-    Keychain file created   : /home/client/.config/pva/1.5/client.p12
+    Keychain file created   : /home/client/.config/pva/1.4/client.p12
     Certificate identifier  : 46093d7c:5283204721404445451
 
 .. note::
@@ -822,11 +822,11 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
     EPICS_PVA_BROADCAST_PORT=5076
     EPICS_PVA_CONN_TMO=30
     EPICS_PVA_SERVER_PORT=5075
-    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.5/client.p12
+    EPICS_PVA_TLS_KEYCHAIN=/home/client/.config/pva/1.4/client.p12
     EPICS_PVA_TLS_OPTIONS=on_expiration=fallback-to-tcp
     EPICS_PVA_TLS_PORT=5076
-    XDG_CONFIG_HOME=/home/client/.config/pva/1.5
-    XDG_DATA_HOME=/home/client/.local/share/pva/1.5
+    XDG_CONFIG_HOME=/home/client/.config/pva/1.4
+    XDG_DATA_HOME=/home/client/.local/share/pva/1.4
     # TLS x509:46093d7c:13415272142438558829:EPICS Root Certificate Authority/softioc@172.17.0.2:35093
     test:enumExample from 172.17.0.2:35093
     struct "epics:nt/NTEnum:1.0" {
@@ -947,12 +947,12 @@ Leave this PVACMS service running while running SoftIOC and SPVA client below.
 
 .. code-block:: shell
 
-    export EPICS_PVA_TLS_KEYCHAIN=~/.config/pva/1.5/michael.p12
+    export EPICS_PVA_TLS_KEYCHAIN=~/.config/pva/1.4/michael.p12
     authnstd -n michael
 
 .. code-block:: console
 
-    Keychain file created   : /home/client/.config/pva/1.5/michael.p12
+    Keychain file created   : /home/client/.config/pva/1.4/michael.p12
     Certificate identifier  : b271f07a:4803259031245539247
 
 - |terminal|\⁴

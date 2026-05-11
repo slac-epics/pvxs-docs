@@ -506,8 +506,8 @@ serves downstream clients as a server:
 
 .. code-block:: shell
 
-   export EPICS_PVA_TLS_KEYCHAIN=$HOME/.config/pva/1.5/gateway.p12
-   export EPICS_PVAS_TLS_KEYCHAIN=$HOME/.config/pva/1.5/gateway.p12
+   export EPICS_PVA_TLS_KEYCHAIN=$HOME/.config/pva/1.4/gateway.p12
+   export EPICS_PVAS_TLS_KEYCHAIN=$HOME/.config/pva/1.4/gateway.p12
    export EPICS_PVA_AUTO_ADDR_LIST=NO
    pvagw gateway.conf
 
