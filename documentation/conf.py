@@ -113,15 +113,15 @@ project = 'PVXS'
 copyright = time.strftime('%Y Michael Davidsaver, George McIntyre, Osprey DCS LLC, and SLAC')
 author = 'Michael Davidsaver and George McIntyre'
 
-# Per Phase B, version strings depend on the selected variant. Release uses
-# the concrete version numbers; dev uses the literal "dev" so the rendered
-# pages clearly indicate they are not a released cut.
+# Version strings depend on the selected variant. Release is the
+# currently-shipping pvxs tag; dev is the next-release-in-progress tag
+# that the dev variant of the docs is being authored against.
 if docs_variant == "release":
     version = '1.4'
     release = '1.4.1'
 else:
-    version = 'dev'
-    release = 'dev'
+    version = '1.5'
+    release = '1.5.1'
 
 
 # -- General configuration ---------------------------------------------------

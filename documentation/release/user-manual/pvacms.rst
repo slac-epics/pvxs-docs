@@ -586,7 +586,7 @@ When a node receives a sync update from a peer, it applies a 6-step verification
 
    - If the cert exists locally: apply the update only if ``isValidStatusTransition()``
      allows the remote status.  When allowed, all fields are overwritten (including
-     ``renew_by`` and ``status_date``).
+     ``status_date``).
    - If the cert does not exist locally: insert it.
    - This logic is the same for both incremental and full snapshot updates.
 
@@ -776,12 +776,6 @@ Per-cert overhead in a sync update:
    * - ``not_after``
      - int64
      - 8 bytes
-   * - ``renew_by``
-     - int64
-     - 8 bytes
-   * - ``renewal_due``
-     - int32
-     - 4 bytes
    * - ``status``
      - int32
      - 4 bytes
@@ -936,17 +930,8 @@ same certificate dates stored in its local database:
    * - PENDING -> VALID
      - ``now >= not_before``
      - No
-   * - VALID -> PENDING_RENEWAL
-     - ``now >= renew_by``
-     - No
    * - VALID -> EXPIRED
      - ``now >= not_after``
-     - No
-   * - PENDING_RENEWAL -> EXPIRED
-     - ``now >= not_after``
-     - No
-   * - VALID (renewal_due flag)
-     - ``now >= midpoint(status_date, renew_by)``
      - No
    * - New cert created
      - CCR processed
@@ -957,27 +942,12 @@ same certificate dates stored in its local database:
    * - PENDING_APPROVAL -> VALID/PENDING
      - Admin approval
      - **Yes**
-   * - PENDING_RENEWAL -> VALID
-     - Renewal CCR processed
-     - **Yes**
-   * - VALID -> VALID
-     - Renewal updates ``renew_by``
-     - **Yes**
 
 This is safe because:
 
-- All nodes have the same ``not_before``, ``not_after``, and ``renew_by`` values.
+- All nodes have the same ``not_before`` and ``not_after`` values.
 - Small timing differences between nodes are harmless -- a client connecting to
   a node that hasn't yet flipped PENDING -> VALID will simply retry.
-- The ``renewal_due`` flag is a notification hint, not a status change.
-
-**VALID -> VALID Sync for Renewals**
-
-When a renewal is processed on one node, the cert status may remain VALID but
-the ``renew_by`` date changes.  The sync snapshot includes all fields, so when a
-peer receives a VALID -> VALID update, it overwrites ``renew_by`` and
-``status_date``.  This prevents the peer's status monitor from incorrectly
-transitioning the cert to PENDING_RENEWAL based on stale dates.
 
 .. _pvacms_clustering_cms_cert_revocation:
 
@@ -1119,9 +1089,6 @@ PVACMS resolves conflicts through a convergent status transition state machine:
 - **Non-revocation divergence is temporary and safe** -- when two nodes diverge due
   to clock differences (e.g. one sees VALID while the other sees PENDING), the
   divergence resolves naturally via time-based transitions.
-- **The renewal cycle is bounded by field propagation** -- the VALID <->
-  PENDING_RENEWAL cycle is the only cycle in the graph, and sync updates carry
-  the updated ``renew_by`` field to prevent re-transitions.
 
 **Comparison with CA Clustering Solutions**
 
@@ -1288,118 +1255,6 @@ This field is populated when the serving PVACMS instance is in a cluster. In ``p
 output it appears as ``PVACMS Node ID`` in the metadata block (alongside the existing
 ``PVACMS Node Address``). The field is empty (``""``) for single-node deployments.
 
-.. _validity_schedules:
-
-Validity Schedules
-------------------
-
-Validity schedules allow operators to define recurring time windows during which a
-certificate is trusted. Outside those windows PVACMS automatically transitions the
-certificate's status to ``SCHEDULED_OFFLINE``; when a window opens it transitions back to
-``VALID`` — with no certificate re-issuance and no manual intervention required.
-
-Typical use cases:
-
-- Client certificate trusted only during business hours (e.g. 08:00–17:00 UTC weekdays).
-- IOC certificate offline during a scheduled weekly maintenance window.
-- Restricting a gateway certificate to operational hours.
-
-Schedules require status monitoring to be active on the certificate. They cannot be used
-with ``--no-status`` certificates, because clients must subscribe to the ``CERT:STATUS``
-PV to react to ``SCHEDULED_OFFLINE`` transitions.
-
-.. _validity_schedules_creating:
-
-Creating Certificates with Schedules
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Use the ``--schedule`` flag (repeatable) when requesting a certificate:
-
-.. code-block:: shell
-
-   # Every day 08:00–17:00 UTC, plus Saturday mornings
-   authnstd --schedule '*,08:00,17:00' --schedule '6,08:00,12:00'
-
-The ``day,HH:MM,HH:MM`` format:
-
-- ``day``: ``0``–``6`` (Sun–Sat) or ``*`` (every day). All times are UTC.
-- ``start_time``, ``end_time``: ``HH:MM`` in 24-hour UTC. Cross-midnight windows
-  (e.g. ``22:00,06:00``) are supported.
-
-.. _validity_schedules_managing:
-
-Managing Schedules with pvxcert
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Use ``pvxcert --schedule`` (or ``-S``) to show, clear, or replace schedule windows for
-an existing certificate (admin only):
-
-.. code-block:: shell
-
-   # Show current windows
-   pvxcert -S show 27975e6b:7246297371190731775
-
-   # Remove all windows (certificate remains VALID permanently)
-   pvxcert -S none 27975e6b:7246297371190731775
-
-   # Set two windows (replaces any existing windows)
-   pvxcert -S '*,08:00,17:00' -S '6,08:00,12:00' 27975e6b:7246297371190731775
-
-Example output:
-
-.. code-block:: text
-
-   Set Schedule ==> 27975e6b:7246297371190731775
-
-   Schedule      :
-   ============================================
-     Every day  08:00 - 17:00 UTC
-     Sat        08:00 - 12:00 UTC
-   --------------------------------------------
-
-Certificate owners may view their own schedule windows without admin rights using
-``pvxcert -S show <cert_id>`` (the same self-read permission applies as for
-self-revocation).
-
-.. _validity_schedules_rpc:
-
-CERT:SCHEDULE RPC
-~~~~~~~~~~~~~~~~~~
-
-Schedule windows can also be managed programmatically via the ``CERT:SCHEDULE`` PV RPC:
-
-.. code-block:: text
-
-   Request:
-       query.serial    : uint64    certificate serial number (required)
-       query.read_only : bool      true = show only, no writes
-       query.schedule  : StructA   new windows (empty array clears all; omit if read_only)
-           day_of_week : String    "0"–"6" or "*"
-           start_time  : String    "HH:MM" UTC
-           end_time    : String    "HH:MM" UTC
-
-   Response:
-       result   : String    "ok"
-       schedule : StructA   current windows after the operation
-
-Write operations are audited (action ``SCHEDULE``) and replicated to cluster peers.
-
-.. _validity_schedules_behaviour:
-
-Runtime Behaviour
-~~~~~~~~~~~~~~~~~~
-
-- PVACMS evaluates scheduled certificates on every status-monitor cycle.
-- When no window is active, the certificate transitions to ``SCHEDULED_OFFLINE``; the
-  ``CERT:STATUS`` PV is updated immediately.
-- When a window opens, the certificate transitions back to ``VALID`` and the status PV
-  is updated immediately without waiting for the next monitor cycle.
-- The adaptive monitor (see :ref:`pvacms_adaptive_monitor`) shortens its sleep interval
-  when certificates have schedule boundaries approaching within the look-ahead window.
-- ``SCHEDULED_OFFLINE`` is **not** a security revocation. A revoked certificate is
-  permanently invalid; a ``SCHEDULED_OFFLINE`` certificate will become valid again when
-  the next window opens. Use revocation for security-motivated invalidation.
-
 .. _pvacms_adaptive_monitor:
 
 Adaptive Status Monitor
@@ -1413,14 +1268,8 @@ state transition:
 - **100 or more approaching transitions** → sleep for ``--monitor-interval-min`` (default 5 s).
 - **Between 0 and 100** → linear interpolation.
 
-A certificate is counted as "approaching" if any of its ``validity_start``,
-``validity_end``, ``renewal_date``, or schedule boundary is within
-``2 × monitor-interval-max`` seconds of the current time.
-
-On each cycle the monitor also scans for ``VALID`` certificates that have passed their
-midpoint between the last status-date and their ``renew_by`` deadline, and posts a
-:ref:`renewal_due_hint` on their ``CERT:STATUS`` PV to prompt proactive renewal by
-authenticators. At most one such certificate is processed per cycle.
+A certificate is counted as "approaching" if any of its ``validity_start`` or
+``validity_end`` is within ``2 × monitor-interval-max`` seconds of the current time.
 
 This keeps PVACMS responsive during transition-dense periods (e.g. a batch deployment
 with many certificates starting simultaneously) while consuming minimal resources during
@@ -1644,8 +1493,7 @@ PVACMS enables several SQLite hardening settings on every database connection:
   latency.
 - **Busy timeout** (``sqlite3_busy_timeout``) — prevents ``SQLITE_BUSY`` errors on
   concurrent access from backup or cluster operations.
-- **Foreign keys** (``PRAGMA foreign_keys=ON``) — enforces referential integrity between
-  ``certs`` and ``cert_schedules``.
+- **Foreign keys** (``PRAGMA foreign_keys=ON``) — enforces referential integrity.
 - **Schema versioning** (``schema_version`` table) — tracks the migration level; used by
   the startup self-tests to detect rollback against a newer schema.
 
@@ -1661,12 +1509,5 @@ The database schema has evolved through several versions:
      - Initial schema: ``certs`` table.
    * - v2
      - Added ``audit`` table for persistent certificate lifecycle events.
-   * - v3
-     - Added ``cert_schedules`` table for validity schedule windows.
-   * - v4
-     - Added SANs storage for certificate Subject Alternative Names.
-   * - v5
-     - Reordered ``SCHEDULED_OFFLINE`` enum value (ordinal 5) to sit between
-       ``PENDING_RENEWAL`` and ``EXPIRED``; migrated existing rows using a sentinel value.
 
 Each migration runs automatically on first open of a database at an older schema version.

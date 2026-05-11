@@ -83,14 +83,14 @@ where:
 * ``<project-name>`` is ``epics-base``, ``pvxs``, ``pvxs-cms``, or
   ``p4p``;
 * ``<project-version>`` is the project version captured by the snapshot,
-  such as ``1.5.1`` or ``1.5.0``;
+  such as ``1.4.1`` or ``1.4.0``;
 * ``spva`` marks the tag as a Secure PVAccess snapshot;
 * ``<yyyymmdd>`` is the snapshot date.
 
-For example, ``pvxs-1.5.1-spva.20260423`` means: project ``pvxs``, pvxs
-version ``1.5.1``, SPVA snapshot, dated ``2026-04-23``.
-``pvxs-cms-1.5.0-spva.20260423`` means: project ``pvxs-cms``, pvxs-cms
-version ``1.5.0``, SPVA snapshot, dated ``2026-04-23``.
+For example, ``pvxs-1.4.1-spva.20260423`` means: project ``pvxs``, pvxs
+version ``1.4.1``, SPVA snapshot, dated ``2026-04-23``.
+``pvxs-cms-1.4.0-spva.20260423`` means: project ``pvxs-cms``, pvxs-cms
+version ``1.4.0``, SPVA snapshot, dated ``2026-04-23``.
 
 When using snapshots, keep the repositories on the tags you were given.
 Do not mix a snapshot tag in one repository with a moving ``dev`` branch in
@@ -122,8 +122,8 @@ were given:
 .. code-block:: shell
 
    git clone --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls.git epics-base
-   git clone --branch pvxs-1.5.1-spva.20260423 https://github.com/slac-epics/pvxs-tls.git pvxs
-   git clone --branch pvxs-cms-1.5.0-spva.20260423 https://github.com/slac-epics/pvxs-cms.git pvxs-cms
+   git clone --branch pvxs-1.4.1-spva.20260423 https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch pvxs-cms-1.4.0-spva.20260423 https://github.com/slac-epics/pvxs-cms.git pvxs-cms
    git clone --branch master https://github.com/slac-epics/p4p-tls.git p4p
    git clone --branch master https://github.com/ControlSystemStudio/phoebus.git phoebus
 
@@ -299,9 +299,9 @@ are optional because they add site-library dependencies.
 
 The tracked defaults live in each module's ``configure/CONFIG_SITE``.
 pvxs defines ``PVXS_ENABLE_SSLKEYLOGFILE`` there. pvxs-cms defines
-``PVXS_ENABLE_PVACMS``, ``PVXS_ENABLE_KRB_AUTH``,
-``PVXS_ENABLE_LDAP_AUTH``, and ``PVXS_CMS_BUILD_TEST_HARNESS`` there;
-the PVACMS default is ``YES`` for host builds and ``NO`` for cross builds.
+``PVXS_ENABLE_PVACMS``, ``PVXS_ENABLE_KRB_AUTH``, and
+``PVXS_ENABLE_LDAP_AUTH`` there; the PVACMS default is ``YES`` for host
+builds and ``NO`` for cross builds.
 
 Windows builds
 --------------

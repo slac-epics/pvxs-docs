@@ -150,9 +150,8 @@ Monitoring certificate status
 -----------------------------
 
 Most applications should let pvxs manage certificate status internally.
-The connection layer subscribes to status process variables, caches signed
-status responses on disk, and reacts to ``VALID``, ``UNKNOWN``,
-``SUSPENDED``, and ``BAD`` status classes as described in
+The connection layer subscribes to status process variables and reacts
+to ``VALID``, ``UNKNOWN``, and ``BAD`` status classes as described in
 :doc:`spva-tls`.
 
 Applications that need operator visibility should expose their own health

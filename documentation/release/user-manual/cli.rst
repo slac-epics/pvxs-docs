@@ -28,14 +28,6 @@ Usage
    pvxcert [options] (-R | --revoke) [<cert_id>]
                                               REVOKE certificate; if cert_id omitted, reads from
                                               -f <file> or $EPICS_PVA_TLS_KEYCHAIN
-   pvxcert [options] (-S | --schedule) show <cert_id>
-                                              SHOW current schedule windows (ADMIN ONLY)
-   pvxcert [options] (-S | --schedule) none <cert_id>
-                                              REMOVE all schedule windows (ADMIN ONLY)
-   pvxcert [options] (-S | --schedule) <day,HH:MM,HH:MM> [-S <day,HH:MM,HH:MM> ...] <cert_id>
-                                              SET validity schedule windows, replacing any existing (ADMIN ONLY)
-                                              day: 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat or * for every day
-                                              times are UTC, e.g. -S '1,08:00,17:00' for Mon 08:00-17:00
    pvxcert (-h | --help)                      Show this help message and exit
    pvxcert (-V | --version)                   Print version and exit
 
@@ -87,17 +79,8 @@ Options
      - Revoke an active certificate. Admin or certificate owner.
        If ``<cert_id>`` is omitted, the certificate is read from ``-f <file>`` or
        ``$EPICS_PVA_TLS_KEYCHAIN``.
-   * - ``-S``, ``--schedule`` ``<value>``
-     - Manage validity schedule windows (repeatable). Values:
-
-       - ``show`` — display current windows (owner or admin)
-       - ``none`` — clear all windows (**admin only**)
-       - ``'<day,HH:MM,HH:MM>'`` — add a window (``*`` or ``0``–``6`` for day; UTC times)
-
-       Multiple ``-S`` flags set multiple windows simultaneously. The last positional
-       argument is always the ``<cert_id>``.
    * - ``-X``,``--dump``
-     - Print verbose X.509 certificate details, including all SANs, decoded extensions,
+     - Print verbose X.509 certificate details, decoded extensions,
        and the full certificate chain (end-entity + intermediate CAs). Use with ``-f``.
    * - ``-w``, ``--timeout`` ``<seconds>``
      - Operation timeout in seconds (default: 5.0)
