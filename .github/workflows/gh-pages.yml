@@ -10,7 +10,7 @@
 # Each build job clones the SLAC SPVA-extended sibling repos at the
 # variant-appropriate refs:
 #
-#   build-release  pvxs-tls@tls       + pvxs-cms@main + epics-base-tls@7.0-secure-pvaccess
+#   build-release  pvxs-tls@main      + pvxs-cms@main + epics-base-tls@7.0-secure-pvaccess
 #   build-dev      pvxs-tls@dev       + pvxs-cms@dev  + epics-base-tls@7.0-secure-pvaccess
 #
 # Sibling repos are slac-epics/pvxs-tls and slac-epics/epics-base-tls — NOT
@@ -63,8 +63,8 @@ jobs:
       - name: Install Mermaid CLI
         run: npm install -g @mermaid-js/mermaid-cli
 
-      - name: Clone sibling pvxs (slac-epics/pvxs-tls@tls)
-        run: git clone --depth 1 --branch tls https://github.com/slac-epics/pvxs-tls ../pvxs
+      - name: Clone sibling pvxs (slac-epics/pvxs-tls@main)
+        run: git clone --depth 1 --branch main https://github.com/slac-epics/pvxs-tls ../pvxs
 
       - name: Clone sibling pvxs-cms (slac-epics/pvxs-cms@main)
         run: git clone --depth 1 --branch main https://github.com/slac-epics/pvxs-cms ../pvxs-cms

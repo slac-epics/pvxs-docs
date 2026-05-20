@@ -15,7 +15,7 @@
 #   brew install inkscape doxygen
 #   pip install sphinx breathe furo sphinx-reredirects
 #   npm install -g @mermaid-js/mermaid-cli   # OR: npx fetches it on the fly
-#   sibling clones at ../epics-base, ../pvxs (branch tls), ../pvxs-cms (branch main)
+#   sibling clones at ../epics-base, ../pvxs (branch main), ../pvxs-cms (branch main)
 #
 # Usage (preferred):
 #   ./build-docs.sh release        # build release variant into ../pvxs-pages/release/
