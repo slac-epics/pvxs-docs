@@ -44,7 +44,7 @@ stable branch choices are:
      - ``7.0-secure-pvaccess``
      - ``epics-base-<version>-spva.<yyyymmdd>``
    * - ``pvxs-tls`` cloned as ``pvxs``
-     - ``tls``
+     - ``main``
      - ``dev``
      - ``pvxs-<version>-spva.<yyyymmdd>``
    * - ``pvxs-cms``
@@ -60,8 +60,9 @@ stable branch choices are:
      - ``master``; Secure PVAccess changes are already integrated
      - use the branch
 
-The ``tls`` branch of ``pvxs-tls`` and the ``main`` branch of
-``pvxs-cms`` are the stable release branches. The ``dev`` branches contain
+The ``main`` branch of ``pvxs-tls`` (renamed from ``tls`` on 2026-05) and
+the ``main`` branch of ``pvxs-cms`` are the stable release branches. The
+``dev`` branches contain
 the latest development work, including experimental features.
 
 For ``p4p-tls``, the ``master`` branch works with whichever pvxs checkout
@@ -83,14 +84,14 @@ where:
 * ``<project-name>`` is ``epics-base``, ``pvxs``, ``pvxs-cms``, or
   ``p4p``;
 * ``<project-version>`` is the project version captured by the snapshot,
-  such as ``1.5.1`` or ``1.5.0``;
+  such as ``1.4.1`` or ``1.4.0``;
 * ``spva`` marks the tag as a Secure PVAccess snapshot;
 * ``<yyyymmdd>`` is the snapshot date.
 
-For example, ``pvxs-1.5.1-spva.20260423`` means: project ``pvxs``, pvxs
-version ``1.5.1``, SPVA snapshot, dated ``2026-04-23``.
-``pvxs-cms-1.5.0-spva.20260423`` means: project ``pvxs-cms``, pvxs-cms
-version ``1.5.0``, SPVA snapshot, dated ``2026-04-23``.
+For example, ``pvxs-1.4.1-spva.20260423`` means: project ``pvxs``, pvxs
+version ``1.4.1``, SPVA snapshot, dated ``2026-04-23``.
+``pvxs-cms-1.4.0-spva.20260423`` means: project ``pvxs-cms``, pvxs-cms
+version ``1.4.0``, SPVA snapshot, dated ``2026-04-23``.
 
 When using snapshots, keep the repositories on the tags you were given.
 Do not mix a snapshot tag in one repository with a moving ``dev`` branch in
@@ -101,7 +102,7 @@ Stable branch checkout:
 .. code-block:: shell
 
    git clone --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls.git epics-base
-   git clone --branch tls https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch main https://github.com/slac-epics/pvxs-tls.git pvxs
    git clone --branch main https://github.com/slac-epics/pvxs-cms.git pvxs-cms
    git clone --branch master https://github.com/slac-epics/p4p-tls.git p4p
    git clone --branch master https://github.com/ControlSystemStudio/phoebus.git phoebus
@@ -122,8 +123,8 @@ were given:
 .. code-block:: shell
 
    git clone --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls.git epics-base
-   git clone --branch pvxs-1.5.1-spva.20260423 https://github.com/slac-epics/pvxs-tls.git pvxs
-   git clone --branch pvxs-cms-1.5.0-spva.20260423 https://github.com/slac-epics/pvxs-cms.git pvxs-cms
+   git clone --branch pvxs-1.4.1-spva.20260423 https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch pvxs-cms-1.4.0-spva.20260423 https://github.com/slac-epics/pvxs-cms.git pvxs-cms
    git clone --branch master https://github.com/slac-epics/p4p-tls.git p4p
    git clone --branch master https://github.com/ControlSystemStudio/phoebus.git phoebus
 
@@ -157,7 +158,7 @@ that project root and are included by the sibling modules.
 
    # Clone the pvxs TLS fork into a directory named "pvxs" so the build
    # paths match the EPICS RELEASE examples and the rest of this manual.
-   git clone --branch tls https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch main https://github.com/slac-epics/pvxs-tls.git pvxs
 
    git clone --branch main https://github.com/slac-epics/pvxs-cms.git pvxs-cms
 
@@ -218,7 +219,7 @@ before ``RULES_MODULES`` so sites can add more modules.
 
    # Clone the pvxs TLS fork into a directory named "pvxs" for consistency
    # with RELEASE paths, installed names, and the rest of this manual.
-   git clone --branch tls https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch main https://github.com/slac-epics/pvxs-tls.git pvxs
 
    git clone --branch main https://github.com/slac-epics/pvxs-cms.git pvxs-cms
 
@@ -299,9 +300,9 @@ are optional because they add site-library dependencies.
 
 The tracked defaults live in each module's ``configure/CONFIG_SITE``.
 pvxs defines ``PVXS_ENABLE_SSLKEYLOGFILE`` there. pvxs-cms defines
-``PVXS_ENABLE_PVACMS``, ``PVXS_ENABLE_KRB_AUTH``,
-``PVXS_ENABLE_LDAP_AUTH``, and ``PVXS_CMS_BUILD_TEST_HARNESS`` there;
-the PVACMS default is ``YES`` for host builds and ``NO`` for cross builds.
+``PVXS_ENABLE_PVACMS``, ``PVXS_ENABLE_KRB_AUTH``, and
+``PVXS_ENABLE_LDAP_AUTH`` there; the PVACMS default is ``YES`` for host
+builds and ``NO`` for cross builds.
 
 Windows builds
 --------------
@@ -329,7 +330,7 @@ Clone the sources and install dependencies:
    cd /d C:\spva-work
 
    git clone --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls.git epics-base
-   git clone --branch tls https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch main https://github.com/slac-epics/pvxs-tls.git pvxs
    git clone --branch main https://github.com/slac-epics/pvxs-cms.git pvxs-cms
 
    git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
@@ -506,8 +507,8 @@ serves downstream clients as a server:
 
 .. code-block:: shell
 
-   export EPICS_PVA_TLS_KEYCHAIN=$HOME/.config/pva/1.5/gateway.p12
-   export EPICS_PVAS_TLS_KEYCHAIN=$HOME/.config/pva/1.5/gateway.p12
+   export EPICS_PVA_TLS_KEYCHAIN=$HOME/.config/pva/1.4/gateway.p12
+   export EPICS_PVAS_TLS_KEYCHAIN=$HOME/.config/pva/1.4/gateway.p12
    export EPICS_PVA_AUTO_ADDR_LIST=NO
    pvagw gateway.conf
 

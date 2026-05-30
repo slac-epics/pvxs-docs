@@ -437,7 +437,7 @@ For MacOS
     PVXS_ENABLE_PVACMS = YES
     EOF
 
-    git clone --recursive --branch tls https://github.com/slac-epics/pvxs-tls.git pvxs
+    git clone --recursive --branch main https://github.com/slac-epics/pvxs-tls.git pvxs
     cd pvxs
 
     make -j10 all

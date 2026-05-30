@@ -28,14 +28,6 @@ Usage
    pvxcert [options] (-R | --revoke) [<cert_id>]
                                               REVOKE certificate; if cert_id omitted, reads from
                                               -f <file> or $EPICS_PVA_TLS_KEYCHAIN
-   pvxcert [options] (-S | --schedule) show <cert_id>
-                                              SHOW current schedule windows (ADMIN ONLY)
-   pvxcert [options] (-S | --schedule) none <cert_id>
-                                              REMOVE all schedule windows (ADMIN ONLY)
-   pvxcert [options] (-S | --schedule) <day,HH:MM,HH:MM> [-S <day,HH:MM,HH:MM> ...] <cert_id>
-                                              SET validity schedule windows, replacing any existing (ADMIN ONLY)
-                                              day: 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat or * for every day
-                                              times are UTC, e.g. -S '1,08:00,17:00' for Mon 08:00-17:00
    pvxcert (-h | --help)                      Show this help message and exit
    pvxcert (-V | --version)                   Print version and exit
 
@@ -87,17 +79,8 @@ Options
      - Revoke an active certificate. Admin or certificate owner.
        If ``<cert_id>`` is omitted, the certificate is read from ``-f <file>`` or
        ``$EPICS_PVA_TLS_KEYCHAIN``.
-   * - ``-S``, ``--schedule`` ``<value>``
-     - Manage validity schedule windows (repeatable). Values:
-
-       - ``show`` — display current windows (owner or admin)
-       - ``none`` — clear all windows (**admin only**)
-       - ``'<day,HH:MM,HH:MM>'`` — add a window (``*`` or ``0``–``6`` for day; UTC times)
-
-       Multiple ``-S`` flags set multiple windows simultaneously. The last positional
-       argument is always the ``<cert_id>``.
    * - ``-X``,``--dump``
-     - Print verbose X.509 certificate details, including all SANs, decoded extensions,
+     - Print verbose X.509 certificate details, decoded extensions,
        and the full certificate chain (end-entity + intermediate CAs). Use with ``-f``.
    * - ``-w``, ``--timeout`` ``<seconds>``
      - Operation timeout in seconds (default: 5.0)
@@ -121,10 +104,10 @@ Examples
    pvxcert
 
    # Query from an explicit keychain file
-   pvxcert -f ~/.config/pva/1.5/client.p12
+   pvxcert -f ~/.config/pva/1.4/client.p12
 
-   # Verbose X.509 dump — full chain, all extensions, all SANs (-X / --dump)
-   pvxcert -X -f ~/.config/pva/1.5/client.p12
+   # Verbose X.509 dump — full chain, all extensions (-X / --dump)
+   pvxcert -X -f ~/.config/pva/1.4/client.p12
 
    # Query a password-protected keychain file
    pvxcert -p -f /path/to/server.p12
@@ -143,7 +126,6 @@ Example status output:
    Serial         : 07246297371190731775
    Not Before     : Sat Feb  1 00:00:00 2026 UTC
    Not After      : Mon Feb  1 00:00:00 2027 UTC
-   SAN            : dns=ioc01.slac.stanford.edu, ip=192.168.1.10
    Config URI     : pva://CERT:CONFIG:27975e6b:07246297371190731775
    --------------------------------------------
 
@@ -176,42 +158,17 @@ Example status output:
    pvxcert -R 27975e6b:07246297371190731775
 
    # Revoke own certificate from keychain file (owner, no cert_id needed)
-   pvxcert -R -f ~/.config/pva/1.5/client.p12
+   pvxcert -R -f ~/.config/pva/1.4/client.p12
 
    # Revoke own certificate from $EPICS_PVA_TLS_KEYCHAIN (owner)
    pvxcert -R
 
-**Schedule management:**
-
-.. code-block:: shell
-
-   # Show current schedule windows (owner or admin)
-   pvxcert -S show 27975e6b:07246297371190731775
-
-   # Set schedule: every weekday 08:00–17:00 UTC, plus Saturday mornings (admin)
-   pvxcert -S '*,08:00,17:00' -S '6,08:00,12:00' 27975e6b:07246297371190731775
-
-   # Clear all schedule windows (admin)
-   pvxcert -S none 27975e6b:07246297371190731775
-
-Example schedule output:
-
-.. code-block:: text
-
-   Set Schedule ==> 27975e6b:07246297371190731775
-
-   Schedule      :
-   ============================================
-     Every day  08:00 - 17:00 UTC
-     Sat        08:00 - 12:00 UTC
-   --------------------------------------------
-
 .. note::
 
-   Administrative operations (approve, deny, revoke with cert_id, set/clear schedule)
+   Administrative operations (approve, deny, revoke with cert_id)
    require appropriate access control permissions configured in the :ref:`pvacms` ACF.
-   Certificate owners may revoke their own certificate (``-R`` without a cert_id) and
-   view their own schedule windows (``-S show``) without admin rights.
+   Certificate owners may revoke their own certificate (``-R`` without a cert_id)
+   without admin rights.
 
 Under the hood, ``pvxcert`` sends a ``PUT`` to the :ref:`pvacms` on the PV associated with the certificate:
 
@@ -608,7 +565,7 @@ The following results were collected on Apple Silicon using the command:
    * - EPICS Base
      - R7.0.10
    * - PVXS
-     - 1.5.0
+     - 1.4.1
    * - OpenSSL
      - 3.6.1
    * - Transport

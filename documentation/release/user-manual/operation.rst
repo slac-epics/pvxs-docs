@@ -64,15 +64,15 @@ Common files created on first start are:
 
    * - File
      - Purpose
-   * - ``$XDG_CONFIG_HOME/pva/1.5/cert_auth.p12``
+   * - ``$XDG_CONFIG_HOME/pva/1.4/cert_auth.p12``
      - PVACMS root certificate authority keychain.
-   * - ``$XDG_CONFIG_HOME/pva/1.5/pvacms.p12``
+   * - ``$XDG_CONFIG_HOME/pva/1.4/pvacms.p12``
      - PVACMS server keychain.
-   * - ``$XDG_CONFIG_HOME/pva/1.5/admin.p12``
+   * - ``$XDG_CONFIG_HOME/pva/1.4/admin.p12``
      - Initial administrator client keychain.
-   * - ``$XDG_CONFIG_HOME/pva/1.5/pvacms.acf``
+   * - ``$XDG_CONFIG_HOME/pva/1.4/pvacms.acf``
      - PVACMS access security file.
-   * - ``$XDG_DATA_HOME/pva/1.5/certs.db``
+   * - ``$XDG_DATA_HOME/pva/1.4/certs.db``
      - Certificate database.
 
 See :doc:`pvacms` for full PVACMS configuration, clustering, backup,
@@ -95,7 +95,7 @@ Use the authenticator that matches your site:
    authnldap -u client
 
 The resulting keychain is normally written under
-``$XDG_CONFIG_HOME/pva/1.5/``. Client tools use ``client.p12`` by default;
+``$XDG_CONFIG_HOME/pva/1.4/``. Client tools use ``client.p12`` by default;
 servers use ``server.p12`` by default. Use ``pvxcert`` to inspect,
 approve, revoke, renew, or query certificate status. See :doc:`cli`.
 
@@ -107,7 +107,7 @@ For command-line clients such as ``pvxget``, ``pvxput``, ``pvxinfo``, and
 
 .. code-block:: shell
 
-   export EPICS_PVA_TLS_KEYCHAIN=$HOME/.config/pva/1.5/client.p12
+   export EPICS_PVA_TLS_KEYCHAIN=$HOME/.config/pva/1.4/client.p12
    export EPICS_PVA_ADDR_LIST="pvacms-host ioc-host"
    export EPICS_PVA_AUTO_ADDR_LIST=NO
 
@@ -153,7 +153,7 @@ Useful operator checks are:
 
 .. code-block:: shell
 
-   pvxcert -f ~/.config/pva/1.5/client.p12
+   pvxcert -f ~/.config/pva/1.4/client.p12
    pvxcert <certificate-id>
    pvxinfo -v test:spec
 

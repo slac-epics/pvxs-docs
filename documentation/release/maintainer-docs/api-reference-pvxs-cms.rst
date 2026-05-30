@@ -26,8 +26,6 @@ Public API
    api-reference-pvxs-cms-certstatus
    api-reference-pvxs-cms-certstatusfactory
    api-reference-pvxs-cms-keypair
-   api-reference-pvxs-cms-sanentry
-   api-reference-pvxs-cms-schedulewindow
 
 Expert API
 ----------

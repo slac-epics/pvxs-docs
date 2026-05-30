@@ -4,10 +4,9 @@ Performance, Monitoring, and Debugging
 ======================================
 
 SPVA adds work that plain PVAccess does not do: TLS handshakes,
-certificate-chain validation, certificate-status subscriptions, optional
-status stapling, and disk caching of signed status responses. Application
-performance work should separate those costs from ordinary get, put,
-monitor, and RPC costs.
+certificate-chain validation, certificate-status subscriptions, and
+optional status stapling. Application performance work should separate
+those costs from ordinary get, put, monitor, and RPC costs.
 
 What changes under SPVA
 -----------------------
@@ -20,10 +19,8 @@ The main costs are:
   status checking is explicitly disabled;
 * **stapling** — servers may staple cached status to reduce the first
   client-side status lookup;
-* **fallback or holding states** — ``UNKNOWN`` and ``SUSPENDED`` status
-  classes can delay operations while pvxs waits for a fresh status;
-* **disk cache** — signed status responses are persisted under the XDG
-  data directory so restart does not always mean a cold status lookup.
+* **fallback or holding states** — ``UNKNOWN`` status can delay operations
+  while pvxs waits for a fresh status.
 
 These costs mostly affect connection churn. Long-lived monitors and
 clients that reuse a
@@ -60,18 +57,15 @@ Prefer these changes before disabling security features:
   per operation;
 * keep monitors long-lived rather than repeatedly connecting and
   disconnecting;
-* keep ``EPICS_PVA_STATUS_CACHE_DIR`` on local storage with owner-only
-  permissions;
 * enable stapling unless you are debugging status behaviour;
 * make PVACMS reachable through a stable address list so status lookups do
   not depend on broad network search;
 * use runtime reconfiguration for keychain rotation instead of process
   restarts when possible.
 
-Use ``EPICS_PVA_NO_STATUS_CACHE=YES``, ``no_revocation_check``, or
-``no_stapling`` only for controlled tests or a documented operational
-exception. They change the security/performance tradeoff and can hide the
-cost you intended to measure.
+Use ``no_revocation_check`` or ``no_stapling`` only for controlled tests or
+a documented operational exception. They change the security/performance
+tradeoff and can hide the cost you intended to measure.
 
 Monitoring and logs
 -------------------

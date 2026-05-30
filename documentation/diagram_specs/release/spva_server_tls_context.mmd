@@ -1,0 +1,34 @@
+ %%{init: {
+    'theme': 'forest',
+    'themeVariables': {
+        'noteBkgColor': '#fff6e9',
+        'noteBorderColor': '#7c334f',
+        'noteTextColor': '#544943',
+        'stateBkg': '#cde498',
+        'stateBorder': '#7c334f',
+        'stateTextColor': '#544943',
+        'fontFamily': 'Georgia Serif',
+        'fontSize': '12px',
+        'stateLabelColor': '#544943',
+        'stateTextColor': '#544943',
+        'stateBorderColor': '#7c334f',
+        'mainBkg': '#fff6e9',
+        'textColor': '#544943',
+        'lineColor': '#7c334f',
+        'edgeLabelBackground': '#fff6e9',
+        'tertiaryColor': '#fff6e9'
+    }
+}}%%
+stateDiagram-v2
+    direction TB
+    [*] --> Init
+
+    Init --> DegradedMode: No Cert<br>OR Cert REVOKED/EXPIRED
+    Init --> TcpReady: Cert VALID<br>AND Monitoring Required<br>(awaiting first GOOD)
+    Init --> TlsReady: Cert VALID<br>AND Monitoring NOT Required
+
+    TcpReady --> TlsReady: Cert Status GOOD
+    TcpReady --> DegradedMode: Cert Status BAD (REVOKED/EXPIRED)<br>OR persistent STALE
+
+    TlsReady --> TcpReady: Cert Status UNKNOWN<br>(PVACMS momentarily unreachable)
+    TlsReady --> DegradedMode: Cert Status BAD (REVOKED/EXPIRED)

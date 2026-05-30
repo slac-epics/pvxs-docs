@@ -44,7 +44,7 @@ stable branch choices are:
      - ``7.0-secure-pvaccess``
      - ``epics-base-<version>-spva.<yyyymmdd>``
    * - ``pvxs-tls`` cloned as ``pvxs``
-     - ``tls``
+     - ``main``
      - ``dev``
      - ``pvxs-<version>-spva.<yyyymmdd>``
    * - ``pvxs-cms``
@@ -60,8 +60,9 @@ stable branch choices are:
      - ``master``; Secure PVAccess changes are already integrated
      - use the branch
 
-The ``tls`` branch of ``pvxs-tls`` and the ``main`` branch of
-``pvxs-cms`` are the stable release branches. The ``dev`` branches contain
+The ``main`` branch of ``pvxs-tls`` (renamed from ``tls`` on 2026-05) and
+the ``main`` branch of ``pvxs-cms`` are the stable release branches. The
+``dev`` branches contain
 the latest development work, including experimental features.
 
 For ``p4p-tls``, the ``master`` branch works with whichever pvxs checkout
@@ -101,7 +102,7 @@ Stable branch checkout:
 .. code-block:: shell
 
    git clone --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls.git epics-base
-   git clone --branch tls https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch main https://github.com/slac-epics/pvxs-tls.git pvxs
    git clone --branch main https://github.com/slac-epics/pvxs-cms.git pvxs-cms
    git clone --branch master https://github.com/slac-epics/p4p-tls.git p4p
    git clone --branch master https://github.com/ControlSystemStudio/phoebus.git phoebus
@@ -157,7 +158,7 @@ that project root and are included by the sibling modules.
 
    # Clone the pvxs TLS fork into a directory named "pvxs" so the build
    # paths match the EPICS RELEASE examples and the rest of this manual.
-   git clone --branch tls https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch main https://github.com/slac-epics/pvxs-tls.git pvxs
 
    git clone --branch main https://github.com/slac-epics/pvxs-cms.git pvxs-cms
 
@@ -218,7 +219,7 @@ before ``RULES_MODULES`` so sites can add more modules.
 
    # Clone the pvxs TLS fork into a directory named "pvxs" for consistency
    # with RELEASE paths, installed names, and the rest of this manual.
-   git clone --branch tls https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch main https://github.com/slac-epics/pvxs-tls.git pvxs
 
    git clone --branch main https://github.com/slac-epics/pvxs-cms.git pvxs-cms
 
@@ -329,7 +330,7 @@ Clone the sources and install dependencies:
    cd /d C:\spva-work
 
    git clone --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls.git epics-base
-   git clone --branch tls https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch main https://github.com/slac-epics/pvxs-tls.git pvxs
    git clone --branch main https://github.com/slac-epics/pvxs-cms.git pvxs-cms
 
    git clone https://github.com/microsoft/vcpkg.git C:\vcpkg

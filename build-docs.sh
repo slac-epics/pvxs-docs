@@ -15,7 +15,7 @@
 #   brew install inkscape doxygen
 #   pip install sphinx breathe furo sphinx-reredirects
 #   npm install -g @mermaid-js/mermaid-cli   # OR: npx fetches it on the fly
-#   sibling clones at ../epics-base, ../pvxs (branch tls), ../pvxs-cms (branch main)
+#   sibling clones at ../epics-base, ../pvxs (branch main), ../pvxs-cms (branch main)
 #
 # Usage (preferred):
 #   ./build-docs.sh release        # build release variant into ../pvxs-pages/release/
@@ -139,9 +139,21 @@ PCFG
             base_name="$(basename "${mmd_file}" .mmd)"
             release_png="${DOC_DIR}/release/_images/${base_name}.png"
             dev_png="${DOC_DIR}/dev/_images/${base_name}.png"
-            info "  ${base_name}.mmd → release/_images/${base_name}.png + dev/_images/"
-            ${MMDC_CMD} -i "${mmd_file}" -o "${release_png}" -s 2 -p "${PUPPETEER_CFG}"
-            cp "${release_png}" "${dev_png}"
+            # Per-variant source: diagram_specs/<variant>/<name>.mmd overrides the
+            # shared diagram_specs/<name>.mmd. Render the release PNG from the resolved
+            # release source. For dev: render a dev override if present, else cp the
+            # release PNG (render-once-then-cp keeps non-overridden diagrams identical).
+            release_src="${DIAGRAM_SPECS_DIR}/release/${base_name}.mmd"
+            [ -f "${release_src}" ] || release_src="${mmd_file}"
+            dev_src="${DIAGRAM_SPECS_DIR}/dev/${base_name}.mmd"
+            info "  ${release_src} → release/_images/${base_name}.png"
+            ${MMDC_CMD} -i "${release_src}" -o "${release_png}" -s 2 -p "${PUPPETEER_CFG}"
+            if [ -f "${dev_src}" ]; then
+                info "  ${dev_src} → dev/_images/${base_name}.png"
+                ${MMDC_CMD} -i "${dev_src}" -o "${dev_png}" -s 2 -p "${PUPPETEER_CFG}"
+            else
+                cp "${release_png}" "${dev_png}"
+            fi
         done
     else
         info "No Mermaid diagram specs found — skipping"

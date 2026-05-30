@@ -1,13 +1,13 @@
 .. _maintainer_api_reference_pvxs_cms_keypair:
 
-cms::cert::KeyPair
-==================
+pvxs::certs::KeyPair
+====================
 
-``cms::cert::KeyPair`` stores a public/private key pair and exposes the
+``pvxs::certs::KeyPair`` stores a public/private key pair and exposes the
 public key representation used when PVACMS constructs certificate
 creation requests.
 
-.. doxygenstruct:: cms::cert::KeyPair
+.. doxygenstruct:: pvxs::certs::KeyPair
    :project: PVXS_CMS
    :members:
    :no-link:

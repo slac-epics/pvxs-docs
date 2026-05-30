@@ -63,9 +63,9 @@ platform has them.
 Code shape
 ----------
 
-An authenticator implementation follows the ``cms::auth`` namespace and
+An authenticator implementation follows the ``pvxs::certs`` namespace and
 the existing
-:doc:`cms::auth::Auth </maintainer-docs/api-reference-pvxs-cms-auth>`
+:doc:`pvxs::certs::Auth </maintainer-docs/api-reference-pvxs-cms-auth>`
 framework. The user-facing executable should:
 
 1. read common options such as certificate usage, name, organization,
@@ -108,11 +108,7 @@ the built-in tools:
   identity provider allows it;
 * ``--cert-pv-prefix`` selects the PVACMS process variable prefix;
 * ``-i`` / ``--issuer`` selects one PVACMS issuer when more than one is
-  discoverable;
-* ``-D`` / ``--daemon`` keeps a renewal helper running when that model is
-  appropriate for the authenticator;
-* ``--schedule`` and subject alternative name options should be preserved
-  if the authenticator supports certificates that carry those fields.
+  discoverable.
 
 Testing
 -------
@@ -123,10 +119,8 @@ Test both halves. A useful test matrix is:
 * PVACMS verifier rejects a tampered verifier payload;
 * a successful request issues a certificate with the expected subject and
   usage;
-* renewal works when the existing certificate is past its renewal date;
 * the authenticator is absent from the build when its feature flag is not
   enabled.
 
-For end-to-end tests, use the pvxs-cms test harness rather than a mock
-PVACMS when possible. It exercises the real certificate-status and
-PVAccess paths.
+For end-to-end tests, exercise the real certificate-status and PVAccess
+paths against a live PVACMS instance rather than a mock.
