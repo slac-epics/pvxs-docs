@@ -310,15 +310,14 @@
 
 - Peer Status Store.
 
-  A process-wide, in-memory cache of peer certificate status maintained by
-  pvxs to avoid repeating TLS handshakes to peers whose certificates are
-  known to be non-``GOOD``. Entries are keyed by peer certificate identity
-  (issuer + serial) and expire at the cert-status ``status_valid_until_date``
-  boundary. An auxiliary GUID-to-cert-identity map enables search-reply
-  filtering by server GUID. The store drives per-channel search partitioning
-  (channels targeting non-``GOOD`` peers emit ``["tcp"]``-only searches)
-  and active upgrade on peer recovery (plain-TCP connections to a
-  newly-``GOOD`` peer are torn down so channels re-search and commit to TLS).
+  A per-``CertStatusExData`` ``std::map`` of peer certificate status, keyed by
+  the peer certificate's serial number and guarded by an ``epicsMutex``. It lets
+  a TLS context reuse an existing peer status-and-monitor across the connections
+  sharing that context, instead of re-subscribing for every connection to the
+  same peer. The store is present on both the release and dev branches; the dev
+  addition is the recovery observer (``setOnSuspended`` / ``setOnResumed`` /
+  ``setOnDegraded``) that reacts to a peer's status leaving or returning to the
+  ``GOOD`` class.
   See :ref:`peer_status_store`.
 
 .. _glossary_trust_anchor:

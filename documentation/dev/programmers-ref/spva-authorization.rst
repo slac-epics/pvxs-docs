@@ -58,6 +58,18 @@ by the server and, optionally, by the client.
 Access Control
 --------------
 
+.. admonition:: Preview — SAN-based authorization is not yet shipping
+   :class: warning
+
+   The ``SAG`` predicate and SAN-based access control described in this section
+   require the EPICS Base ``aslib-san-access-groups`` feature branch. That branch
+   is **not** part of the epics-base reference this documentation is built against
+   (``7.0-secure-pvaccess``), so end-to-end SAN authorization is **preview /
+   unreleased**: it cannot be exercised with the currently-built epics-base. The
+   pvxs and pvxs-cms SAN plumbing (certificate SAN extraction, CCR ``san``
+   issuance, the ``SanEntry`` type) *is* present in the dev build and is documented
+   without this caveat.
+
 Secure PVAccess integrates with EPICS Security's authorization system via extensions to the
 Access Control File (ACF) syntax. New rule predicates (``METHOD``, ``AUTHORITY``, ``PROTOCOL``)
 and a new ``RPC`` permission type enable fine-grained control while preserving backward
@@ -177,7 +189,7 @@ from the client's TLS certificate. This is distinct from ``HAG`` (which matches 
 client's IP address or hostname at the network level) — ``SAG`` matches the
 cryptographically bound identity embedded in the X.509 certificate.
 
-**Defining a SAG**
+**Defining a SAG** (preview — see admonition above)
 
 ``SAG`` definitions appear at the top level of the ACF file, alongside ``UAG`` and
 ``HAG``:
@@ -484,7 +496,8 @@ Identity Structure for APIs
 
 The ``ASIDENTITY`` / ``ASGIDENTITY`` structure is passed to
 ``asAddClientIdentity()`` and ``asChangeClientIdentity()`` for each connection.
-It carries the full authenticated peer identity including Subject Alternative Names:
+It carries the full authenticated peer identity including Subject Alternative Names
+(preview — see admonition above):
 
 .. code-block:: c
 

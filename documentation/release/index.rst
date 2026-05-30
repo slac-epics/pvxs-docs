@@ -3,6 +3,14 @@
 |security| Secure PVAccess Documentation
 ==========================================
 
+.. admonition:: Release variant
+   :class: important
+
+   You are reading the **release** variant of the SPVA documentation
+   (pvxs ``1.5.1``), which describes the currently-shipping behaviour. A
+   separate **dev** variant documents in-flight features for the next
+   release. Switch the sidebar dropdown to **dev** to see it.
+
 For protocol implementers — wire-level transport, message encodings,
 state machines, normative protocol semantics:
 

@@ -1,0 +1,42 @@
+ %%{init: {
+    'theme': 'forest',
+    'themeVariables': {
+        'noteBkgColor': '#fff6e9',
+        'noteBorderColor': '#7c334f',
+        'noteTextColor': '#544943',
+        'stateBkg': '#cde498',
+        'stateBorder': '#7c334f',
+        'stateTextColor': '#544943',
+        'fontFamily': 'Georgia Serif',
+        'fontSize': '12px',
+        'stateLabelColor': '#544943',
+        'stateTextColor': '#544943',
+        'stateBorderColor': '#7c334f',
+        'mainBkg': '#fff6e9',
+        'textColor': '#544943',
+        'lineColor': '#7c334f',
+        'edgeLabelBackground': '#fff6e9',
+        'tertiaryColor': '#fff6e9'
+    }
+}}%%
+stateDiagram-v2
+    direction TB
+    [*] --> PENDING_APPROVAL: CCR requires approval
+    [*] --> PENDING: Approved before notBefore
+    [*] --> VALID: Approved within validity window
+
+    PENDING_APPROVAL --> PENDING: Approved before notBefore
+    PENDING_APPROVAL --> VALID: Approved within validity window
+
+    PENDING --> VALID: notBefore reached
+
+    VALID --> PENDING_RENEWAL: renew_by passed without renewal
+    VALID --> EXPIRED: notAfter reached
+    VALID --> REVOKED: Revoked by administrator
+
+    PENDING_RENEWAL --> VALID: Renewal recorded
+    PENDING_RENEWAL --> EXPIRED: notAfter reached
+    PENDING_RENEWAL --> REVOKED: Revoked by administrator
+
+    EXPIRED --> [*]
+    REVOKED --> [*]

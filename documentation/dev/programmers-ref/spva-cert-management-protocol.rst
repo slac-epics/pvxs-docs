@@ -57,13 +57,16 @@ Certificate Attributes
 
 - ``public key``: Public key of the certificate subject
 - ``private key``: Private key of the certificate subject. Not stored in the certificate; stored in the keychain file.
+- ``SAN`` (Subject Alternative Names): an optional list of additional identities bound to the
+  certificate. Each entry is a ``{type, value}`` pair, where ``type`` is ``dns`` (a DNS host
+  name) or ``ip`` (an IP address). Stored in the X.509 ``subjectAltName`` extension.
 - ``SPVA certificate status extension``: PV name where certificate status can be monitored
 - ``SPVA config uri extension``: PV name where certificate configuration can be monitored
 
 Certificate States
 ------------------
 
-.. figure:: certificate_states.png
+.. figure:: /_images/certificate_states.png
     :alt: Certificate States
     :width: 75%
     :align: left
@@ -217,6 +220,9 @@ Sent to :ref:`pvacms` to request a new certificate. The request is a PVStructure
         UInt32     not_after          # Validity end time (epoch seconds)
         string     pub_key            # Public key data
         enum_t     status_monitoring_extension  # Include status monitoring
+        StructA    san                # Optional: Subject Alternative Names
+            string     type           # "dns" or "ip"
+            string     value          # DNS host name or IP address
         structure  verifier           # Optional: Authenticator specific data
 
 The ``verifier`` sub-structure is present only when ``type`` references a

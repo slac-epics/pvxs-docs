@@ -1969,7 +1969,7 @@ IANA-registered to the EPICS community.
 - **pvxs-cms implementation** — https://github.com/slac-epics/pvxs-cms;
   in particular ``src/common/certstatus.h`` (the cert-status
   PVStructure schema),
-  :doc:`cms::cert::CertFactory </maintainer-docs/api-reference-pvxs-cms-certfactory>` (the
+  :doc:`pvxs::certs::CertFactory </maintainer-docs/api-reference-pvxs-cms-certfactory>` (the
   certificate-issuance code path), and ``src/pvacms/opensslgbl.h``
   (the custom Object Identifier definitions referenced in
   Section 4.3). Consulted in preparing this specification.

@@ -63,9 +63,9 @@ platform has them.
 Code shape
 ----------
 
-An authenticator implementation follows the ``cms::auth`` namespace and
+An authenticator implementation follows the ``pvxs::certs`` namespace and
 the existing
-:doc:`cms::auth::Auth </maintainer-docs/api-reference-pvxs-cms-auth>`
+:doc:`pvxs::certs::Auth </maintainer-docs/api-reference-pvxs-cms-auth>`
 framework. The user-facing executable should:
 
 1. read common options such as certificate usage, name, organization,

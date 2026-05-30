@@ -7,9 +7,9 @@
    :class: important
 
    You are reading the **dev** variant of the SPVA documentation
-   (pvxs ``1.5.1``). The dev variant covers features that are in flight
+   (pvxs ``1.5.2``). The dev variant covers features that are in flight
    for the next release and not yet shipping in the current release
-   (``1.4.1``). Switch the sidebar dropdown to **release** to see only
+   (``1.5.1``). Switch the sidebar dropdown to **release** to see only
    the currently-shipping behaviour.
 
    Features in this dev cut that are not in release:

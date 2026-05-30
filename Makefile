@@ -98,20 +98,30 @@ combined-root:
 .PHONY: mermaid
 mermaid: $(MMD_PNGS)
 
-# Mermaid output is per-variant: each .mmd is rendered into
-# documentation/release/_images/<name>.png (the canonical render) and then
-# cp'd into documentation/dev/_images/<name>.png so each Sphinx variant build
-# can resolve `.. image:: /_images/<name>.png` against its own source root.
+# Mermaid output is per-variant. The source for each variant is resolved as
+# diagram_specs/<variant>/<name>.mmd if that override exists, else the shared
+# diagram_specs/<name>.mmd. The release PNG is always rendered from its resolved
+# source. For dev: if a dev override exists, render it; otherwise cp the release
+# PNG (render-once-then-cp keeps non-overridden diagrams byte-identical).
 $(DOC_DIR)/release/_images/%.png: $(DIAGRAM_DIR)/%.mmd
 	@mkdir -p $(DOC_DIR)/release/_images
-	@printf '\033[1;34m==>\033[0m  %s → %s\n' "$<" "$@"
-	@printf '{"args":["--no-sandbox","--disable-setuid-sandbox"]}\n' > $(PUPPETEER_CFG)
-	$(MMDC) -i $< -o $@ -s 2 -p $(PUPPETEER_CFG)
-	@rm -f $(PUPPETEER_CFG)
+	@src=$(DIAGRAM_DIR)/release/$*.mmd; [ -f "$$src" ] || src=$<; \
+	  printf '\033[1;34m==>\033[0m  %s → %s\n' "$$src" "$@"; \
+	  printf '{"args":["--no-sandbox","--disable-setuid-sandbox"]}\n' > $(PUPPETEER_CFG); \
+	  $(MMDC) -i "$$src" -o $@ -s 2 -p $(PUPPETEER_CFG); \
+	  rm -f $(PUPPETEER_CFG)
 
 $(DOC_DIR)/dev/_images/%.png: $(DOC_DIR)/release/_images/%.png
 	@mkdir -p $(DOC_DIR)/dev/_images
-	@cp $< $@
+	@src=$(DIAGRAM_DIR)/dev/$*.mmd; \
+	  if [ -f "$$src" ]; then \
+	    printf '\033[1;34m==>\033[0m  %s → %s\n' "$$src" "$@"; \
+	    printf '{"args":["--no-sandbox","--disable-setuid-sandbox"]}\n' > $(PUPPETEER_CFG); \
+	    $(MMDC) -i "$$src" -o $@ -s 2 -p $(PUPPETEER_CFG); \
+	    rm -f $(PUPPETEER_CFG); \
+	  else \
+	    cp $< $@; \
+	  fi
 
 # ---------------------------------------------------------------------------
 # Doxygen — C/C++ API extraction from sibling repos

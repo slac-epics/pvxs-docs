@@ -1,12 +1,12 @@
 .. _maintainer_api_reference_pvxs_cms_certificatestatus:
 
-cms::cert::CertificateStatus
-============================
+pvxs::certs::CertificateStatus
+==============================
 
-``cms::cert::CertificateStatus`` models certificate status state and is
+``pvxs::certs::CertificateStatus`` models certificate status state and is
 used as a key part of status publication and status transitions.
 
-.. doxygenstruct:: cms::cert::CertificateStatus
+.. doxygenstruct:: pvxs::certs::CertificateStatus
    :project: PVXS_CMS
    :members:
    :no-link:

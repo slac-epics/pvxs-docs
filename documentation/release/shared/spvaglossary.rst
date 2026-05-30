@@ -111,7 +111,7 @@
   The PVAccess RPC message sent by an authenticator tool (``authnstd``,
   ``authnkrb``, ``authnldap``) to PVACMS to request a signed X.509 certificate.
   The CCR carries the public key, requested subject fields (CN/O/OU/C), desired
-  validity period, SANs, schedule windows, and authenticator-specific verifier
+  validity period, the status-monitoring extension, and authenticator-specific verifier
   data (e.g. a Kerberos GSSAPI token). PVACMS verifies the CCR, signs the
   certificate, and returns it to the requester.
 

@@ -1,13 +1,13 @@
 .. _maintainer_api_reference_pvxs_cms_certstatusfactory:
 
-cms::cert::CertStatusFactory
-============================
+pvxs::certs::CertStatusFactory
+==============================
 
-``cms::cert::CertStatusFactory`` creates signed certificate-status
+``pvxs::certs::CertStatusFactory`` creates signed certificate-status
 responses used by PVACMS when publishing Secure PVAccess certificate
 status information.
 
-.. doxygenclass:: cms::cert::CertStatusFactory
+.. doxygenclass:: pvxs::certs::CertStatusFactory
    :project: PVXS_CMS
    :members:
    :no-link:

@@ -63,7 +63,7 @@ Certificate Attributes
 Certificate States
 ------------------
 
-.. figure:: certificate_states.png
+.. figure:: /_images/certificate_states.png
     :alt: Certificate States
     :width: 75%
     :align: left
@@ -73,6 +73,8 @@ Certificate States
   approval publishes ``VALID``.
 - ``PENDING``: Not yet valid (before ``notBefore`` date)
 - ``VALID``: Currently valid and usable
+- ``PENDING_RENEWAL``: The certificate's renewal deadline has passed without a renewal being
+  recorded; the certificate is past-due for renewal.
 - ``EXPIRED``: Past ``notAfter`` date; permanently non-operational.
 - ``REVOKED``: Permanently revoked by an administrator.
 
@@ -86,7 +88,7 @@ Status response structure:
 .. code-block:: console
 
     Structure
-        enum_t     status               # PENDING_APPROVAL, PENDING, VALID, EXPIRED, REVOKED
+        enum_t     status               # PENDING_APPROVAL, PENDING, VALID, PENDING_RENEWAL, EXPIRED, REVOKED
         UInt64     serial               # Certificate serial number
         string     state                # String representation of status
         enum_t     ocsp_status          # GOOD, REVOKED, UNKNOWN
@@ -95,8 +97,6 @@ Status response structure:
         string     ocsp_certified_until # Validity period end
         string     ocsp_revocation_date # Revocation date if applicable
         UInt8A     ocsp_response        # Signed PKCS#7 encoded OCSP response
-        string     pvacms_node_id       # "<issuer_id>:<node_id>" of the serving PVACMS node
-                                        # (empty for single-node deployments)
 
 .. _certificate_creation_request_CCR:
 

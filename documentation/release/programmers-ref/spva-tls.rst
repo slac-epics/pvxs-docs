@@ -90,25 +90,31 @@ State Machines
 
 *Server TLS Context State Machine:*
 
-States: ``Init``, ``TlsReady``, ``DegradedMode``.
+States: ``Init``, ``DegradedMode``, ``TcpReady``, ``TlsReady``.
 
 - ``Init``: initial state; loads and validates certificates. The context remains in ``Init``
   until cert-status resolution completes.
+- ``TcpReady``: the optimistic bootstrap state. The certificate is ``VALID`` and status
+  monitoring is required, but the first ``GOOD`` status has not yet been received. TCP is
+  usable immediately while the context awaits the first authoritative cert-status delivery;
+  TLS admission is deferred until it arrives. On the first ``GOOD`` the context graduates to
+  ``TlsReady``; it also returns to ``TcpReady`` when a previously-``TlsReady`` context's
+  status becomes ``UNKNOWN`` (e.g. PVACMS momentarily unreachable).
 - ``TlsReady``: certificate status is ``GOOD``; both TCP and TLS protocol requests are served.
 - ``DegradedMode``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Only TCP
   is permitted. The certificate monitor is stopped.
 
 Transitions are driven by certificate validity, status monitoring results, and :ref:`configuration` options.
 
-.. image:: spva_server_tls_context.png
+.. image:: /_images/spva_server_tls_context.png
    :alt: SPVA Server TLS Context State Machine
    :align: center
 
 *Client TLS Context State Machine:*
 
-States are the same as the server (``Init``, ``TlsReady``, ``DegradedMode``). The client never
-exits on TLS configuration issues; trust anchor validation and certificate status govern
-initial transitions.
+States are the same as the server (``Init``, ``DegradedMode``, ``TcpReady``, ``TlsReady``). The
+client never exits on TLS configuration issues; trust anchor validation and certificate status
+govern initial transitions.
 
 .. image:: /_images/spva_client_tls_context.png
    :alt: SPVA Client TLS Context State Machine

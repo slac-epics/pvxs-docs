@@ -115,7 +115,7 @@ States: ``Init``, ``TcpOnly``, ``TcpReady``, ``TlsReady``, ``DegradedMode``.
 
 Transitions are driven by certificate validity, status monitoring results, and :ref:`configuration` options.
 
-.. image:: spva_server_tls_context.png
+.. image:: /_images/spva_server_tls_context.png
    :alt: SPVA Server TLS Context State Machine
    :align: center
 
@@ -267,51 +267,28 @@ waits for the certificate to return to ``VALID``.
 Peer Status Store (Well-Behaved Peer Pattern)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-pvxs maintains a **process-wide, in-memory peer status store** that records peer certificate
-status across connection lifetimes. This prevents the "groundhog day" problem where a
-process repeatedly attempts TLS handshakes to a peer whose certificate is known to be
-non-``GOOD``, only to give up and fall back to TCP each time.
+pvxs maintains a per-``CertStatusExData`` **peer status store** that records peer
+certificate status across the connections sharing a TLS context. This is a
+``std::map<serial_number_t, std::weak_ptr<SSLPeerStatusAndMonitor>>`` guarded by an
+``epicsMutex``, keyed by the peer certificate's serial number. The store is present on
+**both** the release and dev branches; it lets a context reuse an existing peer
+status-and-monitor instead of re-subscribing for every connection to the same peer.
 
 **How it works:**
 
 - Every peer cert-status delivery (from the per-connection ``SSLPeerStatusAndMonitor``
-  subscription) updates the store with the peer's certificate identity and status class.
-- The store is keyed by peer certificate identity (issuer + serial) and maintains an
-  auxiliary GUID-to-peer-cert-identity map for search-reply filtering.
-- Entries expire when their ``status_valid_until_date`` passes (PVACMS-signed freshness;
-  no hardcoded TTL). On expiry the entry is removed and the next attempt is allowed to
-  proceed with TLS normally.
+  subscription) updates the store entry for that peer's serial number.
+- Entries are held as ``weak_ptr`` to the shared status-and-monitor, so an entry drops
+  automatically once the last connection referencing it goes away.
 
-**Consumers:**
-
-1. **Client search-reply filter:** when a ``CMD_SEARCH_RESPONSE`` arrives with
-   ``protocol = "tls"``, the client consults the store by the server's GUID. If a
-   current non-``GOOD`` entry exists, the reply is discarded. The channel remains in
-   searching and the server GUID is recorded on the channel for search partitioning.
-2. **Per-channel search partitioning:** ``tickSearch`` partitions searching channels into
-   a default sub-bucket (``["tls", "tcp"]``) and a TCP-only sub-bucket (``["tcp"]``) based
-   on the store. Channels whose last-known server GUID maps to a non-``GOOD`` entry are
-   placed in the TCP-only sub-bucket.
-3. **Server/client handshake-completion filter:** at TLS handshake completion, before
-   subscribing to peer status, the endpoint consults the store by the peer cert identity.
-   If a current non-``GOOD`` entry exists, the connection is rejected immediately.
-
-**Active upgrade on recovery:** when the store observes a transition from non-``GOOD``
-to ``GOOD`` for a peer (detected by comparing the prior entry's class against the new
-delivery), a recovery observer is fired. Each ``ContextImpl`` (client) and ``Server::Pvt``
-(server) registers a recovery observer that walks its connection map, finds every plain-TCP
-connection to the recovered peer, and tears it down. Channels return to searching, the next
-search cycle places them in the default sub-bucket, and they commit to TLS.
-
-If no TLS connection to the peer exists (all channels were TCP-downgraded), recovery falls
-back to the existing OCSP ``status_valid_until_date`` expiry: the entry expires, the next
-search cycle returns the channel to the default sub-bucket, and the normal search/reply
-flow re-evaluates the peer.
-
-The store is implemented as a Meyers singleton (``PeerStatusStore::instance()``), using a
-function-local static to comply with the pvxs rule against global constructors. It uses
-``epicsMutex`` per the pvxs concurrency idiom. The store is in-memory only; process restart
-wipes it and costs one wasted TLS handshake per peer to re-learn.
+**Dev addition — recovery observer.** The dev branch adds a recovery observer to
+``SSLContext`` (``setOnSuspended`` / ``setOnResumed`` / ``setOnDegraded``, absent on the
+release branch). When a peer's status transitions out of, or back into, the ``GOOD`` class,
+the registered observer reacts: on recovery to ``GOOD`` it re-enables TLS for connections to
+that peer, and on a move to ``SUSPENDED`` / ``DegradedMode`` it applies the corresponding
+hold or tear-down. This is the mechanism behind the active tear-down on ``BAD`` and resume
+on ``GOOD`` described above; the underlying serial-keyed store itself is unchanged from the
+release branch.
 
 .. _status_caching:
 
@@ -346,12 +323,15 @@ under the XDG data directory:
 
 Cache files are cryptographically self-validating — a corrupted or tampered file simply fails
 OCSP verification and is discarded.  Expired cache files are deleted on load.  The cache
-directory is created with owner-only permissions (``0700``) on first write.  Advisory file
-locking ensures safe concurrent access from multiple processes sharing the same directory.
+directory is created with owner-only permissions (``0700``) on first write.  Concurrency
+safety relies solely on the atomic temp-file-plus-``rename()`` write described above; there
+is no advisory file locking (the header comments mention it, but it is not implemented).
 
 Configuration (see :ref:`environment_variables`):
 
-- ``EPICS_PVA_STATUS_CACHE_DIR`` — override the default cache directory path.
+- ``EPICS_PVA_STATUS_CACHE_DIR`` — override the default client cache directory path.
+- ``EPICS_PVAS_TLS_STATUS_CACHE_DIR`` — override the default server cache directory path.
+- ``EPICS_PVA_TLS_STATUS_CACHE_DIR`` — alternate client cache directory override.
 - ``EPICS_PVA_NO_STATUS_CACHE=YES`` — disable disk caching entirely.
 
 In non-OpenSSL builds, all cache operations are no-ops.
