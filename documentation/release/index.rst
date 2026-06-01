@@ -57,4 +57,3 @@ Shared reference material used across all manuals:
    :caption: Shared Reference
 
    shared/spvaglossary
-   shared/durations

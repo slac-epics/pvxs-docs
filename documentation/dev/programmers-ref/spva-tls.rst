@@ -15,9 +15,27 @@ is revoked or requires renewal.
 
 Three connection modes are supported:
 
-- ``tcp/tcp``: TCP only (legacy ``ca``)
-- ``tcp/tls``: server-only authenticated TLS
-- ``tls/tls``: mutually authenticated TLS
+.. list-table::
+   :widths: 30 70
+   :header-rows: 1
+
+   * - Mode
+     - Description
+   * - Plain TCP
+     - No TLS.  Legacy ``ca``/``anonymous`` credentials only.
+       Neither peer presents a certificate.
+   * - TLS, server-authenticated
+     - The connection is fully encrypted with TLS 1.3.  The server
+       presents a certificate; the client verifies it but presents no
+       certificate of its own.  The client's identity is
+       ``anonymous`` or ``ca``; only the server's identity is
+       cryptographically established.
+   * - TLS, mutually authenticated (mTLS)
+     - The connection is fully encrypted with TLS 1.3.  Both peers
+       present and verify X.509 certificates.  Both identities are
+       cryptographically established.  ``METHOD`` is ``x509`` on
+       both sides.  This is the recommended mode for production
+       deployments.
 
 Supported Keychain-File Formats
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -60,16 +78,33 @@ Protocol Operation
 Connection Establishment
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-TLS is used when at least the server is configured for TLS. PKCS#12 keychain files are loaded via
-``IdFileReader``, which extracts the certificate, CA chain, and private key. Key usage is validated:
-clients require ``XKU_SSL_CLIENT``; servers require ``XKU_SSL_SERVER``. Certificate chain verification
-depth is limited to 5 levels. The ALPN protocol identifier is ``pva/1``.
+TLS is activated when at least the server side has a keychain configured.  The server advertises
+TLS capability; a client with a matching keychain upgrades to TLS during the handshake.
 
-An agent uses TLS if a certificate, trust anchor, and private key are present at the path given by
-``EPICS_PVA_TLS_KEYCHAIN``. Default paths:
+To make a connection use TLS, provide a PKCS#12 keychain file via an environment variable or
+programmatic configuration.  The keychain must contain the entity certificate, the private key,
+and the CA chain back to the Root CA.  pvxs validates the certificate's key-usage extension
+(clients must carry the client-auth usage; servers must carry the server-auth usage) and verifies
+the CA chain.
 
-- ``~/.config/pva/1.5/client.p12`` for clients
-- ``~/.config/pva/1.5/server.p12`` for servers
+The keychain path is controlled by:
+
+- ``EPICS_PVA_TLS_KEYCHAIN`` — client-side keychain path
+- ``EPICS_PVAS_TLS_KEYCHAIN`` — server-side keychain path (overrides the client variable for
+  server processes)
+
+If a password was set when writing the P12 file, point to a file containing that password:
+
+- ``EPICS_PVA_TLS_KEYCHAIN_PWD_FILE`` — path to a file containing the client keychain password
+- ``EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE`` — path to a file containing the server keychain password
+
+To set the password from code, use ``ConfigCommon::setKeychainPassword()`` from the EXPERT API
+(see :doc:`expert-api`).
+
+Default keychain paths when no environment variable is set:
+
+- ``~/.config/pva/1.4/client.p12`` for clients
+- ``~/.config/pva/1.4/server.p12`` for servers
 
 For server-only authenticated TLS:
 
@@ -83,6 +118,63 @@ During the handshake, certificates are exchanged, servers staple cached status, 
 validate against their trusted root. After the handshake, both peers subscribe to peer certificate
 status; clients may use stapled server status.
 
+Configuring TLS across implementations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The environment variables above work identically in all three SPVA
+implementations.  The table below shows how to pass them programmatically
+when you cannot or do not want to use the shell environment.
+
+.. list-table::
+   :widths: 20 80
+   :header-rows: 1
+
+   * - Language
+     - Programmatic TLS configuration
+   * - **C++**
+     - Set fields on ``pvxs::client::Config`` or ``pvxs::server::Config``
+       before calling ``.build()``. Use ``setKeychainPassword()`` from the
+       EXPERT API for passwords (see :doc:`expert-api`). Example::
+
+         auto conf = pvxs::client::Config::fromEnv();
+         conf.tls_keychain_file = "/path/to/client.p12";
+         auto cli = conf.build();
+
+   * - **Python (P4P)**
+     - Pass a ``conf=`` dict with the same env-var names to
+       ``Context()`` or ``Server()``. Example::
+
+         from p4p.client.thread import Context
+         ctxt = Context('pva', conf={
+             'EPICS_PVA_TLS_KEYCHAIN': '/path/to/client.p12',
+         }, useenv=False)
+
+       The ``p4p`` package does **not** have a Python-level password API;
+       embed the password in the path as ``/path/to/file.p12;password``
+       (the same format accepted by the C++ library and Phoebus), or
+       point ``EPICS_PVA_TLS_KEYCHAIN_PWD_FILE`` at a password file.
+
+   * - **Java (Phoebus)**
+     - Set Java system properties before constructing ``PVAClient`` or
+       ``PVAServer``, or use environment variables.  System properties
+       take precedence::
+
+         System.setProperty("EPICS_PVA_TLS_KEYCHAIN",
+                            "/path/to/client.p12");
+         System.setProperty("EPICS_PVAS_TLS_KEYCHAIN",
+                            "/path/to/server.p12");
+
+       Embed the password in the path as ``/path/to/file.p12;password``
+       or point the ``*_PWD_FILE`` property at a password file.
+
+.. note::
+
+   In all three implementations, a plain-TCP client (no keychain
+   configured) can still connect to a server that advertises TLS,
+   provided the server has ``client_cert=optional`` set and does not
+   require mutual authentication.  This is the normal mode for cert-status
+   queries and other read-only administrative operations against PVACMS.
+
 .. _state_machines:
 
 State Machines
@@ -90,25 +182,16 @@ State Machines
 
 *Server TLS Context State Machine:*
 
-States: ``Init``, ``TcpOnly``, ``TcpReady``, ``TlsReady``, ``DegradedMode``.
+States: ``Init``, ``DegradedMode``, ``TcpReady``, ``TlsReady``.
 
-- ``Init``: initial state; loads and validates certificates.
-- ``TcpOnly``: certificate exists but is not yet operationally usable (e.g. ``PENDING``,
-  ``PENDING_APPROVAL``, ``SCHEDULED_OFFLINE``, or ``PENDING_RENEWAL`` before TLS was ever
-  established). Plain TCP only; TLS is not advertised or accepted. The certificate status
-  monitor remains active so the context upgrades automatically to ``TlsReady`` when
-  the certificate becomes ``VALID``.
-- ``TcpReady``: the **optimistic bootstrap state**. Entered when no cached cert-status is
-  available and the entity certificate's status defaults to ``UNKNOWN``. TCP connections
-  are accepted and TLS handshakes are permitted to proceed, but post-handshake admission
-  gates wait for cert-status to resolve. If the first authoritative cert-status delivery
-  is ``VALID``, the context graduates to ``TlsReady`` and the channel completes over TLS
-  (zero added latency). If the first delivery is non-``GOOD`` (``SUSPENDED``, ``BAD``, or
-  ``UNKNOWN``-class), the context transitions to ``TcpOnly`` or ``DegradedMode`` and any
-  pre-Validated TLS connections are torn down — channels return to searching and re-resolve
-  over plain TCP (the **give-up rule**; see :ref:`spva_protocol_spec` Section 7.3.1).
-  ``TcpReady`` is also entered when a previously-``TlsReady`` context's status becomes
-  ``UNKNOWN`` (e.g. PVACMS momentarily unreachable).
+- ``Init``: initial state; loads and validates certificates. The context remains in ``Init``
+  until cert-status resolution completes.
+- ``TcpReady``: the optimistic bootstrap state. The certificate is ``VALID`` and status
+  monitoring is required, but the first ``GOOD`` status has not yet been received. TCP is
+  usable immediately while the context awaits the first authoritative cert-status delivery;
+  TLS admission is deferred until it arrives. On the first ``GOOD`` the context graduates to
+  ``TlsReady``; it also returns to ``TcpReady`` when a previously-``TlsReady`` context's
+  status becomes ``UNKNOWN`` (e.g. PVACMS momentarily unreachable).
 - ``TlsReady``: certificate status is ``GOOD``; both TCP and TLS protocol requests are served.
 - ``DegradedMode``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Only TCP
   is permitted. The certificate monitor is stopped.
@@ -121,9 +204,9 @@ Transitions are driven by certificate validity, status monitoring results, and :
 
 *Client TLS Context State Machine:*
 
-States are the same as the server (``Init``, ``TcpOnly``, ``TcpReady``, ``TlsReady``,
-``DegradedMode``). The client never exits on TLS configuration issues; trust anchor validation
-and certificate status govern initial transitions.
+States are the same as the server (``Init``, ``DegradedMode``, ``TcpReady``, ``TlsReady``). The
+client never exits on TLS configuration issues; trust anchor validation and certificate status
+govern initial transitions.
 
 .. image:: /_images/spva_client_tls_context.png
    :alt: SPVA Client TLS Context State Machine
@@ -138,12 +221,6 @@ Status classes (internal grouping of PVACMS status values):
 - ``UNKNOWN``: status not yet received or indeterminate. Connections wait; operations are
   not yet permitted.
 - ``GOOD``: certificate status is ``VALID``. TLS proceeds normally.
-- ``SUSPENDED``: certificate is temporarily non-operational but expected to recover.
-  Covers ``SCHEDULED_OFFLINE`` (certificate is in a scheduled offline window) and
-  ``PENDING_RENEWAL`` (certificate has passed its renewal date and a renewal is in flight).
-  Existing TLS connections are maintained; contexts that have not yet established TLS enter
-  ``TcpOnly`` and keep monitoring for recovery. See
-  :ref:`suspended_cert_status`.
 - ``BAD``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Connection is
   torn down immediately; no recovery.
 
@@ -161,7 +238,7 @@ Transitions are driven by status updates from :ref:`pvacms` and PVACMS availabil
    peer. This avoids burning PVACMS channels on certificates that cannot recover.
 
 Certificate status values from PVACMS: ``UNKNOWN``, ``VALID``, ``PENDING``, ``PENDING_APPROVAL``,
-``PENDING_RENEWAL``, ``SCHEDULED_OFFLINE``, ``EXPIRED``, ``REVOKED``.
+``EXPIRED``, ``REVOKED``.
 OCSP status values: ``GOOD``, ``REVOKED``, ``UNKNOWN``.
 
 .. image:: /_images/spva_peer_certificate_status.png
@@ -206,12 +283,8 @@ monitor their own entity certificate and their peer's entity certificate.
 Status response handling:
 
 - Status not yet received (``UNKNOWN``): search requests are ignored; the client retries later.
-- Status ``PENDING_APPROVAL``: if TLS is not yet established, the context enters ``TcpOnly``
-  and keeps monitoring until approval transitions the certificate to ``VALID``.
 - Status ``BAD`` (``REVOKED`` / ``EXPIRED``): the server offers only TCP; the client tears down
   the connection immediately.
-- Status ``SUSPENDED`` (``SCHEDULED_OFFLINE`` / ``PENDING_RENEWAL``): the connection layer
-  enters a holding state — see :ref:`suspended_cert_status`.
 - Status ``GOOD`` (``VALID``): the server offers both TCP and TLS; the connection proceeds.
 
 **Pre-Validated connection give-up.** When a TLS connection has completed the handshake but
@@ -220,119 +293,24 @@ authoritative cert-status delivery for either the local cert or the peer cert dr
 deterministic exit:
 
 - ``GOOD``: the admission gate releases and the channel completes over TLS (happy path).
-- ``SUSPENDED`` / ``UNKNOWN`` class (own cert): the context enters ``TcpOnly``; all
-  pre-Validated TLS connections are torn down. Channels return to searching and
-  re-resolve over TCP.
 - ``BAD`` class (own cert): the context enters ``DegradedMode``; all pre-Validated TLS
   connections are torn down. Channels fall back to TCP.
-- ``SUSPENDED`` / ``UNKNOWN`` / ``BAD`` class (peer cert): the specific pre-Validated
-  connection is torn down. The client returns the channel to searching; the server drops
-  the connection.
+- ``BAD`` class (peer cert): the specific pre-Validated connection is torn down. The client
+  returns the channel to searching; the server drops the connection.
 
 This ensures no pre-Validated TLS connection waits indefinitely for a status that will not
 become ``GOOD`` on the current connection attempt.
-
-.. _suspended_cert_status:
-
-SUSPENDED Certificate Status
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The ``SUSPENDED`` status class covers two certificate states that are temporarily
-non-operational but are expected to become ``VALID`` again automatically:
-
-- ``SCHEDULED_OFFLINE``: the certificate is within a configured offline schedule window
-  (see :ref:`validity_schedules`). The certificate will return to ``VALID`` when the window ends.
-- ``PENDING_RENEWAL``: the certificate has passed its ``renew_by`` date and a renewal is
-  in flight. The certificate will return to ``VALID`` once the renewed certificate is issued.
-
-Unlike ``BAD`` (which causes immediate disconnection), ``SUSPENDED`` puts the connection layer
-into a holding state:
-
-- **If TLS was already established** (``TlsReady`` context): the TLS socket stays open.
-  Existing ``GET``/``PUT``/``RPC`` operations receive a ``SUSPENDED`` error; monitors are
-  paused. When the certificate transitions back to ``VALID``, operations resume automatically
-  with no reconnect and no new TLS handshake.
-- **If TLS was not yet established** (``Init`` / ``TcpOnly`` / ``TcpReady`` context): the
-  context enters ``TcpOnly`` so plain-TCP connections are not blocked, but TLS is not
-  advertised. When the certificate returns to ``VALID``, the context upgrades to ``TlsReady``
-  and TLS advertising resumes.
-
-``SUSPENDED`` is distinct from ``BAD`` because the offline state is time-bounded and
-operator-intended. During initial connection establishment, a ``SCHEDULED_OFFLINE`` status
-places the context in ``TcpOnly`` so plain-TCP traffic can continue while status monitoring
-waits for the certificate to return to ``VALID``.
-
-.. _peer_status_store:
-
-Peer Status Store (Well-Behaved Peer Pattern)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-pvxs maintains a per-``CertStatusExData`` **peer status store** that records peer
-certificate status across the connections sharing a TLS context. This is a
-``std::map<serial_number_t, std::weak_ptr<SSLPeerStatusAndMonitor>>`` guarded by an
-``epicsMutex``, keyed by the peer certificate's serial number. The store is present on
-**both** the release and dev branches; it lets a context reuse an existing peer
-status-and-monitor instead of re-subscribing for every connection to the same peer.
-
-**How it works:**
-
-- Every peer cert-status delivery (from the per-connection ``SSLPeerStatusAndMonitor``
-  subscription) updates the store entry for that peer's serial number.
-- Entries are held as ``weak_ptr`` to the shared status-and-monitor, so an entry drops
-  automatically once the last connection referencing it goes away.
-
-**Dev addition — recovery observer.** The dev branch adds a recovery observer to
-``SSLContext`` (``setOnSuspended`` / ``setOnResumed`` / ``setOnDegraded``, absent on the
-release branch). When a peer's status transitions out of, or back into, the ``GOOD`` class,
-the registered observer reacts: on recovery to ``GOOD`` it re-enables TLS for connections to
-that peer, and on a move to ``SUSPENDED`` / ``DegradedMode`` it applies the corresponding
-hold or tear-down. This is the mechanism behind the active tear-down on ``BAD`` and resume
-on ``GOOD`` described above; the underlying serial-keyed store itself is unchanged from the
-release branch.
 
 .. _status_caching:
 
 Status Caching
 ^^^^^^^^^^^^^^
 
-Certificate status is cached at two levels: in-memory and on disk.
-
-**In-memory caching** — Agents subscribe to peer certificate status via :ref:`pvacms`.  Status
-transitions trigger connection re-evaluation.  The most recent status is held in memory for the
-lifetime of the subscription and reused within its validity period.  Servers staple their cached
-status during the TLS handshake; clients may consume stapled status in lieu of an initial
-:ref:`pvacms` request.
-
-**Disk caching** — Signed OCSP responses are persisted to disk so that certificate status is
-available immediately on process restart, eliminating the cold-start window where status would
-otherwise be ``UNKNOWN`` until the first PV subscription update arrives from :ref:`pvacms`.
-
-On ``subscribe()``, the ``CertStatusManager`` checks for a cached OCSP response file.  If one
-exists, the signed response is loaded, verified against the trusted store, and — if still
-current — delivered to the callback immediately.  The PV subscription is still established to
-receive future updates.  On each subscription update, the new signed OCSP response bytes are
-written to the cache file using atomic write (temp file + ``rename()``) to prevent partial reads.
-
-Cache files are stored as individual ``<cert_id>.ocsp`` files (one per certificate, ~2 KB each)
-under the XDG data directory:
-
-.. code-block:: text
-
-    ${XDG_DATA_HOME}/pva/1.5/status_cache/
-    (typically ~/.local/share/pva/1.5/status_cache/)
-
-Cache files are cryptographically self-validating — a corrupted or tampered file simply fails
-OCSP verification and is discarded.  Expired cache files are deleted on load.  The cache
-directory is created with owner-only permissions (``0700``) on first write.  Concurrency
-safety relies solely on the atomic temp-file-plus-``rename()`` write described above; there
-is no advisory file locking (the header comments mention it, but it is not implemented).
-
-Configuration (see :ref:`environment_variables`):
-
-- ``EPICS_PVA_STATUS_CACHE_DIR`` — override the default client cache directory path.
-- ``EPICS_PVAS_TLS_STATUS_CACHE_DIR`` — override the default server cache directory path.
-- ``EPICS_PVA_TLS_STATUS_CACHE_DIR`` — alternate client cache directory override.
-- ``EPICS_PVA_NO_STATUS_CACHE=YES`` — disable disk caching entirely.
+Agents subscribe to peer certificate status via :ref:`pvacms`. Status transitions trigger
+connection re-evaluation. The most recent status is held in memory for the lifetime of the
+subscription and reused within its validity period. Servers staple their cached status during
+the TLS handshake; clients may consume stapled status in lieu of an initial :ref:`pvacms`
+request.
 
 In non-OpenSSL builds, all cache operations are no-ops.
 
@@ -370,7 +348,6 @@ Debug Logging
 Debug log categories:
 
 - ``pvxs.certs.auth``          - Authenticators
-- ``pvxs.certs.cache``         - OCSP Status Disk Cache
 - ``pvxs.auth.cfg``            - Authn configuration
 - ``pvxs.auth.cms``            - CMS
 - ``pvxs.auth.krb``            - Kerberos Authenticator
@@ -395,14 +372,14 @@ Three deployment patterns are supported:
 
 - **Standard**: agents on networked hosts with local storage; certificates in local protected directories.
 - **Diskless**: agents on hosts without local storage; certificates on network-mounted storage (NFS, SMB/CIFS, AFP) with optional password protection via diskless server.
-- **Hybrid**: mix of standard and diskless nodes sharing a common trust anchor with consistent :ref:`certificate_management`.
+- **Hybrid**: mix of standard and diskless nodes sharing a common trust anchor with consistent :ref:`cert_management`.
 
 Keychain-File Storage
 ^^^^^^^^^^^^^^^^^^^^^
 
 Keychain file paths follow the `XDG_CONFIG_HOME <https://specifications.freedesktop.org/basedir-spec/latest/>`_
 standard. When ``XDG_CONFIG_HOME`` is unset, it defaults to ``~/.config``. The full default path is
-``~/.config/pva/1.5/``, with ``client.p12`` for clients and ``server.p12`` for servers.
+``~/.config/pva/1.4/``, with ``client.p12`` for clients and ``server.p12`` for servers.
 
 Each keychain file contains the certificate, private key, and CA chain including the root certificate.
 Files are protected with mode ``400``. The agent reconfigures automatically on certificate updates.

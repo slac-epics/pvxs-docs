@@ -15,9 +15,27 @@ is revoked or requires renewal.
 
 Three connection modes are supported:
 
-- ``tcp/tcp``: TCP only (legacy ``ca``)
-- ``tcp/tls``: server-only authenticated TLS
-- ``tls/tls``: mutually authenticated TLS
+.. list-table::
+   :widths: 30 70
+   :header-rows: 1
+
+   * - Mode
+     - Description
+   * - Plain TCP
+     - No TLS.  Legacy ``ca``/``anonymous`` credentials only.
+       Neither peer presents a certificate.
+   * - TLS, server-authenticated
+     - The connection is fully encrypted with TLS 1.3.  The server
+       presents a certificate; the client verifies it but presents no
+       certificate of its own.  The client's identity is
+       ``anonymous`` or ``ca``; only the server's identity is
+       cryptographically established.
+   * - TLS, mutually authenticated (mTLS)
+     - The connection is fully encrypted with TLS 1.3.  Both peers
+       present and verify X.509 certificates.  Both identities are
+       cryptographically established.  ``METHOD`` is ``x509`` on
+       both sides.  This is the recommended mode for production
+       deployments.
 
 Supported Keychain-File Formats
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -60,13 +78,30 @@ Protocol Operation
 Connection Establishment
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-TLS is used when at least the server is configured for TLS. PKCS#12 keychain files are loaded via
-``IdFileReader``, which extracts the certificate, CA chain, and private key. Key usage is validated:
-clients require ``XKU_SSL_CLIENT``; servers require ``XKU_SSL_SERVER``. Certificate chain verification
-depth is limited to 5 levels. The ALPN protocol identifier is ``pva/1``.
+TLS is activated when at least the server side has a keychain configured.  The server advertises
+TLS capability; a client with a matching keychain upgrades to TLS during the handshake.
 
-An agent uses TLS if a certificate, trust anchor, and private key are present at the path given by
-``EPICS_PVA_TLS_KEYCHAIN``. Default paths:
+To make a connection use TLS, provide a PKCS#12 keychain file via an environment variable or
+programmatic configuration.  The keychain must contain the entity certificate, the private key,
+and the CA chain back to the Root CA.  pvxs validates the certificate's key-usage extension
+(clients must carry the client-auth usage; servers must carry the server-auth usage) and verifies
+the CA chain.
+
+The keychain path is controlled by:
+
+- ``EPICS_PVA_TLS_KEYCHAIN`` — client-side keychain path
+- ``EPICS_PVAS_TLS_KEYCHAIN`` — server-side keychain path (overrides the client variable for
+  server processes)
+
+If a password was set when writing the P12 file, point to a file containing that password:
+
+- ``EPICS_PVA_TLS_KEYCHAIN_PWD_FILE`` — path to a file containing the client keychain password
+- ``EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE`` — path to a file containing the server keychain password
+
+To set the password from code, use ``ConfigCommon::setKeychainPassword()`` from the EXPERT API
+(see :doc:`expert-api`).
+
+Default keychain paths when no environment variable is set:
 
 - ``~/.config/pva/1.4/client.p12`` for clients
 - ``~/.config/pva/1.4/server.p12`` for servers
@@ -82,6 +117,63 @@ and certificate status subscriptions are established and cached for all certific
 During the handshake, certificates are exchanged, servers staple cached status, and both peers
 validate against their trusted root. After the handshake, both peers subscribe to peer certificate
 status; clients may use stapled server status.
+
+Configuring TLS across implementations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The environment variables above work identically in all three SPVA
+implementations.  The table below shows how to pass them programmatically
+when you cannot or do not want to use the shell environment.
+
+.. list-table::
+   :widths: 20 80
+   :header-rows: 1
+
+   * - Language
+     - Programmatic TLS configuration
+   * - **C++**
+     - Set fields on ``pvxs::client::Config`` or ``pvxs::server::Config``
+       before calling ``.build()``. Use ``setKeychainPassword()`` from the
+       EXPERT API for passwords (see :doc:`expert-api`). Example::
+
+         auto conf = pvxs::client::Config::fromEnv();
+         conf.tls_keychain_file = "/path/to/client.p12";
+         auto cli = conf.build();
+
+   * - **Python (P4P)**
+     - Pass a ``conf=`` dict with the same env-var names to
+       ``Context()`` or ``Server()``. Example::
+
+         from p4p.client.thread import Context
+         ctxt = Context('pva', conf={
+             'EPICS_PVA_TLS_KEYCHAIN': '/path/to/client.p12',
+         }, useenv=False)
+
+       The ``p4p`` package does **not** have a Python-level password API;
+       embed the password in the path as ``/path/to/file.p12;password``
+       (the same format accepted by the C++ library and Phoebus), or
+       point ``EPICS_PVA_TLS_KEYCHAIN_PWD_FILE`` at a password file.
+
+   * - **Java (Phoebus)**
+     - Set Java system properties before constructing ``PVAClient`` or
+       ``PVAServer``, or use environment variables.  System properties
+       take precedence::
+
+         System.setProperty("EPICS_PVA_TLS_KEYCHAIN",
+                            "/path/to/client.p12");
+         System.setProperty("EPICS_PVAS_TLS_KEYCHAIN",
+                            "/path/to/server.p12");
+
+       Embed the password in the path as ``/path/to/file.p12;password``
+       or point the ``*_PWD_FILE`` property at a password file.
+
+.. note::
+
+   In all three implementations, a plain-TCP client (no keychain
+   configured) can still connect to a server that advertises TLS,
+   provided the server has ``client_cert=optional`` set and does not
+   require mutual authentication.  This is the normal mode for cert-status
+   queries and other read-only administrative operations against PVACMS.
 
 .. _state_machines:
 
@@ -280,7 +372,7 @@ Three deployment patterns are supported:
 
 - **Standard**: agents on networked hosts with local storage; certificates in local protected directories.
 - **Diskless**: agents on hosts without local storage; certificates on network-mounted storage (NFS, SMB/CIFS, AFP) with optional password protection via diskless server.
-- **Hybrid**: mix of standard and diskless nodes sharing a common trust anchor with consistent :ref:`certificate_management`.
+- **Hybrid**: mix of standard and diskless nodes sharing a common trust anchor with consistent :ref:`cert_management`.
 
 Keychain-File Storage
 ^^^^^^^^^^^^^^^^^^^^^

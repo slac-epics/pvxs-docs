@@ -3,12 +3,256 @@
 |cli| Command Line Tools
 =========================
 
-SPVA provides two command line tools for certificate management and performance benchmarking.
+SPVA provides command line tools from two packages: **pvxs** (basic PVA
+operations and diagnostics) and **pvxs-cms** (certificate management, performance
+benchmarking, and authenticators).  The tools below are listed by package.
+
+After building, add the binary directories to your ``PATH``:
+
+.. code-block:: shell
+
+   EPICS_HOST_ARCH=$(epics-base/startup/EpicsHostArch)
+   export PATH="$PWD/pvxs/bin/$EPICS_HOST_ARCH:$PATH"
+   export PATH="$PWD/pvxs-cms/bin/$EPICS_HOST_ARCH:$PATH"
+
+pvxs tools
+----------
+
+.. _pvxget:
+
+|terminal| pvxget — Get a PV value
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Perform a one-shot GET on one or more PVs and print the result.
+
+.. code-block:: text
+
+   pvxget [options] [pvname ...]
+
+   Options:
+     -h        Show this message.
+     -V        Print version and exit.
+     -r <req>  pvRequest condition (e.g. "field(value)").
+     -v        Make more noise.
+     -d        Shorthand for $PVXS_LOG="pvxs.*=DEBUG".
+     -w <sec>  Operation timeout in seconds.  Default 5.
+     -# <cnt>  Maximum number of elements to print per array field.
+               Set to 0 for unlimited.  Default 20.
+     -F <fmt>  Output format: delta, tree.
+
+Examples:
+
+.. code-block:: shell
+
+   # Get one PV
+   pvxget MY:PV
+
+   # Get a field subset
+   pvxget -r 'field(value,alarm)' MY:PV
+
+   # Get with timeout override
+   pvxget -w 10 MY:PV
+
+.. _pvxput:
+
+|terminal| pvxput — Put a value to a PV
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Perform a one-shot PUT to a single PV.
+
+.. code-block:: text
+
+   pvxput [options] <pvname> [ <value> | <fld>=<value> ...]
+
+   Options:
+     -h        Show this message.
+     -V        Print version and exit.
+     -r <req>  pvRequest condition.
+     -v        Make more noise.
+     -d        Shorthand for $PVXS_LOG="pvxs.*=DEBUG".
+     -w <sec>  Operation timeout in seconds.  Default 5.
+
+Examples:
+
+.. code-block:: shell
+
+   # Put a scalar value
+   pvxput MY:PV 3.14
+
+   # Put a named field
+   pvxput MY:PV value=3.14
+
+.. _pvxmonitor:
+
+|terminal| pvxmonitor — Monitor a PV
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Subscribe to one or more PVs and print each update.  Press Ctrl-C to stop.
+
+.. code-block:: text
+
+   pvxmonitor [options] [pvname ...]
+
+   Options:
+     -h        Show this message.
+     -V        Print version and exit.
+     -r <req>  pvRequest condition.
+     -v        Make more noise.
+     -d        Shorthand for $PVXS_LOG="pvxs.*=DEBUG".
+     -# <cnt>  Maximum number of elements to print per array field.
+               Set to 0 for unlimited.  Default 20.
+     -F <fmt>  Output format: delta, tree.
+     -w <sec>  Timeout for certificate status verification if configured.  Default 5.
+
+Examples:
+
+.. code-block:: shell
+
+   # Monitor a PV
+   pvxmonitor MY:PV
+
+   # Monitor in tree format
+   pvxmonitor -F tree MY:PV
+
+.. _pvxinfo:
+
+|terminal| pvxinfo — Introspect PV type
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Print the type structure of one or more PVs without subscribing to their
+values.
+
+.. code-block:: text
+
+   pvxinfo [options] [pvname ...]
+
+   Options:
+     -h        Show this message.
+     -V        Print version and exit.
+     -v        Make more noise.
+     -d        Shorthand for $PVXS_LOG="pvxs.*=DEBUG".
+     -D        Print host troubleshooting information.
+     -w <sec>  Operation timeout in seconds.  Default 5.
+
+Examples:
+
+.. code-block:: shell
+
+   pvxinfo MY:PV
+
+.. _pvxcall:
+
+|terminal| pvxcall — RPC call
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Perform a one-shot PVAccess RPC call, sending a PVStructure as the
+request argument.
+
+.. code-block:: text
+
+   pvxcall [options] <pvname> <fld>=<value> ...
+
+   Options:
+     -h        Show this message.
+     -V        Print version and exit.
+     -v        Make more noise.
+     -d        Shorthand for $PVXS_LOG="pvxs.*=DEBUG".
+     -w <sec>  Operation timeout in seconds.  Default 5.
+
+Examples:
+
+.. code-block:: shell
+
+   pvxcall CERT:STATUS:27975e6b:07246297371190731775 state=APPROVE
+
+.. _pvxlist:
+
+|terminal| pvxlist — Discover servers and PVs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Discover PVAccess servers on the network via beacon listening and/or
+active broadcast.  Can also list PVs hosted by a server.
+
+.. code-block:: text
+
+   # Discover servers
+   pvxlist [options]
+
+   # List PVs hosted by servers at given addresses
+   pvxlist [options] <IP[:Port] ...>
+
+   # Server info
+   pvxlist [options] -i <IP[:Port] ...>
+
+   Options:
+     -h        Show this message.
+     -V        Print version and exit.
+     -A        Active discovery mode (default).  Sends broadcast ping.
+               Warning: Active discovery creates network traffic.
+     -p        Passive discovery mode.  Only listen for Beacons.
+     -i        Query server info.  Requires address(es).
+     -v        Make more noise.
+     -d        Shorthand for $PVXS_LOG="pvxs.*=DEBUG".
+     -w <sec>  Operation timeout in seconds.  Default 5.
+               '0' disables timeout — useful with -v.
+
+Examples:
+
+.. code-block:: shell
+
+   # Monitor beacons to detect servers coming online/offline
+   pvxlist -w 0 -v
+
+   # List all PV names (warning: high network load)
+   pvxlist $(pvxlist -w 5)
+
+.. _pvxvct:
+
+|terminal| pvxvct — PVA Virtual Cable Tester
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Assist in troubleshooting network configuration by listening for PVA
+client/server UDP traffic (searches and beacons).
+
+.. code-block:: text
+
+   pvxvct [-C|-S] [-B hostip[:port]] [-H hostip]
+
+   Options:
+     -h               Print this message.
+     -V               Print version and exit.
+     -C               Show only client Searches.
+     -S               Show only server Beacons.
+     -B <host/ip>[:port]  Listen on the given interface(s).  May be repeated.
+     -B <mcast>[,ttl#][@iface][:port]
+     -H host          Show only messages from this peer.  May be repeated.
+     -P pvname        Show only searches for this PV name.  May be repeated.
+
+.. _pvxmshim:
+
+|terminal| pvxmshim — Multicast shim
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Forward PVA multicast/broadcast UDP packets between network interfaces
+or subnets.  Useful for bridging PVA across network segments where
+broadcast does not naturally traverse.
+
+.. code-block:: text
+
+   pvxmshim [-L <ip>[@iface]]... [-F <ip>]
+
+   Options:
+     -L <ip>           Interface address to listen on.
+     -L <ip>[@iface]   Join multicast group, optionally via a specific interface.
+     -F <ip>           Forward received packets to destination address.
+
+pvxs-cms tools
+--------------
 
 .. _pvxcert:
 
 |terminal| pvxcert — Certificate Management
---------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``pvxcert`` is a certificate management utility for querying certificate status and performing
 administrative operations such as approving, denying, or revoking certificates managed by :ref:`pvacms`.
@@ -177,10 +421,79 @@ Under the hood, ``pvxcert`` sends a ``PUT`` to the :ref:`pvacms` on the PV assoc
     Structure
         string     state    # APPROVE, DENY, REVOKE
 
+.. _authnstd_tool:
+
+|terminal| authnstd — Standard Authenticator
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Obtain a client, server, or IOC certificate using self-declared credentials
+(username and hostname).  Certificates start in ``PENDING_APPROVAL`` unless
+the site policy bypasses approval for this usage type.
+
+See the authnstd section in :doc:`/programmers-ref/spva-authentication`
+for full details, including prior-approval inheritance behaviour.
+
+.. code-block:: shell
+
+   # Create a client certificate for the current user
+   authnstd
+
+   # Create a server certificate for IOC1 at KLYS LI01
+   authnstd -u server -n IOC1 -o "KLYS:LI01:10" --ou "FACET"
+
+   # Download the Trust Anchor only (no entity certificate)
+   authnstd --trust-anchor
+
+   # Force overwrite of an existing certificate
+   authnstd --force
+
+.. _authnkrb_tool:
+
+|terminal| authnkrb — Kerberos Authenticator
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Obtain a certificate using an existing Kerberos ticket.  Run ``kinit``
+first to obtain a ticket, then run ``authnkrb``.
+
+See the authnkrb section in :doc:`/programmers-ref/spva-authentication`
+for full details.
+
+.. code-block:: shell
+
+   kinit -l 24h greg@SLAC.STANFORD.EDU
+   authnkrb
+
+   # Specify a non-default Kerberos realm
+   authnkrb --krb-realm EPICS.ORG
+
+   # Create a server certificate
+   authnkrb -u server
+
+.. _authnldap_tool:
+
+|terminal| authnldap — LDAP Authenticator
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Obtain a certificate by authenticating against an LDAP directory service.
+
+See the authnldap section in :doc:`/programmers-ref/spva-authentication`
+for full details.
+
+.. code-block:: shell
+
+   # Prompt for LDAP password
+   authnldap
+
+   # Supply password on command line (for scripting)
+   authnldap -p secret
+
+   # Point to a specific LDAP server
+   authnldap --ldap-host ldap.site.example.com --ldap-port 389
+
 .. _pvxperf:
 
 |terminal| pvxperf — GET Latency and Throughput Benchmark
-----------------------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``pvxperf`` is a self-contained benchmark that measures GET round-trip latency and throughput
 across five protocol modes. It quantifies the performance cost of TLS and certificate monitoring
@@ -300,7 +613,7 @@ CLI Options
      - TLS keychain file for SPVA modes
      -
    * - ``--setup-cms``
-     - Auto-bootstrap PVACMS with temp certs (see :ref:`cms_bootstrap`)
+     - Auto-bootstrap PVACMS with temp certs (see ``CMS Bootstrap`` section below)
      -
    * - ``--external-cms``
      - Use an already-running PVACMS instance

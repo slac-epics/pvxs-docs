@@ -22,13 +22,13 @@
      ``iPAddress`` entries, exposed to the application/authorization
      layer (``ASGIDENTITY.sans``) and matched by the new ``SAG`` ACF
      predicate.
-   - **``signalRights`` and ``aclChange``** server-side hooks for
+   - **signalRights** and **aclChange** server-side hooks for
      re-evaluating authorization on connected sessions.
    - **SUSPENDED connection-state class.** Cert-status states
      ``PENDING_RENEWAL`` and ``SCHEDULED_OFFLINE`` map to the
      SUSPENDED class — TLS socket stays open, monitors paused, GET
      continues, PUT/RPC rejected, until status returns to ``GOOD``.
-   - **TCP-only context state (``TcpOnly`` / ``TcpReady``).**
+   - **TCP-only context state** (``TcpOnly`` / ``TcpReady``).
      Optimistic-bootstrap and recoverable-non-operational TLS context
      states; plain-TCP connections continue while status monitoring
      waits for the certificate to become ``VALID``.
@@ -46,7 +46,7 @@
      under a long ``notAfter`` envelope. Re-issuance is not required
      for normal short-cadence rotation; the existing keypair stays
      in service.
-   - **``cms::`` namespace.** The PVACMS C++ symbols have moved from
+   - **cms::** namespace. The PVACMS C++ symbols have moved from
      ``pvxs::cms::*`` to ``cms::*``. API-reference pages reflect the
      renamed namespace.
    - **pvacms test harness.** ``PVXS_CMS_BUILD_TEST_HARNESS`` build
@@ -99,4 +99,3 @@ Shared reference material used across all manuals:
    :caption: Shared Reference
 
    shared/spvaglossary
-   shared/durations

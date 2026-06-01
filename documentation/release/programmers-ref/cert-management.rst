@@ -1,111 +1,565 @@
 .. _cert_management:
 
-Certificate Management
-======================
+|security| Certificate Management
+===================================
 
-This page covers the application-developer view of Secure-PVAccess
-certificate management: the shape of the request a client sends and what
-it gets back. The protocol-level details (certificate format, lifecycle
-states, on-the-wire status PVStructure schema, the wire-side CCR schema)
-are in :doc:`/programmers-ref/spva-cert-management-protocol` — read that first if you need
-to know what the messages look like on the wire.
+This page covers the full programmer-facing picture of Secure-PVAccess
+certificate management: the concepts, the protocol structures, and the
+C++ APIs you use to request, install, renew, and monitor certificates.
 
 .. seealso::
 
-   :doc:`/programmers-ref/spva-cert-management-protocol` — protocol-level certificate
-   management: keys, trust establishment, certificate format, lifecycle
-   states, on-the-wire status and CCR schemas.
+   :doc:`/protocol-spec/spva` — wire-level protocol details for SPVA,
+   including certificate management RPC messages.
+
+Public and Private Keys
+-----------------------
+
+Each EPICS agent maintains a public/private key pair for identification:
+
+- The public key identifies the agent to peers.  Its shorthand
+  representation is an 8-character SKID (Subject Key Identifier).
+- The private key must be protected like a password.
+- Both keys are stored in the PKCS#12 keychain file.
+- If the keychain file contains no key pair, any ``authnxxx`` tool will
+  generate one automatically and store it there.
+- An established key pair is reused for all subsequent certificate
+  requests.
+
+Identity assertion works as follows: each peer presents a certificate
+and signs a challenge with its private key.  The verifying peer checks
+the signature against the public key in the certificate, then validates
+the certificate's chain of trust back to its own Trust Anchor (Root CA).
+
+Private keys must be stored in a keychain file inaccessible to other
+users or processes.  Use a separate keychain file per certificate usage.
+
+Trust Establishment
+-------------------
+
+Each EPICS agent must have a copy of the Root CA certificate in its
+keychain file to verify certificates presented by peers.  A certificate
+signed by an untrusted CA is rejected.  Even agents that do not hold
+their own certificate must have a copy of the Root CA, referred to here
+as the Trust Anchor.
+
+Administrators distribute PKCS#12 files containing the Root certificate
+to all clients.  These files must be stored at the path specified by
+``EPICS_PVA_TLS_KEYCHAIN`` or its equivalent.  The trust anchor is
+delivered together with the entity certificate when an ``authnxxx`` tool
+obtains a certificate from PVACMS.
+
+Certificates
+------------
+
+A certificate is the document exchanged with a peer to establish
+identity.  It contains the agent's subject name and public key.
+
+- A certificate is not private and can be shared with any peer.  The
+  keychain file that stores it also contains the private key and must
+  not be shared.
+- A certificate is valid for a fixed time period.
+- A certificate can be revoked by an administrator; status monitoring is
+  included by default.
+
+Certificate Attributes
+-----------------------
+
+- ``subject``: The entity to which the certificate was issued
+
+  - ``name``: Common name (username, application name, or other identifier)
+  - ``organization``: Hostname, institution, domain, or realm
+  - ``organizational unit``: Optional subdivision of the organization
+  - ``country``: Two-letter country code.  Default: ``US``
+
+- ``issuer``: The certificate authority that issued the certificate
+- ``serial number``: Unique serial number for the certificate
+- ``validity period``:
+
+  - ``notBefore``: Date and time before which the certificate is not valid
+  - ``notAfter``: Date and time after which the certificate is not valid
+
+- ``public key``: Public key of the certificate subject
+- ``private key``: Private key of the certificate subject.  Not stored
+  in the certificate; stored in the keychain file.
+- ``SPVA certificate status extension``: PV name where certificate status
+  can be monitored
+- ``SPVA config uri extension``: PV name where certificate configuration
+  can be monitored
+
+Certificate States
+------------------
+
+.. figure:: /_images/certificate_states.png
+    :alt: Certificate States
+    :width: 75%
+    :align: left
+    :name: certificate-states
+
+- ``PENDING_APPROVAL``: Awaiting administrative approval.  Status
+  monitoring continues until approval publishes ``VALID``.
+- ``PENDING``: Not yet valid (before ``notBefore`` date)
+- ``VALID``: Currently valid and usable
+- ``PENDING_RENEWAL``: The certificate's renewal deadline has passed
+  without a renewal being recorded; the certificate is past-due for
+  renewal.
+- ``EXPIRED``: Past ``notAfter`` date; permanently non-operational.
+- ``REVOKED``: Permanently revoked by an administrator.
+
+.. _certificate_status_message:
+
+Certificate Status Message
+--------------------------
+
+Status response structure:
+
+.. code-block:: console
+
+    Structure
+        enum_t     status               # PENDING_APPROVAL, PENDING, VALID, PENDING_RENEWAL, EXPIRED, REVOKED
+        UInt64     serial               # Certificate serial number
+        string     state                # String representation of status
+        enum_t     ocsp_status          # GOOD, REVOKED, UNKNOWN
+        string     ocsp_state           # OCSP state string
+        string     ocsp_status_date     # Status timestamp
+        string     ocsp_certified_until # Validity period end
+        string     ocsp_revocation_date # Revocation date if applicable
+        UInt8A     ocsp_response        # Signed PKCS#7 encoded OCSP response
+
+.. _certificate_creation_request_CCR:
+
+Certificate Creation Request (CCR)
+-----------------------------------
+
+Sent to :ref:`pvacms` to request a new certificate.  The request is a
+PVStructure with the following fields:
+
+.. code-block:: console
+
+    Structure
+        string     type               # std, krb, ldap
+        string     name               # Certificate subject name
+        string     country            # Optional: Country code
+        string     organization       # Optional: Organization name
+        string     organization_unit  # Optional: Unit name
+        UInt16     usage              # Certificate usage flags:
+                                        #   0x01: Client
+                                        #   0x02: Server
+                                        #   0x03: Client and Server
+                                        #   0x04: Intermediate Certificate Authority
+                                        #   0x08: CMS
+                                        #   0x0A: Any Server
+                                        #   0x10: Certificate Authority
+        UInt32     not_before         # Validity start time (epoch seconds)
+        UInt32     not_after          # Validity end time (epoch seconds)
+        string     pub_key            # Public key data
+        enum_t     status_monitoring_extension  # Include status monitoring
+        structure  verifier           # Optional: Authenticator specific data
+
+The ``verifier`` sub-structure is present only when ``type`` references a
+:ref:`pvacms_type_1_auth_methods` or :ref:`pvacms_type_2_auth_methods`
+authenticator.
 
 How a programmer requests a certificate
----------------------------------------
+----------------------------------------
 
-A client requests a certificate from :doc:`/user-manual/pvacms` by
-submitting a Certificate Creation Request (CCR) containing its public
-key. The flow is:
+The ``authnxxx`` tools wrap the complete flow.  The steps below explain
+what happens internally, in case you need to drive the flow from code.
 
-1. Generate a key pair (typically the first ``authnxxx`` invocation does
-   this automatically and stores it in the configured keychain file).
-2. Submit a CCR. The CCR's ``verifier`` sub-structure carries the
-   authenticator-specific payload (Kerberos ticket, LDAP signature, etc.)
-   when the request comes from a Type 1 or Type 2 authenticator. See
-   :ref:`certificate_creation_request_CCR` for the wire-level schema.
-3. Receive the signed certificate from PVACMS.
-4. Install the certificate at the keychain location configured by
-   ``EPICS_PVA_TLS_KEYCHAIN`` (see
-   :doc:`/programmers-ref/configuration`).
+1. Generate or reuse a key pair
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The resulting certificate is then used by pvxs's TLS context for
-mutual-authentication handshakes, and its status is monitored against
-PVACMS for the lifetime of the connection (see
-:ref:`certificate_status_message`).
+The key pair is loaded from the configured keychain file, or generated
+fresh when none is present:
+
+.. code-block:: c++
+
+   #include "idfilefactory.h"    // pvxs-cms/src/common/
+   #include "security.h"
+
+   const std::string keychain = config.tls_keychain_file;
+   const std::string pwd      = config.getKeychainPassword();
+
+   std::shared_ptr<cms::cert::KeyPair> key_pair;
+   try {
+       // Try to load an existing key pair from the keychain file.
+       key_pair = cms::cert::IdFileFactory::create(keychain, pwd)->getKeyFromFile();
+   } catch (const std::exception &) {
+       // No key pair yet — generate a fresh RSA key pair.
+       key_pair = cms::cert::IdFileFactory::createKeyPair();
+   }
+   // key_pair->public_key  — PEM-encoded public key
+   // key_pair->private_key — PEM-encoded private key (keep secret)
+
+2. Build and submit the CCR
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use the authenticator framework to build and submit the CCR.  The
+``Auth::processCertificateCreationRequest`` member does the PVAccess
+RPC to PVACMS and returns the PEM bundle:
+
+.. code-block:: c++
+
+   #include "auth.h"           // pvxs-cms/src/authn/
+   #include "ccrmanager.h"
+
+   // credentials carries name, org, not_before, not_after, etc.
+   auto ccr = authenticator.createCertCreationRequest(
+       credentials, key_pair, cert_usage, config);
+
+   // cert_pv_prefix — the PVACMS PV prefix (default "CERT")
+   // issuer_id      — 8-hex-char issuer SKID (empty = broadcast to any)
+   // timeout        — seconds to wait for a response
+   time_t renew_by{};
+   std::string pem_bundle;
+   std::tie(renew_by, pem_bundle) =
+       cms::auth::CCRManager::createCertificate(
+           ccr, config.getCertPvPrefix(), config.issuer_id,
+           config.getRequestTimeout());
+
+``pem_bundle`` is an empty string when PVACMS places the certificate in
+``PENDING_APPROVAL`` and the operator has not yet approved it.  Poll the
+status PV (see below) and retry once the certificate is approved.
+
+3. Write the P12 keychain file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When ``pem_bundle`` is non-empty, write all components into a PKCS#12
+file.  The ``IdFileFactory`` bundles the private key, the issued
+certificate, and the CA chain from the PEM bundle into one encrypted
+P12 file:
+
+.. code-block:: c++
+
+   // password-protect the keychain file
+   const std::string p12_password = "my_password";
+
+   // Create an IdFileFactory with the key pair, the PEM bundle,
+   // and (optionally) null for any intermediates already in the bundle.
+   auto file_factory = cms::cert::IdFileFactory::create(
+       keychain, p12_password,
+       key_pair,
+       nullptr,   // intermediate CA cert (nullptr = read from bundle)
+       nullptr,   // root CA cert          (nullptr = read from bundle)
+       pem_bundle);
+
+   file_factory->writeIdentityFile();
+   std::cout << "Keychain written to: " << keychain << "\n";
+
+The resulting P12 file contains:
+
+- ``pkcs8ShroudedKeyBag`` — the private key, encrypted with the password;
+- ``certBag`` — the end-entity certificate;
+- one or more additional ``certBag`` entries — the CA chain up to and
+  including the root CA.
+
+See the PKCS#12 Keychain Profile in :doc:`/protocol-spec/spva` (§4.1)
+for the full bag-level layout, required X.509 extensions, and OpenSSL
+commands for manual certificate creation.
+
+To set a password from code rather than from an environment variable,
+use the EXPERT API method ``setKeychainPassword()`` on the config object
+(see :doc:`expert-api`):
+
+.. code-block:: c++
+
+   #include <pvxs/client.h>
+
+   auto conf = pvxs::client::Config::fromEnv();
+   conf.setKeychainPassword("my_password");   // overrides env file
+
+4. Verify the written keychain
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+After writing, read back and log the certificate details for confirmation:
+
+.. code-block:: c++
+
+   auto cert_data =
+       cms::cert::IdFileFactory::create(keychain, p12_password)
+           ->getCertDataFromFile();
+
+   const auto serial   = cms::cert::CertStatusFactory::getSerialNumber(cert_data.cert);
+   const auto issuer   = cms::cert::CertStatus::getIssuerId(cert_data.cert_auth_chain);
+   std::cout << "Certificate ID: " << cms::cert::getCertId(issuer, serial) << "\n";
+
+Renewing from ``PENDING_RENEWAL`` or after ``renewal_due``
+----------------------------------------------------------
+
+The cert-status PV includes two renewal-related fields:
+
+- ``renewal_due`` (``Bool``) — advisory hint set once ``now >= renew_by``.
+  The certificate status remains ``VALID`` while this flag is true.
+  The holder **should** renew proactively.
+- ``PENDING_RENEWAL`` — the ``status`` field value reached when the
+  renewal deadline has passed and no renewal was received.  The
+  certificate becomes ``SUSPENDED``; TLS connections are held.
+
+Renewing when ``renewal_due`` is true (proactive renewal)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When a client observes ``renewal_due = true`` in a cert-status update,
+it should submit a new CCR immediately.  Because the certificate is still
+``VALID``, no special transport handling is required:
+
+.. code-block:: c++
+
+   // Subscribe to your own cert-status PV.
+   // When renewal_due becomes true, call your certificate acquisition
+   // function again with the same key pair and config.
+   auto cert_data = getCertificate(
+       retrieved_credentials, config, cert_usage, authenticator,
+       tls_keychain_file, tls_keychain_pwd, daemon_mode);
+
+The ``authnxxx -D`` (daemon) mode handles this automatically: the
+authenticator subscribes to its own cert-status PV and calls
+``getCertificate`` whenever ``renewal_due`` flips to true.
+
+Renewing from ``PENDING_RENEWAL`` (past-due renewal)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When the certificate is in ``PENDING_RENEWAL``, the authenticator helper
+tools automatically disable TLS for the renewal request:
+
+.. code-block:: c++
+
+   // The ccrmanager.cpp sets tls_disabled = true on its inner client
+   // before sending the CCR when the certificate is already PENDING_RENEWAL.
+   // This ensures the renewal RPC goes over plain TCP even though the
+   // certificate's secure context is SUSPENDED.
+   //
+   // If driving the flow from code, disable TLS explicitly on the client
+   // config before sending the CCR:
+   auto client_conf = pvxs::client::Config::fromEnv();
+   client_conf.tls_disabled = true;
+   auto client = client_conf.build();
+   // ... then submit the CCR using this plain-TCP client.
+
+After renewal, PVACMS updates the existing cert-status to ``VALID``, and
+connections that were holding in the SUSPENDED class resume automatically.
+
+Querying certificate status
+----------------------------
+
+PVACMS publishes one status PV per certificate.  The PV name is derived
+from the certificate's issuer SKID and serial number:
+
+.. code-block:: text
+
+   <prefix>:STATUS:<issuer>:<serial>
+
+where ``<prefix>`` defaults to ``CERT``.
+
+Most of the time you do not use TLS when talking to PVACMS for status
+queries.  PVACMS operates without client certificates on the status
+channel so that clients can query status even before they have obtained
+their own certificate.
+
+Getting status from any responding PVACMS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**C++**
+
+.. code-block:: c++
+
+   #include <pvxs/client.h>
+
+   // Plain-TCP client (no keychain) for status queries.
+   auto client = pvxs::client::Config::fromEnv().build();
+
+   const std::string cert_id = "27975e6b:07246297371190731775";
+   auto val = client.get("CERT:STATUS:" + cert_id).exec()->wait(5.0);
+   std::cout << val["status"] << "\n";  // e.g. "VALID"
+
+**Python (P4P)**
+
+.. code-block:: python
+
+   from p4p.client.thread import Context
+
+   # No keychain — plain TCP to PVACMS.
+   ctxt = Context('pva', useenv=True)
+   val = ctxt.get('CERT:STATUS:27975e6b:07246297371190731775')
+   print(val['status'])   # e.g. "VALID"
+   ctxt.close()
+
+Monitor for changes (useful when waiting for ``PENDING_APPROVAL``
+to become ``VALID``):
+
+.. code-block:: python
+
+   import time
+   from p4p.client.thread import Context
+
+   ctxt = Context('pva')
+   sub = ctxt.monitor(
+       'CERT:STATUS:27975e6b:07246297371190731775',
+       lambda v: print('status:', v['status']))
+   time.sleep(30)
+   sub.close()
+   ctxt.close()
+
+**Java (Phoebus core-pva)**
+
+.. code-block:: java
+
+   import org.epics.pva.client.*;
+   import java.util.concurrent.TimeUnit;
+
+   try (PVAClient client = new PVAClient()) {
+       PVAChannel ch = client.getChannel(
+           "CERT:STATUS:27975e6b:07246297371190731775");
+       ch.connect().get(5, TimeUnit.SECONDS);
+       System.out.println(ch.read("").get(5, TimeUnit.SECONDS));
+   }
+
+Getting status from a specific authority
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To target a specific PVACMS (e.g., the one that issued your certificate),
+set ``EPICS_PVA_ADDR_LIST`` in the environment before starting, or pass it
+programmatically.
+
+**C++**
+
+.. code-block:: c++
+
+   auto conf = pvxs::client::Config::fromEnv();
+   conf.addressList  = "pvacms.site.example.com";
+   conf.autoAddrList = false;
+   auto client = conf.build();
+
+   auto val = client.get("CERT:STATUS:27975e6b:07246297371190731775")
+                    .exec()->wait(5.0);
+
+**Python (P4P)**
+
+.. code-block:: python
+
+   from p4p.client.thread import Context
+
+   ctxt = Context('pva', conf={
+       'EPICS_PVA_ADDR_LIST': 'pvacms.site.example.com',
+       'EPICS_PVA_AUTO_ADDR_LIST': 'NO',
+   }, useenv=False)
+   val = ctxt.get('CERT:STATUS:27975e6b:07246297371190731775')
+   print(val['status'])
+   ctxt.close()
+
+**Java (Phoebus core-pva)**
+
+.. code-block:: java
+
+   System.setProperty("EPICS_PVA_ADDR_LIST", "pvacms.site.example.com");
+   System.setProperty("EPICS_PVA_AUTO_ADDR_LIST", "false");
+
+   try (PVAClient client = new PVAClient()) {
+       PVAChannel ch = client.getChannel(
+           "CERT:STATUS:27975e6b:07246297371190731775");
+       ch.connect().get(5, TimeUnit.SECONDS);
+       System.out.println(ch.read("").get(5, TimeUnit.SECONDS));
+   }
+
+Communicating with a PVACMS that uses a different cert prefix
+--------------------------------------------------------------
+
+By default, PVACMS uses the prefix ``CERT``.  If a site runs a PVACMS
+with a non-default prefix, target it via an environment variable or
+programmatically.
+
+**Via environment variable (all languages):**
+
+.. code-block:: shell
+
+   export EPICS_PVA_CERT_PV_PREFIX=ORNL_CERTS
+
+**C++ — EXPERT API programmatic override:**
+
+.. code-block:: c++
+
+   #include <pvxs/client.h>
+
+   auto conf = pvxs::client::Config::fromEnv();
+   conf.setCertPvPrefix("ORNL_CERTS");  // overrides env variable
+   auto client = conf.build();
+
+   // Status PV names are now "ORNL_CERTS:STATUS:<issuer>:<serial>"
+   auto val = client.get("ORNL_CERTS:STATUS:27975e6b:07246297371190731775")
+                    .exec()->wait(5.0);
+
+**Python (P4P) — conf dict:**
+
+.. code-block:: python
+
+   from p4p.client.thread import Context
+
+   ctxt = Context('pva', conf={
+       'EPICS_PVA_CERT_PV_PREFIX': 'ORNL_CERTS',
+   })
+   val = ctxt.get('ORNL_CERTS:STATUS:27975e6b:07246297371190731775')
+   print(val['status'])
+   ctxt.close()
+
+**Java (Phoebus core-pva) — system property:**
+
+.. code-block:: java
+
+   System.setProperty("EPICS_PVA_CERT_PV_PREFIX", "ORNL_CERTS");
+
+   try (PVAClient client = new PVAClient()) {
+       PVAChannel ch = client.getChannel(
+           "ORNL_CERTS:STATUS:27975e6b:07246297371190731775");
+       ch.connect().get(5, TimeUnit.SECONDS);
+       System.out.println(ch.read("").get(5, TimeUnit.SECONDS));
+   }
 
 PVACMS-specific behaviour
--------------------------
+--------------------------
 
-The protocol specification (:doc:`/protocol-spec/spva`) describes the
-Certificate Management Service abstractly — the states a certificate
-can be in, the transitions clients can observe, and the PVStructure
-schemas exchanged on the wire. The information below is specific to
-**PVACMS**, the reference implementation of that service shipped with
-``pvxs-cms``. Programmers writing client code against a PVACMS-backed
-deployment will need it; programmers writing portable code against any
-conforming Certificate Management Service should rely on the
-protocol spec instead.
+The protocol specification (:doc:`/protocol-spec/spva`)
+describes the Certificate Management Service abstractly.  The information
+below is specific to **PVACMS**, the reference implementation shipped
+with ``pvxs-cms``.
 
 Certificate validity defaults (PVACMS configuration)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 PVACMS supplies default validity periods for issued certificates per
-usage class. The relevant deployment-side environment variables are:
+usage class:
 
 - ``EPICS_PVACMS_CERT_VALIDITY`` — default validity for all certificate
   usages unless a usage-specific setting overrides it.
-
-- ``EPICS_PVACMS_CERT_VALIDITY_CLIENT`` — maximum validity for
-  CLIENT certificates.
-- ``EPICS_PVACMS_CERT_VALIDITY_SERVER`` — maximum validity for
-  SERVER certificates.
+- ``EPICS_PVACMS_CERT_VALIDITY_CLIENT`` — maximum validity for CLIENT
+  certificates.
+- ``EPICS_PVACMS_CERT_VALIDITY_SERVER`` — maximum validity for SERVER
+  certificates.
 - ``EPICS_PVACMS_CERT_VALIDITY_IOC`` — maximum validity for IOC
   certificates.
 
 These settings accept :ref:`duration_strings`; a plain number means
 minutes.
 
-PVACMS uses these defaults when a certificate creation request omits
-``not_after`` or when the corresponding ``disallow custom duration``
-policy is enabled.
-
 Cert-status freshness (PVACMS configuration)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The freshness horizon a cert-status update advertises via its
-``status_valid_until_date`` field is set by PVACMS deployment
-configuration:
-
 - ``EPICS_PVACMS_CERT_STATUS_VALIDITY_MINS`` — number of minutes a
-  PVACMS-issued cert-status response remains valid before clients
-  must treat it as stale and downgrade the connection class to
-  UNKNOWN (see protocol spec Section 8.4). Default 30 minutes.
-
-Despite the historical ``_MINS`` suffix, this setting accepts
-:ref:`duration_strings`; a plain number means minutes.
-
-The protocol does not mandate this number — only that PVACMS attach
-*some* finite ``status_valid_until_date`` to every status update.
+  PVACMS-issued cert-status response remains valid before clients must
+  treat it as stale.  Default 30 minutes.  Despite the ``_MINS`` suffix
+  this setting accepts :ref:`duration_strings`.
 
 Approval-bypass (issuance directly to ``VALID`` / ``PENDING``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The protocol allows a CCR to issue directly into the post-approval
-state set without passing through ``PENDING_APPROVAL``. PVACMS
-selects this path when either condition holds (source:
+The protocol allows a CCR to issue directly into the post-approval state
+set without passing through ``PENDING_APPROVAL``.  PVACMS selects this
+path when either condition holds (source:
 ``pvxs-cms/src/pvacms/pvacms.cpp:1815-1829``):
 
-1. The CCR's authenticator is non-default (Kerberos, LDAP, …) and
-   its ``verifier`` validates successfully — the authenticator's
-   own verifier substitutes for administrator approval.
-2. The CCR's authenticator is the default ``std`` authenticator and
-   the matching site policy ``cert_<usage>_require_approval``
+1. The CCR's authenticator is non-default (Kerberos, LDAP, …) and its
+   ``verifier`` validates successfully — the authenticator's own verifier
+   substitutes for administrator approval.
+2. The CCR's authenticator is the default ``std`` authenticator and the
+   matching site policy ``cert_<usage>_require_approval``
    (one of ``cert_ioc_require_approval``,
    ``cert_client_require_approval``, ``cert_server_require_approval``)
    is false.
@@ -115,18 +569,6 @@ time-based status the cryptographic clock dictates at issuance:
 ``PENDING`` if ``now < notBefore``, ``VALID`` if
 ``notBefore ≤ now < notAfter``, or (in the degenerate case of a
 backdated short-lived certificate) ``EXPIRED`` if ``now ≥ notAfter``.
-
-PVACMS cluster mode
-~~~~~~~~~~~~~~~~~~~
-
-A site MAY deploy PVACMS as a cluster of servers sharing the same
-CA-signing private key (or operating as a hot-standby pair). Cluster
-membership is opaque to clients — they see only one logical service.
-In cluster deployments, clients SHOULD discover the active PVACMS
-endpoint via DNS round-robin or an explicit service-discovery
-mechanism. The wire-level ``pvacms_node_id`` field of a cert-status
-update identifies which cluster member produced the update, useful
-for debugging but not for client routing.
 
 PVACMS Certificate Authority operations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -138,34 +580,32 @@ On every approved CCR, PVACMS performs the following CA operations:
 2. Generate a fresh certificate serial number (typically a 128-bit
    random integer).
 3. Construct an X.509 certificate body matching the CCR's
-   ``name`` / ``organization`` / etc., with validity per site
-   policy (capped at the requested ``not_after`` and at the
-   per-usage ``EPICS_PVACMS_CERT_VALIDITY_*`` setting).
+   ``name`` / ``organization`` / etc., with validity per site policy
+   (capped at the requested ``not_after`` and at the per-usage
+   ``EPICS_PVACMS_CERT_VALIDITY_*`` setting).
 4. Sign the certificate with PVACMS's CA private key.
-5. Insert the certificate's status entry into the PVACMS database
-   with state ``VALID`` (or ``PENDING`` / ``PENDING_APPROVAL`` per
-   the rules above).
-6. Return the PEM-encoded certificate to the client in the CCR
-   response.
+5. Insert the certificate's status entry into the PVACMS database with
+   state ``VALID`` (or ``PENDING`` / ``PENDING_APPROVAL`` per the rules
+   above).
+6. Return the PEM-encoded certificate to the client in the CCR response.
 
 Authenticator-specific verification
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The protocol spec (Section 6.2) defines the ``verifier`` payload
-for each authenticator. The PVACMS-side verification logic is:
+The protocol spec defines the ``verifier`` payload for each
+authenticator.  The PVACMS-side verification logic is:
 
 - ``std`` — no verifier; PVACMS trusts the supplied
   ``name``/``organization`` and gates issuance on the
   ``cert_<usage>_require_approval`` site policy described above.
 - ``krb`` — PVACMS validates the GSS-API ``token`` against its
   configured Kerberos service principal and verifies the ``mic``
-  over the CCR contents. A successful verification substitutes for
+  over the CCR contents.  A successful verification substitutes for
   administrator approval.
 - ``ldap`` — PVACMS validates the ``signature`` over the CCR
   contents against the public key registered in LDAP for the
-  requesting principal (which itself was retrieved after the
-  principal completed an LDAP bind). A successful verification
-  substitutes for administrator approval.
+  requesting principal.  A successful verification substitutes for
+  administrator approval.
 
 For the full set of authenticator runtime options (Kerberos keytabs,
 LDAP base DN, etc.) see :doc:`/user-manual/pvacms`.

@@ -61,7 +61,7 @@ fork), pvxs-cms, and phoebus — and the prior implementation
 reference material at :doc:`/programmers-ref/spva-tls`,
 :doc:`/programmers-ref/spva-authentication`,
 :doc:`/programmers-ref/spva-authorization`, and
-:doc:`/programmers-ref/spva-cert-management-protocol` were
+:doc:`/programmers-ref/cert-management` were
 consulted in preparing this specification (see Section 19.2). The
 specification's authority derives from this document, not from
 those implementations or that prior reference material.
@@ -497,7 +497,27 @@ SPVA keychain file SHALL use the following bag-level profile:
 The bags MAY be distributed across one or more ``AuthenticatedSafe``
 containers. The interoperable layout used by OpenSSL, PVXS, PVACMS,
 and Java ``keytool`` places the ``pkcs8ShroudedKeyBag`` in one safe
-and the certificate bags in another safe.
+and the certificate bags in another safe:
+
+.. code-block:: text
+
+   PKCS#12
+   ├── AuthenticatedSafe (unencrypted)
+   │   └── pkcs8ShroudedKeyBag       ← private key, password-protected
+   │       attributes:
+   │         localKeyId = <sha1 fingerprint of leaf cert public key>
+   │         friendlyName = "alias"   (optional, used by Java keytool)
+   └── AuthenticatedSafe (encrypted)
+       ├── certBag                   ← leaf (entity) certificate
+       │   attributes:
+       │     localKeyId = <same sha1 fingerprint>
+       │     friendlyName = "alias"   (optional)
+       ├── certBag                   ← intermediate CA (if present)
+       └── certBag                   ← root CA / trust anchor
+
+A trust-only file (containing only the CA certificate, no private
+key) SHALL contain only ``certBag`` entries and MUST NOT contain a
+``pkcs8ShroudedKeyBag``.
 
 Additional bag attributes are required for interoperability:
 
@@ -550,18 +570,44 @@ REQUIRED. Every SPVA certificate MUST contain:
 - **Subject Key Identifier** (``id-ce-subjectKeyIdentifier``):
   REQUIRED.
 
+The required Key Usage and Extended Key Usage values vary by
+certificate role:
+
+.. list-table::
+   :widths: 20 40 40
+   :header-rows: 1
+
+   * - Role
+     - Key Usage
+     - Extended Key Usage
+   * - Client
+     - ``digitalSignature``
+     - ``clientAuth``
+   * - Server
+     - ``digitalSignature, keyEncipherment``
+     - ``serverAuth``
+   * - IOC (client + server)
+     - ``digitalSignature, keyEncipherment``
+     - ``clientAuth, serverAuth``
+   * - CA
+     - ``cRLSign, keyCertSign``
+     - (none required)
+
 OPTIONAL.
 
 - **Subject Alternative Name** (``id-ce-subjectAltName``): MAY be
   omitted entirely. When present, see Section 4.5 for SPVA's
   handling of its entries.
 
-4.3. SPVA Custom X.509 Extension
---------------------------------
+4.3. SPVA Custom X.509 Extensions
+----------------------------------
 
-SPVA defines one custom X.509 extension:
+SPVA defines two private-enterprise X.509 extensions. Both are
+OPTIONAL and non-critical (``critical = FALSE``). Both carry an
+``IA5String`` value (:rfc:`5280` Section 4.2.1.6) holding a PV name.
+Neither sub-arc is currently IANA-registered.
 
-.. table:: SPVA custom X.509 extension
+.. table:: SPVA custom X.509 extensions
    :widths: auto
 
    +---------------------+----------------------------+
@@ -569,10 +615,10 @@ SPVA defines one custom X.509 extension:
    +=====================+============================+
    | SPvaCertStatusURI   | ``1.3.6.1.4.1.37427.1``    |
    +---------------------+----------------------------+
+   | SPvaCertConfigURI   | ``1.3.6.1.4.1.72473.1``    |
+   +---------------------+----------------------------+
 
-OPTIONAL. Issued non-critical (``critical = FALSE``). Carries an
-``IA5String`` value (:rfc:`5280` Section 4.2.1.6) holding a PV
-name. The sub-arc is not currently IANA-registered.
+**SPvaCertStatusURI** (``1.3.6.1.4.1.37427.1``):
 
 Value: the PV name where the certificate-status PV for this
 certificate is published. Default form
@@ -587,8 +633,16 @@ Connections involving such a certificate proceed without
 certificate-status monitoring; the revocation mechanism does not
 apply to that certificate.
 
-A non-SPVA-aware verifier MAY ignore the extension. A certificate
-carrying it remains a fully-conformant X.509 v3 certificate per
+**SPvaCertConfigURI** (``1.3.6.1.4.1.72473.1``):
+
+Value: the PV name where certificate-configuration updates for this
+certificate are published. Presence is optional and opt-in
+(corresponding to the ``--add-config-uri`` flag on ``authnxxx``
+tools). An implementation that does not recognise this extension MUST
+ignore it.
+
+A non-SPVA-aware verifier MAY ignore both extensions. A certificate
+carrying them remains a fully-conformant X.509 v3 certificate per
 :rfc:`5280` and is usable by non-SPVA software, provided the
 Extended Key Usage and Subject Alternative Name fields are
 appropriate for the non-SPVA use.
@@ -1983,7 +2037,7 @@ IANA-registered to the EPICS community.
   authentication implementation.
 - :doc:`/programmers-ref/spva-authorization` — pvxs's authorization
   implementation.
-- :doc:`/programmers-ref/spva-cert-management-protocol` — pvxs's
+- :doc:`/programmers-ref/cert-management` — pvxs's
   cert-management implementation.
 - :doc:`/user-manual/pvacms` — PVACMS deployment and operation.
 

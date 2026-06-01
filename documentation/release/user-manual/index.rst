@@ -11,6 +11,7 @@ what remains compatible with existing EPICS tools.
 .. toctree::
    :maxdepth: 2
 
+   cli
    operation
    spvaqstart
    spvaqstartstd
@@ -19,7 +20,7 @@ what remains compatible with existing EPICS tools.
    spvaqsgw
    interoperability
    pvacms
-   cli
+   durations
 
 .. seealso::
 

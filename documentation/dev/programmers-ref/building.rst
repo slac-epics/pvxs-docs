@@ -4,9 +4,18 @@ Building Libraries and Executables
 ==================================
 
 This page is the programmer path through the build. It assumes you are
-building code that links against pvxs, pvxs-cms, or both. If you only need
-to try the tools as an operator, use the :doc:`/user-manual/spvaqstart`
-quick start instead.
+building code that links against pvxs, pvxs-cms, or both — for example,
+if you are:
+
+* building and deploying IOCs in your production network;
+* writing a client service or data-pipeline tool that uses pvxs directly;
+* embedding pvxs in a device driver or support module;
+* building a custom authenticator plugin against pvxs-cms; or
+* building the Python (P4P) or Java (Phoebus) bindings from source.
+
+If you only need to install and run the existing SPVA tools as an operator
+— configuring PVACMS, issuing certificates, running IOCs — use the
+:doc:`/user-manual/spvaqstart` quick start instead.
 
 Build order
 -----------
@@ -71,9 +80,13 @@ need the advanced Secure PVAccess access-security grammar, including
 ``METHOD``, ``PROTOCOL``, ``AUTHORITY``, and related fields. Phoebus has
 the relevant Secure PVAccess changes integrated into ``master``.
 
-Snapshot tags are immutable release snapshots. Use a snapshot only when a
-release note, deployment instruction, or maintainer tells you which exact
-tag to use. The tag grammar is:
+Snapshot tags are the recommended starting point for production builds and
+new deployments. Each snapshot is an immutable, named point in the release
+history. Using a snapshot means your build is reproducible, and if you
+report a problem the maintainers can identify the exact code you were
+running from the tag name alone.
+
+The tag grammar is:
 
 .. code-block:: text
 
@@ -84,20 +97,34 @@ where:
 * ``<project-name>`` is ``epics-base``, ``pvxs``, ``pvxs-cms``, or
   ``p4p``;
 * ``<project-version>`` is the project version captured by the snapshot,
-  such as ``1.5.1`` or ``1.5.0``;
+  such as ``1.4.1`` or ``1.4.0``;
 * ``spva`` marks the tag as a Secure PVAccess snapshot;
 * ``<yyyymmdd>`` is the snapshot date.
 
-For example, ``pvxs-1.5.1-spva.20260423`` means: project ``pvxs``, pvxs
-version ``1.5.1``, SPVA snapshot, dated ``2026-04-23``.
-``pvxs-cms-1.5.0-spva.20260423`` means: project ``pvxs-cms``, pvxs-cms
-version ``1.5.0``, SPVA snapshot, dated ``2026-04-23``.
+For example, ``pvxs-1.4.1-spva.20260423`` means: project ``pvxs``, pvxs
+version ``1.4.1``, SPVA snapshot, dated ``2026-04-23``.
+``pvxs-cms-1.4.0-spva.20260423`` means: project ``pvxs-cms``, pvxs-cms
+version ``1.4.0``, SPVA snapshot, dated ``2026-04-23``.
 
-When using snapshots, keep the repositories on the tags you were given.
-Do not mix a snapshot tag in one repository with a moving ``dev`` branch in
-another unless the deployment instructions explicitly say to do so.
+Always keep all repositories on tags from the same snapshot date.  Do not
+mix a snapshot tag in one repository with a moving branch in another; the
+repositories are co-versioned and a mismatch can produce subtle build
+failures or wire-protocol incompatibilities.
 
-Stable branch checkout:
+**Recommended: snapshot tag checkout.** Replace the example tags with the
+current release tags published on the project's GitHub releases page:
+
+.. code-block:: shell
+
+   git clone --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls.git epics-base
+   git clone --branch pvxs-1.4.1-spva.20260423 https://github.com/slac-epics/pvxs-tls.git pvxs
+   git clone --branch pvxs-cms-1.4.0-spva.20260423 https://github.com/slac-epics/pvxs-cms.git pvxs-cms
+   git clone --branch master https://github.com/slac-epics/p4p-tls.git p4p
+   git clone --branch master https://github.com/ControlSystemStudio/phoebus.git phoebus
+
+**Tracking the stable branch** (latest tagged release, plus any patches
+applied since): use this when you want to follow the release line closely
+and can tolerate occasional source changes between builds.
 
 .. code-block:: shell
 
@@ -107,7 +134,8 @@ Stable branch checkout:
    git clone --branch master https://github.com/slac-epics/p4p-tls.git p4p
    git clone --branch master https://github.com/ControlSystemStudio/phoebus.git phoebus
 
-Latest development checkout:
+**Latest development checkout** (experimental features, may be unstable):
+use only when you need a feature that has not yet appeared in a snapshot.
 
 .. code-block:: shell
 
@@ -115,17 +143,6 @@ Latest development checkout:
    git clone --branch dev https://github.com/slac-epics/pvxs-tls.git pvxs
    git clone --branch dev https://github.com/slac-epics/pvxs-cms.git pvxs-cms
    git clone --branch feature/acf-grammar-7.0.10 https://github.com/slac-epics/p4p-tls.git p4p
-   git clone --branch master https://github.com/ControlSystemStudio/phoebus.git phoebus
-
-Snapshot tag checkout, replacing the example tags with the exact tags you
-were given:
-
-.. code-block:: shell
-
-   git clone --branch 7.0-secure-pvaccess https://github.com/slac-epics/epics-base-tls.git epics-base
-   git clone --branch pvxs-1.5.1-spva.20260423 https://github.com/slac-epics/pvxs-tls.git pvxs
-   git clone --branch pvxs-cms-1.5.0-spva.20260423 https://github.com/slac-epics/pvxs-cms.git pvxs-cms
-   git clone --branch master https://github.com/slac-epics/p4p-tls.git p4p
    git clone --branch master https://github.com/ControlSystemStudio/phoebus.git phoebus
 
 Always clone ``pvxs-tls`` into a directory named ``pvxs`` and ``p4p-tls``
@@ -300,9 +317,9 @@ are optional because they add site-library dependencies.
 
 The tracked defaults live in each module's ``configure/CONFIG_SITE``.
 pvxs defines ``PVXS_ENABLE_SSLKEYLOGFILE`` there. pvxs-cms defines
-``PVXS_ENABLE_PVACMS``, ``PVXS_ENABLE_KRB_AUTH``,
-``PVXS_ENABLE_LDAP_AUTH``, and ``PVXS_CMS_BUILD_TEST_HARNESS`` there;
-the PVACMS default is ``YES`` for host builds and ``NO`` for cross builds.
+``PVXS_ENABLE_PVACMS``, ``PVXS_ENABLE_KRB_AUTH``, and
+``PVXS_ENABLE_LDAP_AUTH`` there; the PVACMS default is ``YES`` for host
+builds and ``NO`` for cross builds.
 
 Windows builds
 --------------
@@ -420,26 +437,48 @@ instead and leave ``LIBEVENT`` unset:
 Keep ``OPENSSL`` set if OpenSSL is installed outside the compiler's
 default include and library search paths.
 
-p4p and the PVAccess Gateway
-----------------------------
+p4p — Python bindings
+---------------------
 
-``p4p`` is the Python binding layer over pvxs. It also builds the
-``pvagw`` gateway executable used by Secure PVAccess gateway deployments.
-Build it after ``epics-base`` and ``pvxs``.
+``p4p`` is the Python binding layer over pvxs. It exposes the full PVAccess
+client and server API from Python, and also builds the ``pvagw`` gateway
+executable. Because it wraps the C++ pvxs library, it inherits SPVA
+capabilities — TLS, certificate-status monitoring, the same
+environment-variable configuration — from the pvxs it is built against.
 
-For ordinary Python use, the simplest path is the published wheel, which
-pulls matching ``epicscorelibs`` and ``pvxslibs`` Python wheels:
+**PyPI package:** ``p4p`` — published at https://pypi.org/project/p4p/.
+
+.. warning::
+
+   The wheels published on PyPI are built against the **upstream pvxs
+   library** (``slac-epics/pvxs``, plain PVAccess), not the SPVA fork
+   (``slac-epics/pvxs-tls``). Installing ``pip install p4p`` gives you a
+   working PVAccess client and server, but **none of the SPVA features are
+   present**: no TLS, no certificate-status monitoring, no
+   ``EPICS_PVA_TLS_KEYCHAIN`` support.
+
+   To use SPVA features from Python you must build p4p from source against
+   the SPVA pvxs checkout, as described in the source build section below.
+
+The PyPI wheel is useful for environments where plain PVAccess is sufficient
+and you do not need TLS or certificate management:
 
 .. code-block:: shell
 
-   python3 -m venv p4ptest
-   . p4ptest/bin/activate
-   python -m pip install -U pip
-   python -m pip install p4p nose2
+   python3 -m venv p4p-plain
+   . p4p-plain/bin/activate
+   pip install -U pip
+   pip install p4p
+
+To verify:
+
+.. code-block:: shell
+
+   pip install nose2
    python -m nose2 p4p
 
-Use the EPICS module build below when you need ``p4p`` and ``pvagw`` built
-against the sibling SPVA ``pvxs`` checkout.
+**For SPVA features**, skip the PyPI wheel and use the source build below
+against the SPVA ``pvxs`` checkout instead.
 
 For a source build against the sibling ``epics-base`` and ``pvxs`` trees,
 install the Python build prerequisites first:
@@ -501,73 +540,133 @@ For a systemd-managed Linux gateway:
    sudo systemctl daemon-reload
    sudo systemctl start pvagw@mygw.service
 
-For Secure PVAccess, the gateway process normally needs both client-side
-and server-side keychains because it connects upstream as a client and
-serves downstream clients as a server:
+For Secure PVAccess, the gateway uses an IOC certificate — a single
+PKCS#12 file that carries both client and server key usage, allowing the
+gateway to connect upstream as a TLS client and serve downstream clients
+as a TLS server.  TLS is configured in the gateway JSON configuration
+file via ``tls_keychain`` in each ``clients`` and ``servers`` block; do
+not use environment variables for this:
 
-.. code-block:: shell
+.. code-block:: json
 
-   export EPICS_PVA_TLS_KEYCHAIN=$HOME/.config/pva/1.5/gateway.p12
-   export EPICS_PVAS_TLS_KEYCHAIN=$HOME/.config/pva/1.5/gateway.p12
-   export EPICS_PVA_AUTO_ADDR_LIST=NO
-   pvagw gateway.conf
+   {
+     "version": 2,
+     "clients": [
+       {
+         "name": "upstream",
+         "addrlist": "ioc-host",
+         "autoaddrlist": false,
+         "tls_keychain": "/home/gateway/.config/pva/1.5/gateway.p12"
+       }
+     ],
+     "servers": [
+       {
+         "name": "downstream",
+         "clients": ["upstream"],
+         "tls_keychain": "/home/gateway/.config/pva/1.5/gateway.p12"
+       }
+     ]
+   }
+
+Obtain an IOC certificate for the gateway using ``authnstd -u ioc`` (or
+the appropriate authenticator for your site).  The same keychain file is
+referenced in both ``clients`` and ``servers`` blocks.  The path in
+``tls_keychain`` is resolved relative to the directory containing the
+``gateway.conf`` file.
 
 The Kubernetes gateway image uses the same build shape: install Python
 development packages, copy the ``p4p`` source, run ``make distclean`` and
 ``make``, then run ``/opt/epics/p4p/bin/<host-arch>/pvagw
 /home/gateway/gateway.conf``.
 
-Phoebus / CS-Studio
--------------------
+Phoebus / CS-Studio — Java PVA
+--------------------------------
 
-Phoebus, also known as CS-Studio, is a Java application. It does not
-depend on pvxs, p4p, epics-base, or pvxs-cms at build time. Its
-``core/pva`` module is an independent Java implementation of PVAccess and
-Secure PVAccess. Keep its wire-level behavior consistent with pvxs, but
-build it as a normal Maven Java project.
+Phoebus (also known as CS-Studio) contains an independent Java implementation
+of PVAccess and Secure PVAccess under ``core/pva``. It does not depend on
+the C++ pvxs, p4p, epics-base, or pvxs-cms libraries at build time — it
+speaks the same wire protocol but is implemented entirely in Java.
+
+**Maven Central coordinates:**
+
+.. code-block:: xml
+
+   <dependency>
+       <groupId>org.phoebus</groupId>
+       <artifactId>core-pva</artifactId>
+       <version><!-- see https://central.sonatype.com/artifact/org.phoebus/core-pva --></version>
+   </dependency>
+
+Phoebus releases are published to Maven Central via Sonatype.  Check the
+Maven Central search for the latest stable version.  The artifact carries
+BouncyCastle (``bcpkix-jdk18on``, ``bcprov-jdk18on``) as a transitive
+dependency, which is used for OCSP certificate-status checking.
+
+If you only need the ``core-pva`` Java PVA library (without the full Phoebus
+display-builder application), add the above dependency to your project's
+``pom.xml`` and use the API shown in :doc:`applications`.
+
+Building from source
+~~~~~~~~~~~~~~~~~~~~
 
 Install Java and Maven first:
 
 * Java Development Kit 17 or later.
 * Maven 3.x.
 
-Build the Phoebus target platform, then the product:
+To use the ``core-pva`` library independently of the full Phoebus product,
+build just that module:
 
 .. code-block:: shell
 
    git clone --branch master https://github.com/ControlSystemStudio/phoebus.git phoebus
-   cd phoebus
 
+   # Build only core-pva and its dependencies:
+   mvn install -f phoebus/pom.xml -pl core/pva -am -DskipTests
+
+The resulting jar installs to your local Maven cache at:
+``~/.m2/repository/org/phoebus/core-pva/<version>/core-pva-<version>.jar``
+
+To build the full Phoebus product (display-builder application):
+
+.. code-block:: shell
+
+   cd phoebus
    mvn clean verify -f dependencies/pom.xml
    mvn clean install -DskipTests
-
-For Java PVAccess or Secure PVAccess implementation work, build just the
-``core/pva`` module and its dependencies:
-
-.. code-block:: shell
-
-   mvn install -pl core/pva -am -DskipTests
-
-Run the product jar:
-
-.. code-block:: shell
 
    cd phoebus-product/target
    java -jar product-*-SNAPSHOT.jar
 
-To exercise the Java PVAccess client directly without the display-builder
-user interface, run ``PVAClientMain`` from the Phoebus library directory:
+To exercise the Java PVAccess client from the command line without the
+display-builder UI, use ``PVAClientMain``:
 
 .. code-block:: shell
 
    java -cp '/opt/phoebus/lib/*' org.epics.pva.client.PVAClientMain \
        monitor -r 'field()' test:aiExample
 
-For Secure PVAccess tests, provide the Java process with the same runtime
-configuration used by other clients, including ``EPICS_PVA_TLS_KEYCHAIN``,
-``EPICS_PVA_ADDR_LIST`` or ``EPICS_PVA_NAME_SERVERS``, and
-``EPICS_PVA_AUTO_ADDR_LIST``. Phoebus consumes those settings in its Java
-PVAccess implementation; it does not load the C++ pvxs library.
+For Secure PVAccess, set the same environment variables used by C++ clients:
+
+.. code-block:: shell
+
+   export EPICS_PVA_TLS_KEYCHAIN=$HOME/.config/pva/1.5/client.p12
+   export EPICS_PVA_ADDR_LIST="pvacms-host ioc-host"
+   export EPICS_PVA_AUTO_ADDR_LIST=NO
+
+   java -cp '/opt/phoebus/lib/*' org.epics.pva.client.PVAClientMain \
+       get MY:PV
+
+Phoebus reads ``EPICS_PVA_TLS_KEYCHAIN`` and ``EPICS_PVAS_TLS_KEYCHAIN``
+(or the equivalent Java system properties ``-DEPICS_PVA_TLS_KEYCHAIN=...``)
+directly in its Java PVAccess implementation. It does not load the C++ pvxs
+library.
+
+.. note::
+
+   Java system properties take precedence over environment variables in
+   Phoebus: ``-DEPICS_PVA_TLS_KEYCHAIN=/path/to/client.p12`` overrides the
+   shell environment variable of the same name.
 
 Standalone executables
 ----------------------

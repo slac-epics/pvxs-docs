@@ -103,6 +103,66 @@ through the ACF definitions of ASGs ...
 
 6. to control access to PVs
 
+What a programmer receives from the connection layer
+-----------------------------------------------------
+
+When a peer connects, pvxs delivers the authenticated identity to your
+server-side callback via
+:doc:`pvxs::server::ClientCredentials </maintainer-docs/api-reference-pvxs-server-clientcredentials>`.
+The fields present depend on the authentication mode:
+
+.. code-block:: c++
+
+   #include <pvxs/server.h>
+
+   auto serv = pvxs::server::Server::fromEnv();
+
+   serv.addSource("mysrc",
+       pvxs::server::StaticSource::build()
+           .add("MY:PV", pvxs::server::SharedPV::buildMailbox())
+           .onOp([](std::unique_ptr<pvxs::server::ConnectOp> &&op) {
+               // op->credentials() is populated before onOp fires.
+               auto &creds = op->credentials();
+               // creds.method   : "anonymous", "ca", or "x509"
+               // creds.account  : username (ca/x509 modes)
+               // creds.host     : peer network address
+               // creds.isTLS    : true when the connection is over TLS
+               // creds.roles()  : group memberships resolved by pvxs
+               op->connect(pvxs::nt::NTScalar{pvxs::TypeCode::Float64}.create());
+           }));
+
+In mTLS mode, ``creds.method == "x509"`` and ``creds.account`` is
+set to the CN from the peer's certificate.  ``creds.isTLS == true``.
+In server-only TLS, ``creds.isTLS == true`` but ``creds.method`` is
+``"ca"`` or ``"anonymous"``.  In plain TCP, ``creds.isTLS == false``.
+
+The ``ioc::Credentials`` class (see :ref:`peer_credentials` below)
+wraps ``pvxs::server::ClientCredentials`` for IOC-side access security
+and adds the ``authority`` and ``issuer_id`` fields used in ``AUTHORITY``
+ACF rules.
+
+Configuring the authentication mode
+-------------------------------------
+
+The mode is driven by the keychain files present at startup:
+
+- **Mutual TLS** — both ``EPICS_PVAS_TLS_KEYCHAIN`` and
+  ``EPICS_PVA_TLS_KEYCHAIN`` are set on their respective processes, and
+  the server sets ``client_cert=require`` in ``EPICS_PVAS_TLS_OPTIONS``.
+- **Server-only TLS** — only the server has a keychain; the server sets
+  ``client_cert=optional``; the client has only a trust-anchor keychain
+  (obtained via ``authnstd --trust-anchor``).
+- **Plain TCP** — neither side has a keychain.
+
+.. code-block:: shell
+
+   ## Mutual TLS server
+   export EPICS_PVAS_TLS_KEYCHAIN=/path/to/server.p12
+   export EPICS_PVAS_TLS_OPTIONS="client_cert=require"
+
+   ## Server-only TLS server
+   export EPICS_PVAS_TLS_KEYCHAIN=/path/to/server.p12
+   export EPICS_PVAS_TLS_OPTIONS="client_cert=optional"
 
 .. _site_authenticators:
 
