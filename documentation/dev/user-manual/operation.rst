@@ -136,6 +136,15 @@ For an IOC or server process:
 until a usable certificate is available. Use ``fallback-to-tcp`` only
 where plain PVAccess fallback is an intentional compatibility choice.
 
+To refuse plaintext PVAccess entirely, add ``no_tcp`` to
+``EPICS_PVAS_TLS_OPTIONS``. The server then never opens its plaintext TCP
+port and advertises only its TLS endpoint, so only TLS clients can reach
+it. ``no_tcp`` controls transport and is independent of ``client_cert``,
+which controls authentication: a server with ``client_cert=require`` but
+without ``no_tcp`` still accepts plaintext PVAccess connections. Combine
+``client_cert=require no_tcp`` for a fully locked-down,
+mutually-authenticated, TLS-only server.
+
 Run through a gateway
 ---------------------
 

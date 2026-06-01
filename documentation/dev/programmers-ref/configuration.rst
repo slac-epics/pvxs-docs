@@ -61,6 +61,14 @@ The following environment variables control SPVA behavior.
 |                          |                            |                                     | request stapling information during TLS handshake             |
 |                          | Controls OCSP stapling.    +-------------------------------------+---------------------------------------------------------------+
 |                          |                            | ``no``, ``false``, ``0`` (default)  | Stapling is enabled.                                          |
+|                          +----------------------------+-------------------------------------+---------------------------------------------------------------+
+|                          | ``no_tcp``                 |                                     | Server only. Disables the plaintext PVAccess TCP              |
+|                          |                            | (flag; no value)                    | listener entirely: the server does not bind the TCP           |
+|                          | Controls plaintext         |                                     | port, advertises only the TLS endpoint in SEARCH              |
+|                          | transport.                 |                                     | replies and beacons, and ignores searches that do not         |
+|                          |                            |                                     | offer ``tls``. Independent of ``client_cert`` (which          |
+|                          |                            |                                     | controls authentication, not transport). Fixed for            |
+|                          |                            |                                     | the process lifetime.                                         |
 +--------------------------+----------------------------+-------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_PORT       | {port number} default ``5076``                                   | Port number for Secure PVAccess. For clients, the server port |
 |                          |                                                                  | to connect to (PVA). For servers, the local port to listen on |
@@ -103,3 +111,4 @@ via their public base class
 - `pvxs::impl::ConfigCommon::tls_keychain_file` - Set keychain file path
 - `pvxs::impl::ConfigCommon::tls_client_cert_required` - Control client certificate requirements
 - `pvxs::impl::ConfigCommon::tls_port` - Set TLS port number
+- `pvxs::impl::ConfigCommon::tls_disable_plain_tcp` - Disable the plaintext PVAccess TCP listener (TLS-only transport)
