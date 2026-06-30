@@ -93,14 +93,10 @@ PVACMS Usage
             --acf <acf_file>                      Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf
       (-a | --admin-keychain) <admin_keychain>    Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.5/admin.p12
             --admin-keychain-pwd <file>           Specify location of file containing Admin User's keychain file password
-            --admin-keychain-new <new_name>       Generate a new Admin User's keychain file, update the ACF file, and exit.
-                                                  Fails if the keychain file already exists or a certificate with that
-                                                  subject is already registered; use ``--admin-keychain-ensure`` for
-                                                  idempotent at-startup handling.
             --admin-keychain-ensure <new_name>    Ensure the Admin User's keychain exists at startup: create one if
-                                                  missing, skip with a warning if a certificate with that subject is
-                                                  already registered, update the ACF file, then continue running
-                                                  PVACMS. Mutually exclusive with ``--admin-keychain-new``.
+                                                  missing; skip with a warning if a certificate with that subject is
+                                                  already registered; update the ACF file; then continue running
+                                                  PVACMS. Mutually exclusive with --admin-keychain-new.
 
 
 .. _pvacms_configuration:
@@ -392,37 +388,61 @@ Two admin options control this:
     ``--acf``.
 
 ``--admin-keychain-ensure <name>``
-    Ensure the admin keychain exists at startup **without exiting**, then
-    continue running PVACMS normally.  Resolution rules:
+    Ensure the admin keychain exists at startup, then **continue running**
+    PVACMS normally (it does not exit).  This form is safe to enable
+    unconditionally on every PVACMS start (eg. in a supervisor/systemd unit or
+    container entrypoint).  It is mutually exclusive with
+    ``--admin-keychain-new``.  PVACMS resolves it as follows:
 
-    - If the keychain file is missing and no certificate with that subject
-      is in the DB, a fresh keychain is created.
-    - If a certificate with the same subject is already registered in the
-      database, PVACMS logs a warning that the certificate will not be
-      created and continues startup.  The ACF ``CMS_ADMIN`` group is still
-      updated (idempotent), so the operator can reuse the existing
-      certificate for that admin subject.
-    - If the keychain file already exists on disk, it is left untouched.
+    - **Keychain file already exists on disk** — it is left untouched and no
+      certificate is created.  PVACMS logs a reminder to make sure that name
+      appears in the ACF.
+    - **Keychain file missing, and no certificate with that subject is
+      registered** — a fresh keychain and certificate are created.  PVACMS
+      again logs a reminder to make sure that name appears in the ACF; it does
+      **not** add the name to the ACF for you in this case.
+    - **Keychain file missing, but a certificate with that subject is already
+      registered** — the certificate is not recreated; PVACMS logs a warning
+      and, in this case only, **does** add the name to the ACF's ``CMS_ADMIN``
+      group, so the existing certificate can be reused as an admin.
 
-    This form is safe to enable unconditionally on every PVACMS start (eg.
-    in a supervisor/systemd unit or container entrypoint).  Accepts any
-    other PVACMS runtime option and is mutually exclusive with
-    ``--admin-keychain-new``.
+    Note the asymmetry with ``--admin-keychain-new``: ``--admin-keychain-ensure``
+    only edits the ACF automatically in the third (duplicate-subject) case.
+    When it creates a brand-new keychain it leaves the ACF untouched and just
+    reminds you, so you must add the name to the ``CMS_ADMIN`` group yourself
+    (see :ref:`pvacms_multiple_admins`) and then restart PVACMS.
 
 .. code-block:: shell
 
     # One-shot: bootstrap a new admin and exit
     pvacms --admin-keychain-new admin
 
-    # At every startup: ensure the admin is in the ACF and a keychain exists
+    # At every startup: ensure the admin keychain exists, then keep running
     pvacms --admin-keychain-ensure admin
 
-Both forms write the keychain to the path given by ``-a``/``--admin-keychain``
-(default ``${XDG_CONFIG_HOME}/pva/1.5/admin.p12``) and update the ACF file
-named by ``--acf`` (default ``${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf``).
+Worked example — ``--admin-keychain-ensure`` over successive starts:
 
-This creates the certificate **and** adds it to the ACF's ``CMS_ADMIN`` group
-in one step, e.g. to create an admin keychain for ``alice``:
+.. code-block:: console
+
+    # First start: alice.p12 does not exist and no "alice" cert is registered,
+    # so a fresh admin keychain + certificate are created, then PVACMS runs.
+    $ pvacms --admin-keychain-ensure alice --admin-keychain ~/.config/pva/1.5/alice.p12
+    Keychain file created   : /home/you/.config/pva/1.5/alice.p12
+    WARN  Make sure user "alice" appears in /home/you/.config/pva/1.5/pvacms.acf ...
+    # (PVACMS continues running)
+
+    # Because the create path does NOT edit the ACF, authorize alice yourself
+    # (add her to UAG(CMS_ADMIN)) and restart PVACMS for it to take effect.
+
+    # Later start: alice.p12 already exists on disk, so it is left untouched,
+    # nothing is created, and PVACMS just continues running.
+    $ pvacms --admin-keychain-ensure alice --admin-keychain ~/.config/pva/1.5/alice.p12
+    WARN  Make sure user "alice" appears in /home/you/.config/pva/1.5/pvacms.acf ...
+    # (PVACMS continues running)
+
+The new (one-shot) form, by contrast, both creates the certificate **and** adds
+it to the ACF's ``CMS_ADMIN`` group in one step, then exits — e.g. to create an
+admin keychain for ``alice``:
 
 .. code-block:: shell
 

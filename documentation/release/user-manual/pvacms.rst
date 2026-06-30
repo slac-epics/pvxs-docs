@@ -93,14 +93,6 @@ PVACMS Usage
             --acf <acf_file>                      Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf
       (-a | --admin-keychain) <admin_keychain>    Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.4/admin.p12
             --admin-keychain-pwd <file>           Specify location of file containing Admin User's keychain file password
-            --admin-keychain-new <new_name>       Generate a new Admin User's keychain file, update the ACF file, and exit.
-                                                  Fails if the keychain file already exists or a certificate with that
-                                                  subject is already registered; use ``--admin-keychain-ensure`` for
-                                                  idempotent at-startup handling.
-            --admin-keychain-ensure <new_name>    Ensure the Admin User's keychain exists at startup: create one if
-                                                  missing, skip with a warning if a certificate with that subject is
-                                                  already registered, update the ACF file, then continue running
-                                                  PVACMS. Mutually exclusive with ``--admin-keychain-new``.
 
 
 .. _pvacms_configuration:
@@ -379,46 +371,24 @@ this, bootstrapping an extra admin, or recovering from a lost admin keychain
 file once the certificate authority already exists, must be requested
 explicitly.
 
-Two admin options control this:
+This is controlled by one admin option:
 
 ``--admin-keychain-new <name>``
     Generate a new admin keychain, add the given name to the ACF
     ``CMS_ADMIN`` group, then **exit**.  This is the classic bootstrap form,
     intended to be run as a one-shot command.  It fails if the keychain file
     already exists, or if the certificate database already has a cert with
-    the same subject — use ``--admin-keychain-ensure`` for idempotent
-    at-startup handling.  When using this option, the only other options
+    the same subject.  When using this option, the only other options
     accepted are ``-a``/``--admin-keychain``, ``--admin-keychain-pwd``, and
     ``--acf``.
-
-``--admin-keychain-ensure <name>``
-    Ensure the admin keychain exists at startup **without exiting**, then
-    continue running PVACMS normally.  Resolution rules:
-
-    - If the keychain file is missing and no certificate with that subject
-      is in the DB, a fresh keychain is created.
-    - If a certificate with the same subject is already registered in the
-      database, PVACMS logs a warning that the certificate will not be
-      created and continues startup.  The ACF ``CMS_ADMIN`` group is still
-      updated (idempotent), so the operator can reuse the existing
-      certificate for that admin subject.
-    - If the keychain file already exists on disk, it is left untouched.
-
-    This form is safe to enable unconditionally on every PVACMS start (eg.
-    in a supervisor/systemd unit or container entrypoint).  Accepts any
-    other PVACMS runtime option and is mutually exclusive with
-    ``--admin-keychain-new``.
 
 .. code-block:: shell
 
     # One-shot: bootstrap a new admin and exit
     pvacms --admin-keychain-new admin
 
-    # At every startup: ensure the admin is in the ACF and a keychain exists
-    pvacms --admin-keychain-ensure admin
-
-Both forms write the keychain to the path given by ``-a``/``--admin-keychain``
-(default ``${XDG_CONFIG_HOME}/pva/1.4/admin.p12``) and update the ACF file
+This writes the keychain to the path given by ``-a``/``--admin-keychain``
+(default ``${XDG_CONFIG_HOME}/pva/1.4/admin.p12``) and updates the ACF file
 named by ``--acf`` (default ``${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf``).
 
 This creates the certificate **and** adds it to the ACF's ``CMS_ADMIN`` group
@@ -484,9 +454,9 @@ There is nothing special about an administrator certificate.  An administrator
 is simply any peer that the PVACMS ACF grants ``WRITE`` access in the
 ``DEFAULT`` access security group (ASG) — any ``RULE`` in the ``DEFAULT`` ASG
 that gives a peer ``WRITE`` permission makes that peer an administrator.  The
-``--admin-keychain-new``/``--admin-keychain-ensure`` options described above are
-just a convenience that creates a certificate **and** updates the ACF in one
-step; they do not create a different *kind* of certificate.
+``--admin-keychain-new`` option described above is just a convenience that
+creates a certificate **and** updates the ACF in one step; it does not create a
+different *kind* of certificate.
 
 Because of this, you do **not** need (and should not create) more than one
 certificate per user.  To grant an existing user administrator rights, reuse
