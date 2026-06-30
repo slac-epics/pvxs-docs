@@ -359,11 +359,25 @@ certificates in the ``PENDING_APPROVAL`` state and ``Revoke`` ``VALID`` ones.
 Creating Admin Keychains
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The default admin keychain is created automatically the first time PVACMS
-initialises its Certificate Authority.  Once a certificate authority keychain
-already exists, subsequent PVACMS startups assume the admin keychain also
-exists and will not recreate it — so bootstrapping an extra admin, or
-recovering from a lost admin keychain file, must be requested explicitly.
+The default admin keychain is created automatically, but only on the single
+startup that first initialises the Certificate Authority.  The decision is tied
+to the certificate authority keychain, not to the certificate database:
+
+- **Certificate authority keychain absent** (a fresh, first-ever start): PVACMS
+  creates a new certificate authority key and certificate, and on that same run
+  creates the default admin keychain and certificate — **unless** the admin
+  keychain file already exists on disk, in which case it is left untouched.
+- **Certificate authority keychain already present:** PVACMS loads it and does
+  **not** create a default admin certificate, regardless of whether the
+  certificate database exists.  So if the certificate authority exists but the
+  database does not, no admin certificate is created; and if the database
+  already exists, no admin certificate is created either.
+
+The existence of the certificate database alone never triggers admin-certificate
+creation — only the *creation* of the certificate authority does.  Because of
+this, bootstrapping an extra admin, or recovering from a lost admin keychain
+file once the certificate authority already exists, must be requested
+explicitly.
 
 Two admin options control this:
 
