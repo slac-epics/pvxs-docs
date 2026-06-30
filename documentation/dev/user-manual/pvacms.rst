@@ -356,8 +356,8 @@ certificates in the ``PENDING_APPROVAL`` state and ``Revoke`` ``VALID`` ones.
 
 .. _pvacms_admin_bootstrap:
 
-Bootstrapping and Recovering Admin Keychains
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Creating Admin Keychains
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The default admin keychain is created automatically the first time PVACMS
 initialises its Certificate Authority.  Once a certificate authority keychain
@@ -406,6 +406,130 @@ Two admin options control this:
 Both forms write the keychain to the path given by ``-a``/``--admin-keychain``
 (default ``${XDG_CONFIG_HOME}/pva/1.5/admin.p12``) and update the ACF file
 named by ``--acf`` (default ``${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf``).
+
+This creates the certificate **and** adds it to the ACF's ``CMS_ADMIN`` group
+in one step, e.g. to create an admin keychain for ``alice``:
+
+.. code-block:: shell
+
+    pvacms --admin-keychain-new alice --admin-keychain ~/.config/pva/1.5/alice.p12
+
+For this to work, PVACMS must be able to locate the certificate authority's own
+files, since it is the one issuing the certificate and editing the ACF.  Those
+locations must either be supplied through the environment (or left at their
+defaults):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 30 40
+
+   * - Environment variable
+     - Default location
+     - What it points to
+   * - ``EPICS_PVACMS_ACF``
+     - ``${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf``
+     - ACF file to update
+   * - ``EPICS_CERT_AUTH_TLS_KEYCHAIN``
+     - ``${XDG_CONFIG_HOME}/pva/1.5/cert_auth.p12``
+     - certificate authority certificate (signs the new cert)
+   * - ``EPICS_PVACMS_DB``
+     - ``${XDG_DATA_HOME}/pva/1.5/certs.db``
+     - certificate database
+   * - ``EPICS_PVAS_TLS_KEYCHAIN``
+     - ``${XDG_CONFIG_HOME}/pva/1.5/pvacms.p12``
+     - the PVACMS node's own keychain
+
+…or they must be passed on the command line using the matching options.  Note
+that ``--admin-keychain-new`` accepts only ``--acf`` (plus the admin-keychain
+options) on the same command line, so the ACF can be given as a flag while the
+other locations are taken from the environment:
+
+.. code-block:: shell
+
+    pvacms --admin-keychain-new alice \
+           --admin-keychain ~/.config/pva/1.5/alice.p12 \
+           --acf ~/.config/pva/1.5/pvacms.acf
+
+When you instead run PVACMS as the long-running service (without
+``--admin-keychain-new``), all of these locations have their own options —
+``--acf``, ``-c``/``--cert-auth-keychain``, ``-d``/``--cert-db`` and
+``-p``/``--pvacms-keychain`` respectively — so any of them can be set on the
+command line rather than the environment.
+
+The ``pvacms`` form must be run by a user that has permission to read and write
+the referenced files (the ACF, the certificate authority keychain, the
+certificate database, and the new admin keychain) — typically the same account
+that runs the PVACMS service.
+
+.. _pvacms_multiple_admins:
+
+Creating Multiple Administrator Certificates
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There is nothing special about an administrator certificate.  An administrator
+is simply any peer that the PVACMS ACF grants ``WRITE`` access in the
+``DEFAULT`` access security group (ASG) — any ``RULE`` in the ``DEFAULT`` ASG
+that gives a peer ``WRITE`` permission makes that peer an administrator.  The
+``--admin-keychain-new``/``--admin-keychain-ensure`` options described above are
+just a convenience that creates a certificate **and** updates the ACF in one
+step; they do not create a different *kind* of certificate.
+
+Because of this, you do **not** need (and should not create) more than one
+certificate per user.  To grant an existing user administrator rights, reuse
+the regular certificate they already have rather than minting a second one.
+
+The procedure is:
+
+|1| **Create a regular certificate.** Use *any* of the authenticator tools —
+``authnstd``, ``authnkrb`` or ``authnldap`` — exactly as you would for any
+ordinary client.  No special flags are required.
+
+.. code-block:: shell
+
+    # e.g. issue a standard-authenticator certificate for a new operator
+    authnstd
+
+|2| **Authorize that certificate in the ACF.** Edit the ``pvacms.acf`` file
+(``EPICS_PVACMS_ACF`` / ``${XDG_CONFIG_HOME}/pva/1.5/pvacms.acf`` by default)
+and add the peers you want to promote to a ``UAG`` that the ``DEFAULT`` ASG's
+``WRITE`` rule already references:
+
+- **Using the default ACF** that PVACMS bootstrap produces, add the names to the
+  ``UAG(CMS_ADMIN)`` group — that is the group referenced by the ``WRITE`` rule
+  in the ``DEFAULT`` ASG:
+
+  .. code-block:: text
+
+      UAG(CMS_ADMIN) {admin, operator1, operator2}
+
+- **Using a custom ACF**, add the names to whichever ``UAG`` is named in a
+  ``WRITE`` rule of the ``DEFAULT`` ASG.  If your ``DEFAULT`` ASG grants
+  ``WRITE`` through a different group, add the new administrators there instead.
+
+You are free to identify administrators by whatever method the ACF supports —
+you are **not** constrained to use subject names.  A ``RULE`` may additionally
+or alternatively gate on ``METHOD(...)`` (the authentication method) and
+``AUTHORITY(...)`` (the issuing certificate authority), so you can, for example,
+grant ``WRITE`` to every peer authenticated with a given method by a given
+authority without naming individuals.  Whatever match conditions you choose, the
+rule that grants ``WRITE`` in the ``DEFAULT`` ASG is what confers administrator
+rights.
+
+PVACMS reads its ACF at startup and does **not** hot-reload it, so you must
+restart PVACMS for the edited ACF to take effect.  After the restart, the newly
+authorized certificates can perform admin operations (``Approve``, ``Deny``,
+``Revoke``) just like the bootstrap ``admin`` certificate, without any of them
+being a distinct "administrator certificate".
+
+Alternatively, :ref:`pvacms_admin_bootstrap` does the create-and-authorize in a
+single command.
+
+.. note::
+
+   Administrators cannot revoke their **own** certificate, whereas a regular
+   (non-administrator) user can revoke theirs.  Once a user is operating with an
+   administrator certificate, revoking that certificate requires a **different**
+   administrator to perform the revocation.
 
 .. _pvacms_clustering:
 
