@@ -19,8 +19,9 @@ The following environment variables control SPVA behavior.
 +--------------------------+----------------------------+-------------------------------------+---------------------------------------------------------------+
 | Name                     | Key                        | Value                               | Description                                                   |
 +==========================+============================+=====================================+===============================================================+
-| EPICS_PVA_CERT_PV_PREFIX | {string prefix for certificate management PVs}                   | Replaces the default ``CERT`` prefix. Combined with           |
-|                          | e.g. ``ORNL_CERTS``                                              | ``:STATUS:...``, ``:ROOT``, or ``:CREATE`` to form PV names.  |
+| EPICS_PVA_CERT_PV_PREFIX | {string prefix for certificate management PVs}                   | PVACMS/authn only. Replaces the default ``CERT`` prefix that  |
+|                          | e.g. ``ORNL_CERTS``                                              | PVACMS publishes under. Clients/servers read the status PV    |
+|                          |                                                                  | name from the certificate, not from this variable.            |
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_KEYCHAIN   | {fully qualified path  to keychain file}                         | Fully qualified path to the keychain file containing the      |
 +--------------------------+                                                                  | certificate and private keys used in the TLS handshake.       |

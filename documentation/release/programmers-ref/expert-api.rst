@@ -96,23 +96,6 @@ only programmatically or via command line tool arguments.
     auto conf = pvxs::client::Config::fromEnv();
     conf.setRequestTimeout(10.0);  // 10 second timeout
 
-Certificate PV Prefix
-~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: c++
-
-    void setCertPvPrefix(const std::string &prefix);
-    std::string getCertPvPrefix() const;
-
-Set or query the prefix used for certificate management PV names (default: ``"CERT"``).
-The prefix is prepended to ``:STATUS:...``, ``:ROOT``, and ``:CREATE`` to form the
-full PV names used for PVACMS communication.
-
-.. code-block:: c++
-
-    auto conf = pvxs::client::Config::fromEnv();
-    conf.setCertPvPrefix("ORNL_CERTS");  // use site-specific prefix
-
 Keychain Password
 ~~~~~~~~~~~~~~~~~
 

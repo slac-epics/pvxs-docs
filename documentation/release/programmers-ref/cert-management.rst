@@ -463,55 +463,20 @@ programmatically.
 Communicating with a PVACMS that uses a different cert prefix
 --------------------------------------------------------------
 
-By default, PVACMS uses the prefix ``CERT``.  If a site runs a PVACMS
-with a non-default prefix, target it via an environment variable or
-programmatically.
+By default, PVACMS uses the prefix ``CERT``.  A site may run a PVACMS with a
+non-default prefix (see the PVACMS ``--cert-pv-prefix`` option and the
+``EPICS_PVA[S]_CERT_PV_PREFIX`` environment variables in the PVACMS
+configuration below).
 
-**Via environment variable (all languages):**
+Clients and servers do **not** need to be told the prefix.  The status PV name
+is carried inside each certificate as an extension and is read directly from the
+certificate at connection time; there is no client- or server-side prefix
+configuration.  Whatever prefix a PVACMS was configured with is baked into the
+certificates it issues, so a peer always contacts the correct status PV
+automatically.
 
-.. code-block:: shell
-
-   export EPICS_PVA_CERT_PV_PREFIX=ORNL_CERTS
-
-**C++ — EXPERT API programmatic override:**
-
-.. code-block:: c++
-
-   #include <pvxs/client.h>
-
-   auto conf = pvxs::client::Config::fromEnv();
-   conf.setCertPvPrefix("ORNL_CERTS");  // overrides env variable
-   auto client = conf.build();
-
-   // Status PV names are now "ORNL_CERTS:STATUS:<issuer>:<serial>"
-   auto val = client.get("ORNL_CERTS:STATUS:27975e6b:07246297371190731775")
-                    .exec()->wait(5.0);
-
-**Python (P4P) — conf dict:**
-
-.. code-block:: python
-
-   from p4p.client.thread import Context
-
-   ctxt = Context('pva', conf={
-       'EPICS_PVA_CERT_PV_PREFIX': 'ORNL_CERTS',
-   })
-   val = ctxt.get('ORNL_CERTS:STATUS:27975e6b:07246297371190731775')
-   print(val['status'])
-   ctxt.close()
-
-**Java (Phoebus core-pva) — system property:**
-
-.. code-block:: java
-
-   System.setProperty("EPICS_PVA_CERT_PV_PREFIX", "ORNL_CERTS");
-
-   try (PVAClient client = new PVAClient()) {
-       PVAChannel ch = client.getChannel(
-           "ORNL_CERTS:STATUS:27975e6b:07246297371190731775");
-       ch.connect().get(5, TimeUnit.SECONDS);
-       System.out.println(ch.read("").get(5, TimeUnit.SECONDS));
-   }
+To read a certificate's status PV explicitly, use the status-PV URI stored in
+the certificate rather than reconstructing it from a prefix.
 
 PVACMS-specific behaviour
 --------------------------
