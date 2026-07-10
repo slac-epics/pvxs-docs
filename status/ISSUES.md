@@ -126,59 +126,59 @@ Working branch addressing these: [`slac-epics/epics-base-tls` #1](https://github
 
 **Full list:**
 
-| # | Location | Comment |
-|---|----------|---------|
-| [1](https://github.com/epics-base/pvxs/pull/171#discussion_r3260693318) | `.github/workflows/release.yml:21` | Revert? |
-| [2](https://github.com/epics-base/pvxs/pull/171#discussion_r3260695592) | `release.yml:44` | Probably needs a manual fix on merge. |
-| [3](https://github.com/epics-base/pvxs/pull/171#discussion_r3260712525) | `configure/CONFIG_SITE:48` | Why "NOCRYPT"? |
-| [4](https://github.com/epics-base/pvxs/pull/171#discussion_r3260715903) | `documentation/index.rst:24` | Mark as "optional". |
-| [5](https://github.com/epics-base/pvxs/pull/171#discussion_r3260769980) | `ioc/pvxs/credentials.h:28` | Demote credentials.h to internal (or remove?). |
-| [6](https://github.com/epics-base/pvxs/pull/171#discussion_r3260780359) | `ioc/pvxs/iochooks.h:148` | No need to change this comment. |
-| [7](https://github.com/epics-base/pvxs/pull/171#discussion_r3260817595) | `ioc/credentials.cpp:32` | Where does the "ca" special case move to? It must be somewhere. |
-| [8](https://github.com/epics-base/pvxs/pull/171#discussion_r3260830329) | `ioc/group.cpp:19` | Undo - needed for capture of stdout/err by IOC shell functions. |
-| [9](https://github.com/epics-base/pvxs/pull/171#discussion_r3260836805) | `ioc/Makefile:14` | Undo - redundant to upstream PR #170. |
-| [10](https://github.com/epics-base/pvxs/pull/171#discussion_r3260841605) | `ioc/Makefile:21` | Undo pvxsIoc.dbd make-rule changes - now unnecessary. |
-| [11](https://github.com/epics-base/pvxs/pull/171#discussion_r3260846662) | `ioc/pvalink_lset.cpp:650` | Another pass to remove whitespace-only changes. |
-| [12](https://github.com/epics-base/pvxs/pull/171#discussion_r3260937741) | `src/certstatus.h:33` | Unused - remove definition. |
-| [13](https://github.com/epics-base/pvxs/pull/171#discussion_r3260945673) | `certstatus.h:48` | Switch to `std::numeric_limits<time_t>`. |
-| [14](https://github.com/epics-base/pvxs/pull/171#discussion_r3262212558) | `certstatus.h:107` | Move definition out-of-line; add bounds checking; consider `std::array`. |
-| [15](https://github.com/epics-base/pvxs/pull/171#discussion_r3262229154) | `certstatus.h:207` | Sub-classes with no added members/virtuals - why does this exist? |
-| [16](https://github.com/epics-base/pvxs/pull/171#discussion_r3262240192) | `certstatus.h:141` | Make this an actual `enum`; O(1) `const char*` lookup instead of storing the string separately. |
-| [17](https://github.com/epics-base/pvxs/pull/171#discussion_r3262255310) | `certstatus.h:193` | Passing `std::string` by value is inefficient. |
-| [18](https://github.com/epics-base/pvxs/pull/171#discussion_r3334746811) | `ioc/singlesource.cpp:91` | Revert. |
-| [19](https://github.com/epics-base/pvxs/pull/171#discussion_r3334749914) | `python/pvxslibs/version.py:9` | Revert file. |
-| [20](https://github.com/epics-base/pvxs/pull/171#discussion_r3334752811) | `qsrv/Makefile:26` | Unnecessary - revert. |
-| [21](https://github.com/epics-base/pvxs/pull/171#discussion_r3334759975) | `setup/Makefile:15` | Details? Are the naming differences really MSVC, or an openssl build option? |
-| [22](https://github.com/epics-base/pvxs/pull/171#discussion_r3334761806) | `src/pvxs/client.h:7` | Revert unnecessary deletions in this file. |
-| [23](https://github.com/epics-base/pvxs/pull/171#discussion_r3334801208) | `client.h:1110` | Restore as static local function - no benefit to cluttering the public API. |
-| [24](https://github.com/epics-base/pvxs/pull/171#discussion_r3334811316) | `config.h:123` | Remove all cert-status-PV-prefix references from client/server config - names must come from cert extensions only. |
-| [25](https://github.com/epics-base/pvxs/pull/171#discussion_r3334815742) | `config.h:128` | Thought we agreed this was an anti-feature - remove. |
-| [26](https://github.com/epics-base/pvxs/pull/171#discussion_r3334820824) | `config.h:116` | Currently unused - remove. |
-| [27](https://github.com/epics-base/pvxs/pull/171#discussion_r3334835592) | `netcommon.h:54` | Don't expose issuer/serial through the public API - remove. |
-| [28](https://github.com/epics-base/pvxs/pull/171#discussion_r3334839342) | `nt.h:55` | Revert file. |
-| [29](https://github.com/epics-base/pvxs/pull/171#discussion_r3334844520) | `server.h:9` | `osiSock.h` **must** be included first (windows header ordering). |
-| [30](https://github.com/epics-base/pvxs/pull/171#discussion_r3334856142) | `server.h:115` | Redesign to avoid exposing this redundant static method. |
-| [31](https://github.com/epics-base/pvxs/pull/171#discussion_r3334862321) | `server.h:187` | Revert. |
-| [32](https://github.com/epics-base/pvxs/pull/171#discussion_r3334888134) | `server.h:199` | Revert reordering, added virtual methods, and exposure of previously-private `fromDefs()`. |
-| [33](https://github.com/epics-base/pvxs/pull/171#discussion_r3334895250) | `server.h:251` | Prefer previous individual member initializers. |
-| [34](https://github.com/epics-base/pvxs/pull/171#discussion_r3334899500) | `sharedArray.h:146` | Changes look like a mis-merge - revert. |
-| [35](https://github.com/epics-base/pvxs/pull/171#discussion_r3334920391) | `sharedpv.h:11` | Revert changes to this file. |
-| [36](https://github.com/epics-base/pvxs/pull/171#discussion_r3334924011) | `source.h:277` | Revert changes to this file. |
-| [37](https://github.com/epics-base/pvxs/pull/171#discussion_r3334936557) | `srvcommon.h:38` | ABI back-compat is not a goal (documenting ABI changes is) - remove. |
-| [38](https://github.com/epics-base/pvxs/pull/171#discussion_r3334943502) | `unittest.h:47` | Looks like a mis-merge - revert. |
-| [39](https://github.com/epics-base/pvxs/pull/171#discussion_r3334946850) | `util.h:172` | Grammar? |
-| [40](https://github.com/epics-base/pvxs/pull/171#discussion_r3334963993) | `util.h:296` | Clever change - but this note belongs in a commit message. |
-| [41](https://github.com/epics-base/pvxs/pull/171#discussion_r3334982171) | `src/certdate.h:7` | This whole file should go away; keep only epicsTime↔ASN1_TIME converters - drop the string-parsing/calendar gymnastics. |
-| [42](https://github.com/epics-base/pvxs/pull/171#discussion_r3335014812) | `certstatus.h:169` | Remove? Only used by the to-be-removed `PeerCredential::issuer_id`. |
-| [43](https://github.com/epics-base/pvxs/pull/171#discussion_r3335083607) | `certstatus.cpp:276` | Not all serial numbers fit this range - store internally as a `BIGNUM` (serial won't appear in public API). |
-| [44](https://github.com/epics-base/pvxs/pull/171#discussion_r3335173655) | `certstatus.cpp:349` | Must handle OCSP with multiple `SINGLERESP` - use `OCSP_resp_find_status()`. |
-| [45](https://github.com/epics-base/pvxs/pull/171#discussion_r3335191174) | `certstatus.cpp:356` | Keep openssl-derived identifiers in native format to simplify comparisons and avoid hash-truncation fidelity concerns. |
-| [46](https://github.com/epics-base/pvxs/pull/171#discussion_r3335204605) | `certstatus.cpp:372` | Why not `SSLError`? Should `OCSPParseException` subclass `SSLError`? |
-| [47](https://github.com/epics-base/pvxs/pull/171#discussion_r3335217699) | `certstatus.cpp:440` | Are these conditions legitimately reachable? If not, promote these logs to `err`. |
-| [48](https://github.com/epics-base/pvxs/pull/171#discussion_r3335223710) | `certstatus.cpp:448` | Promote these logs to `info` for understandability. |
-| [49](https://github.com/epics-base/pvxs/pull/171#discussion_r3335263482) | `certstatus.cpp:546` | Remove all references to the second "config" x509 extension. |
-| [50](https://github.com/epics-base/pvxs/pull/171#discussion_r3335272388) | `certstatus.cpp:587` | Redundant call. |
-| [51](https://github.com/epics-base/pvxs/pull/171#discussion_r3335297002) | `certstatus.h:436` | `renew_by` isn't used anywhere in PVXS - remove. |
+| #                                                                        | Location                           | Comment                                                                                                                 |
+|--------------------------------------------------------------------------|------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| [1](https://github.com/epics-base/pvxs/pull/171#discussion_r3260693318)  | `.github/workflows/release.yml:21` | Revert?                                                                                                                 |
+| [2](https://github.com/epics-base/pvxs/pull/171#discussion_r3260695592)  | `release.yml:44`                   | Probably needs a manual fix on merge.                                                                                   |
+| [3](https://github.com/epics-base/pvxs/pull/171#discussion_r3260712525)  | `configure/CONFIG_SITE:48`         | Why "NOCRYPT"?                                                                                                          |
+| [4](https://github.com/epics-base/pvxs/pull/171#discussion_r3260715903)  | `documentation/index.rst:24`       | Mark as "optional".                                                                                                     |
+| [5](https://github.com/epics-base/pvxs/pull/171#discussion_r3260769980)  | `ioc/pvxs/credentials.h:28`        | Demote credentials.h to internal (or remove?).                                                                          |
+| [6](https://github.com/epics-base/pvxs/pull/171#discussion_r3260780359)  | `ioc/pvxs/iochooks.h:148`          | No need to change this comment.                                                                                         |
+| [7](https://github.com/epics-base/pvxs/pull/171#discussion_r3260817595)  | `ioc/credentials.cpp:32`           | Where does the "ca" special case move to? It must be somewhere.                                                         |
+| [8](https://github.com/epics-base/pvxs/pull/171#discussion_r3260830329)  | `ioc/group.cpp:19`                 | Undo - needed for capture of stdout/err by IOC shell functions.                                                         |
+| [9](https://github.com/epics-base/pvxs/pull/171#discussion_r3260836805)  | `ioc/Makefile:14`                  | Undo - redundant to upstream PR #170.                                                                                   |
+| [10](https://github.com/epics-base/pvxs/pull/171#discussion_r3260841605) | `ioc/Makefile:21`                  | Undo pvxsIoc.dbd make-rule changes - now unnecessary.                                                                   |
+| [11](https://github.com/epics-base/pvxs/pull/171#discussion_r3260846662) | `ioc/pvalink_lset.cpp:650`         | Another pass to remove whitespace-only changes.                                                                         |
+| [12](https://github.com/epics-base/pvxs/pull/171#discussion_r3260937741) | `src/certstatus.h:33`              | Unused - remove definition.                                                                                             |
+| [13](https://github.com/epics-base/pvxs/pull/171#discussion_r3260945673) | `certstatus.h:48`                  | Switch to `std::numeric_limits<time_t>`.                                                                                |
+| [14](https://github.com/epics-base/pvxs/pull/171#discussion_r3262212558) | `certstatus.h:107`                 | Move definition out-of-line; add bounds checking; consider `std::array`.                                                |
+| [15](https://github.com/epics-base/pvxs/pull/171#discussion_r3262229154) | `certstatus.h:207`                 | Sub-classes with no added members/virtuals - why does this exist?                                                       |
+| [16](https://github.com/epics-base/pvxs/pull/171#discussion_r3262240192) | `certstatus.h:141`                 | Make this an actual `enum`; O(1) `const char*` lookup instead of storing the string separately.                         |
+| [17](https://github.com/epics-base/pvxs/pull/171#discussion_r3262255310) | `certstatus.h:193`                 | Passing `std::string` by value is inefficient.                                                                          |
+| [18](https://github.com/epics-base/pvxs/pull/171#discussion_r3334746811) | `ioc/singlesource.cpp:91`          | Revert.                                                                                                                 |
+| [19](https://github.com/epics-base/pvxs/pull/171#discussion_r3334749914) | `python/pvxslibs/version.py:9`     | Revert file.                                                                                                            |
+| [20](https://github.com/epics-base/pvxs/pull/171#discussion_r3334752811) | `qsrv/Makefile:26`                 | Unnecessary - revert.                                                                                                   |
+| [21](https://github.com/epics-base/pvxs/pull/171#discussion_r3334759975) | `setup/Makefile:15`                | Details? Are the naming differences really MSVC, or an openssl build option?                                            |
+| [22](https://github.com/epics-base/pvxs/pull/171#discussion_r3334761806) | `src/pvxs/client.h:7`              | Revert unnecessary deletions in this file.                                                                              |
+| [23](https://github.com/epics-base/pvxs/pull/171#discussion_r3334801208) | `client.h:1110`                    | Restore as static local function - no benefit to cluttering the public API.                                             |
+| [24](https://github.com/epics-base/pvxs/pull/171#discussion_r3334811316) | `config.h:123`                     | Remove all cert-status-PV-prefix references from client/server config - names must come from cert extensions only.      |
+| [25](https://github.com/epics-base/pvxs/pull/171#discussion_r3334815742) | `config.h:128`                     | Thought we agreed this was an anti-feature - remove.                                                                    |
+| [26](https://github.com/epics-base/pvxs/pull/171#discussion_r3334820824) | `config.h:116`                     | Currently unused - remove.                                                                                              |
+| [27](https://github.com/epics-base/pvxs/pull/171#discussion_r3334835592) | `netcommon.h:54`                   | Don't expose issuer/serial through the public API - remove.                                                             |
+| [28](https://github.com/epics-base/pvxs/pull/171#discussion_r3334839342) | `nt.h:55`                          | Revert file.                                                                                                            |
+| [29](https://github.com/epics-base/pvxs/pull/171#discussion_r3334844520) | `server.h:9`                       | `osiSock.h` **must** be included first (windows header ordering).                                                       |
+| [30](https://github.com/epics-base/pvxs/pull/171#discussion_r3334856142) | `server.h:115`                     | Redesign to avoid exposing this redundant static method.                                                                |
+| [31](https://github.com/epics-base/pvxs/pull/171#discussion_r3334862321) | `server.h:187`                     | Revert.                                                                                                                 |
+| [32](https://github.com/epics-base/pvxs/pull/171#discussion_r3334888134) | `server.h:199`                     | Revert reordering, added virtual methods, and exposure of previously-private `fromDefs()`.                              |
+| [33](https://github.com/epics-base/pvxs/pull/171#discussion_r3334895250) | `server.h:251`                     | Prefer previous individual member initializers.                                                                         |
+| [34](https://github.com/epics-base/pvxs/pull/171#discussion_r3334899500) | `sharedArray.h:146`                | Changes look like a mis-merge - revert.                                                                                 |
+| [35](https://github.com/epics-base/pvxs/pull/171#discussion_r3334920391) | `sharedpv.h:11`                    | Revert changes to this file.                                                                                            |
+| [36](https://github.com/epics-base/pvxs/pull/171#discussion_r3334924011) | `source.h:277`                     | Revert changes to this file.                                                                                            |
+| [37](https://github.com/epics-base/pvxs/pull/171#discussion_r3334936557) | `srvcommon.h:38`                   | ABI back-compat is not a goal (documenting ABI changes is) - remove.                                                    |
+| [38](https://github.com/epics-base/pvxs/pull/171#discussion_r3334943502) | `unittest.h:47`                    | Looks like a mis-merge - revert.                                                                                        |
+| [39](https://github.com/epics-base/pvxs/pull/171#discussion_r3334946850) | `util.h:172`                       | Grammar?                                                                                                                |
+| [40](https://github.com/epics-base/pvxs/pull/171#discussion_r3334963993) | `util.h:296`                       | Clever change - but this note belongs in a commit message.                                                              |
+| [41](https://github.com/epics-base/pvxs/pull/171#discussion_r3334982171) | `src/certdate.h:7`                 | This whole file should go away; keep only epicsTime↔ASN1_TIME converters - drop the string-parsing/calendar gymnastics. |
+| [42](https://github.com/epics-base/pvxs/pull/171#discussion_r3335014812) | `certstatus.h:169`                 | Remove? Only used by the to-be-removed `PeerCredential::issuer_id`.                                                     |
+| [43](https://github.com/epics-base/pvxs/pull/171#discussion_r3335083607) | `certstatus.cpp:276`               | Not all serial numbers fit this range - store internally as a `BIGNUM` (serial won't appear in public API).             |
+| [44](https://github.com/epics-base/pvxs/pull/171#discussion_r3335173655) | `certstatus.cpp:349`               | Must handle OCSP with multiple `SINGLERESP` - use `OCSP_resp_find_status()`.                                            |
+| [45](https://github.com/epics-base/pvxs/pull/171#discussion_r3335191174) | `certstatus.cpp:356`               | Keep openssl-derived identifiers in native format to simplify comparisons and avoid hash-truncation fidelity concerns.  |
+| [46](https://github.com/epics-base/pvxs/pull/171#discussion_r3335204605) | `certstatus.cpp:372`               | Why not `SSLError`? Should `OCSPParseException` subclass `SSLError`?                                                    |
+| [47](https://github.com/epics-base/pvxs/pull/171#discussion_r3335217699) | `certstatus.cpp:440`               | Are these conditions legitimately reachable? If not, promote these logs to `err`.                                       |
+| [48](https://github.com/epics-base/pvxs/pull/171#discussion_r3335223710) | `certstatus.cpp:448`               | Promote these logs to `info` for understandability.                                                                     |
+| [49](https://github.com/epics-base/pvxs/pull/171#discussion_r3335263482) | `certstatus.cpp:546`               | Remove all references to the second "config" x509 extension.                                                            |
+| [50](https://github.com/epics-base/pvxs/pull/171#discussion_r3335272388) | `certstatus.cpp:587`               | Redundant call.                                                                                                         |
+| [51](https://github.com/epics-base/pvxs/pull/171#discussion_r3335297002) | `certstatus.h:436`                 | `renew_by` isn't used anywhere in PVXS - remove.                                                                        |
 
 ---
 
