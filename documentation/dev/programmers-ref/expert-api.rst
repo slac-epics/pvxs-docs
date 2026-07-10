@@ -105,7 +105,7 @@ Keychain Password
     std::string getKeychainPassword() const;
 
 Set or query the password used to decrypt the PKCS#12 keychain file. This provides
-a programmatic alternative to the ``EPICS_PVA_TLS_KEYCHAIN_PWD_FILE`` environment variable.
+a programmatic alternative to the ``;password`` postfix on ``EPICS_PVA_TLS_KEYCHAIN``.
 
 .. code-block:: c++
 

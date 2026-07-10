@@ -25,14 +25,9 @@ The following environment variables control SPVA behavior.
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_KEYCHAIN   | {fully qualified path  to keychain file}                         | Fully qualified path to the keychain file containing the      |
 +--------------------------+                                                                  | certificate and private keys used in the TLS handshake.       |
-| EPICS_PVAS_TLS_KEYCHAIN  | e.g. ``~/.config/client.p12``,                                   | If not specified, TLS is disabled.                            |
-|                          | ``~/.config/server.p12``                                         |                                                               |
-+--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
-| EPICS_PVA_TLS_KEYCHAIN   | {fully qualified path to keychain password file}                 | Fully qualified path to a file containing the password that   |
-| _PWD_FILE                |                                                                  | decrypts the keychain file. Optional. If not specified, the   |
-+--------------------------+ e.g. ``~/.config/client.pass``,                                  | keychain file is treated as unencrypted. Omitting a password  |
-| EPICS_PVAS_TLS_KEYCHAIN  | ``~/.config/server.pass``                                        | file is not recommended.                                      |
-| _PWD_FILE                |                                                                  |                                                               |
+| EPICS_PVAS_TLS_KEYCHAIN  | e.g. ``~/.config/client.p12``,                                   | If not specified, TLS is disabled. If the keychain file is    |
+|                          | ``~/.config/server.p12``,                                        | encrypted, append the password after a semicolon, e.g.        |
+|                          | ``~/.config/client.p12;password``                                | ``~/.config/client.p12;password``.                            |
 +--------------------------+----------------------------+-------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_OPTIONS    | ``client_cert``            | ``optional`` (default)              | During TLS handshake require client certificate to be         |
 |                          |                            |                                     | presented                                                     |

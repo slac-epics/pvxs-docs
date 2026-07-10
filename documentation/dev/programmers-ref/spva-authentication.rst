@@ -322,7 +322,7 @@ same subject still inherits the prior approval. If the prior certificate was **d
 
 **usage**
 
-Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain and password file locations.
+Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain location (with an optional ``;password`` postfix).
 
 .. code-block:: shell
 
@@ -416,7 +416,7 @@ authkrb Configuration and Usage
 
 **usage**
 
-Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain and password file locations.
+Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain location (with an optional ``;password`` postfix).
 
 .. code-block::
 
@@ -501,7 +501,7 @@ authldap Configuration and Usage
 
 **usage**
 
-Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain and password file locations.
+Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain location (with an optional ``;password`` postfix).
 
 .. code-block:: shell
 
@@ -551,9 +551,6 @@ Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine th
 +--------------------+--------------------------+--------------------------+--------------------------+---------------------------------------+------------------------------------------------------------+
 | Env. *authnldap*   | Env. *pvacms*            | Params. *authldap*       | Params. *pvacms*         | Keys and Values                       | Description                                                |
 +====================+==========================+==========================+==========================+=======================================+============================================================+
-|| EPICS_AUTH_LDAP   ||                         ||                         ||                         || {location of password file}          || file containing password for the given LDAP user account  |
-|| _ACCOUNT_PWD_FILE ||                         ||                         ||                         || e.g. ``~/.config/pva/1.5/ldap.pass`` ||                                                           |
-+--------------------+--------------------------+--------------------------+--------------------------+---------------------------------------+------------------------------------------------------------+
 ||                   ||                         || ``-p``                  ||                         || {LDAP account password}              || password for the given LDAP user account                  |
 ||                   ||                         || ``--password``          ||                         || e.g. ``secret``                      ||                                                           |
 +--------------------+--------------------------+--------------------------+--------------------------+---------------------------------------+------------------------------------------------------------+
