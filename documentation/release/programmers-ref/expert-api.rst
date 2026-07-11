@@ -79,23 +79,6 @@ status from servers.
     auto conf = pvxs::server::Config::fromEnv();
     conf.disableStapling();  // disable stapling
 
-Request Timeout
-~~~~~~~~~~~~~~~
-
-.. code-block:: c++
-
-    void setRequestTimeout(const double timeout);
-    double getRequestTimeout() const;
-
-Set or query the request timeout in seconds (default: 5.0). This timeout applies to
-operations like certificate status queries. Cannot be set via environment variables —
-only programmatically or via command line tool arguments.
-
-.. code-block:: c++
-
-    auto conf = pvxs::client::Config::fromEnv();
-    conf.setRequestTimeout(10.0);  // 10 second timeout
-
 Keychain Password
 ~~~~~~~~~~~~~~~~~
 
