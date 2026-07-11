@@ -829,9 +829,9 @@ The default ACF file restricts cluster PV access via ``UAG(CMS_CLUSTER)``:
 - ``ASG(CLUSTER)`` requires ``UAG(CMS_CLUSTER)``, ``METHOD(x509)``,
   ``AUTHORITY(CMS_AUTH)``, and ``PROTOCOL(TLS)`` for both READ and WRITE.
 
-The CTRL PV RPC handler enforces CLUSTER ASG rules at runtime using
-``SecurityClient.update(as_cluster_mem, ASL1, credentials)`` and rejects join
-requests from clients that do not satisfy ``canWrite()``.
+The CTRL PV RPC handler enforces CLUSTER ASG rules at runtime by mapping
+the caller's credentials to an asLib identity and calling ``asCheckPut()``,
+rejecting join requests from clients that are not permitted to write.
 
 **Sync Loop Prevention**
 

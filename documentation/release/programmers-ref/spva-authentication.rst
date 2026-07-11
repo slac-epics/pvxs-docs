@@ -136,10 +136,9 @@ set to the CN from the peer's certificate.  ``creds.isTLS == true``.
 In server-only TLS, ``creds.isTLS == true`` but ``creds.method`` is
 ``"ca"`` or ``"anonymous"``.  In plain TCP, ``creds.isTLS == false``.
 
-The ``ioc::Credentials`` class (see :ref:`peer_credentials` below)
-wraps ``pvxs::server::ClientCredentials`` for IOC-side access security
-and adds the ``authority`` and ``issuer_id`` fields used in ``AUTHORITY``
-ACF rules.
+The ``pvxs::server::ClientCredentials`` structure (see
+:ref:`peer_credentials` below) carries the ``authority`` field used in
+``AUTHORITY`` ACF rules.
 
 Configuring the authentication mode
 -------------------------------------
