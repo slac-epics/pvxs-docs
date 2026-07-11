@@ -14,11 +14,11 @@
 | pvxs-tls [#23](https://github.com/slac-epics/pvxs-tls/issues/23) pvxlist stack-use-after-scope            | pvxs-tls [#24](https://github.com/slac-epics/pvxs-tls/pull/24)                                                         | OPEN                | **7d**         | **CHANGES_REQUESTED** (author's turn)                       | ✅ "Fixes #23"            | Fix written; reviewer asked for changes.                                                                                                                                                                                                                     |
 | pvxs-tls [#25](https://github.com/slac-epics/pvxs-tls/issues/25) ASan callback-lifetime (sub-fix)         | pvxs-tls [#18](https://github.com/slac-epics/pvxs-tls/pull/18)                                                         | OPEN                | **33d**        | **needs review** (no decision yet)                          | part of #25 family       | Monitor-callback copy fix (on `dev`); also unblocks pvxs-cms #16. Awaiting review.                                                                                                                                                                           |
 | pvxs-tls [#5](https://github.com/slac-epics/pvxs-tls/issues/5) qsrv/Makefile wrong DBD dir               | commit `ed9f6a02` (2026-04-18)                                                                                         | **MERGED** (on `main`) | - merged    | none                                                        | ❌ no                     | **Already fixed on `main`** - DBD dependency now uses `$(INSTALL_LOCATION)/dbd/pvxsIoc.dbd`. #5 asked for a *tag* carrying the fix → **confirm a release tag includes `ed9f6a02`, then close.**                                                              |
+| pvxs-docs [#5](https://github.com/slac-epics/pvxs-docs/issues/5) Remove duplicate PVA/CA protocol specs   | pvxs-docs [#7](https://github.com/slac-epics/pvxs-docs/pull/7)                                                         | OPEN                | **needs review** | **needs review** (first review)                            | ✅ "Fixes #5"            | Replaced the AI-generated PVA/CA spec bodies with pointer stubs to the canonical epics-controls docs (both `release/` + `dev/` variants); build-verified, no new Sphinx warnings. Awaiting review/merge.                                                     |
 
 **No fixing PR exists yet** (genuinely open / unstarted): 
 - pvxs-tls #27, #26, #20, #19;
-- pvxs-cms #34, #33, #32, #28, #26, #23, #22, #20, #18, #17; 
-- pvxs-docs #5.
+- pvxs-cms #34, #33, #32, #28, #26, #23, #22, #20, #18, #17.
 
 ## 1. Open Issues
 
@@ -64,7 +64,7 @@
 
 | # | Issue | Author | Assignee | Age | What it is |
 |---|-------|--------|----------|-----|------------|
-| [#5](https://github.com/slac-epics/pvxs-docs/issues/5) | Remove PVA and CA "specification" documents | mdavidsaver `bug` | george-mcintyre | 14d | Objection that two spec docs duplicate the canonical community docs at epics-docs; requests removal in favour of docs.epics-controls.org. **Aligns with agreed direction:** `pvxs-docs` is a staging area for SPVA docs bound for `epics-docs`; the CA and PVA Protocol specs will be removed as duplicates, and the remaining SPVA docs stay the reference until a final home is found. |
+| [#5](https://github.com/slac-epics/pvxs-docs/issues/5) | Remove PVA and CA "specification" documents | mdavidsaver `bug` | george-mcintyre | 14d | Objection that two spec docs duplicate the canonical community docs at epics-docs; requests removal in favour of docs.epics-controls.org. **Aligns with agreed direction:** `pvxs-docs` is a staging area for SPVA docs bound for `epics-docs`; the CA and PVA Protocol specs are removed as duplicates, and the remaining SPVA docs stay the reference until a final home is found. **Fix written:** PR [#7](https://github.com/slac-epics/pvxs-docs/pull/7) replaces `protocol-spec/pva.rst` + `ca.rst` (both variants) with pointer stubs to the canonical epics-controls docs; OPEN, awaiting review. |
 
 ---
 
@@ -88,6 +88,12 @@ These PRs are, in effect, the in-flight fixes for the issues above.
 | [#17](https://github.com/slac-epics/pvxs-tls/pull/17) | feat: tls-only transport mode (`EPICS_PVAS_TLS_OPTIONS=no_tcp`) | george-mcintyre | 35d (~5w) | **CHANGES_REQUESTED** | New feature: allow a TLS-only server (no TCP fallback). Relates to pvxs-cms [#23](https://github.com/slac-epics/pvxs-cms/issues/23) (CMS tools blocked in TLS-only env). |
 | [#13](https://github.com/slac-epics/pvxs-tls/pull/13) | fix: demote benign loopback echo of own UDP search to Debug | george-mcintyre | 56d (~8w) | **CHANGES_REQUESTED** | Log-noise fix: own broadcast search echoed back is logged too loudly. |
 | [#7](https://github.com/slac-epics/pvxs-tls/pull/7) | fix: tear down live TLS connections when local cert goes BAD | george-mcintyre | 71d (~2mo) | REVIEW_REQUIRED | Security-relevant: drop established TLS connections when the local cert transitions to BAD. Relates to fail-secure theme ([#26](https://github.com/slac-epics/pvxs-tls/issues/26)). |
+
+### `slac-epics/pvxs-docs`
+
+| # | PR | Author | Age | Review | Fixes / relates to |
+|---|----|--------|-----|--------|--------------------|
+| [#7](https://github.com/slac-epics/pvxs-docs/pull/7) | docs: replace duplicate PVA/CA protocol specs with pointers to canonical community docs | george-mcintyre | new | **needs review** | Fixes [#5](https://github.com/slac-epics/pvxs-docs/issues/5): removes the AI-generated PVA/CA spec bodies, replacing them with pointer stubs to docs.epics-controls.org (both `release/` + `dev/` variants). |
 
 ---
 
