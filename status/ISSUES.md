@@ -91,32 +91,44 @@ These PRs are, in effect, the in-flight fixes for the issues above.
 
 ---
 
-## 3. Open review comments on the two upstream (SLAC → community) PRs
+## 3. Review comments on the two upstream (SLAC → community) PRs
 
-These are the outstanding reviewer comments (all from **mdavidsaver**) on the two PRs that merge SLAC SPVA work into the upstream community repos. None are marked resolved yet.
+These are the reviewer comments (all from **mdavidsaver**) on the two PRs that merge SLAC SPVA work into the upstream community repos. Both PRs' threads are now all replied-to and resolved: #171's 51 and #886's 10.
 
 ### 3.1 `epics-base/epics-base` #886 - "Add support for METHOD, AUTHORITY, and PROTOCOL in Access Security" (age 36d / ~5w, CHANGES_REQUESTED)
 
-Working branch addressing these: [`slac-epics/epics-base-tls` #1](https://github.com/slac-epics/epics-base-tls/pull/1). **10 open comments:**
+Working branch addressing these: [`slac-epics/epics-base-tls` #1](https://github.com/slac-epics/epics-base-tls/pull/1) (head branch `work`, base `7.0-secure-pvaccess`).
 
-| # | Location | Comment |
-|---|----------|---------|
-| [1](https://github.com/epics-base/epics-base/pull/886#discussion_r3337583680) | `asLib.h:230` | Why the extra indirection storing the method name? Put a `const char*` directly in `ASGMETHOD` (and `ASGAUTHORITY`) - fewer allocations, simpler, no downside. |
-| [2](https://github.com/epics-base/epics-base/pull/886#discussion_r3337586960) | `asLib.h:215` | These members should become `const char*`. |
-| [3](https://github.com/epics-base/epics-base/pull/886#discussion_r3337598196) | `asLib.h:239` | Does "NOT_SET" mean "either TCP or TLS"? If so, name it `AS_PROTOCOL_ALL`. |
-| [4](https://github.com/epics-base/epics-base/pull/886#discussion_r3337609190) | `asLib.h:323` | Move this value into `asLibRoutines.c` (if it can't be removed entirely). |
-| [5](https://github.com/epics-base/epics-base/pull/886#discussion_r3337654548) | `asLibRoutines.c:645` | The length limit is only used in `asDumpFP()`, which prints a non-re-parseable ` -> ` syntax. Output must be in the same (re-parseable) syntax; see if the arbitrary limit can then be dropped. |
-| [6](https://github.com/epics-base/epics-base/pull/886#discussion_r3337687342) | `asLibRoutines.c:1205` | This would be the only case-insensitive keyword in ACF syntax - just use `strcmp()`. |
-| [7](https://github.com/epics-base/epics-base/pull/886#discussion_r3337708993) | `asLibRoutines.c:1224` | Is `asGetAuthority()` still needed now that every authority node has a simple name? |
-| [8](https://github.com/epics-base/epics-base/pull/886#discussion_r3337732166) | `asLib.h:234` | `ASGAUTHORITY` should track names as a **tree** (node keyword, cert common name, parent) - sketch provided. |
-| [9](https://github.com/epics-base/epics-base/pull/886#discussion_r3337754467) | `asTrapWrite.h:39` | Doc comments must state value ranges: can `method`/`authority` be NULL? what values can `protocol` take? |
-| [10](https://github.com/epics-base/epics-base/pull/886#discussion_r3337758918) | `aslibtest.c:165` | How does this test condition differ from `METHOD("x509") METHOD("ignored") METHOD("ignored_to")`? |
+**All 10 comments resolved**
+- replied to on #886 and marked resolved
+- fixed by 9 commits on branch `work` (see "Fixed by" column)
+- carried by [epics-base-tls #1](https://github.com/slac-epics/epics-base-tls/pull/1)
 
-**Theme:** simplify the data model (drop indirection, `const char*`, authority-as-tree), keep ACF output re-parseable, tighten docs, and justify/trim helpers. Structural rework requested, not just cosmetic.
+| # | Location | Comment | Fixed by (commit on `work`) |
+|---|----------|---------|-----------------------------|
+| [1](https://github.com/epics-base/epics-base/pull/886#discussion_r3337583680) | `asLib.h:230` | Why the extra indirection storing the method name? Put a `const char*` directly in `ASGMETHOD` (and `ASGAUTHORITY`) - fewer allocations, simpler, no downside. | [`384de2d`](https://github.com/slac-epics/epics-base-tls/commit/384de2dafa5e6a569f2c3c1d9bdf961f8ce7a413) |
+| [2](https://github.com/epics-base/epics-base/pull/886#discussion_r3337586960) | `asLib.h:215` | These members should become `const char*`. | [`89f9b93`](https://github.com/slac-epics/epics-base-tls/commit/89f9b93b8ede2374cb2456c55d4d72d38954d699) |
+| [3](https://github.com/epics-base/epics-base/pull/886#discussion_r3337598196) | `asLib.h:239` | Does "NOT_SET" mean "either TCP or TLS"? If so, name it `AS_PROTOCOL_ALL`. | [`e1842f2`](https://github.com/slac-epics/epics-base-tls/commit/e1842f28595ce36c5d2aa0b89d86ca037a337184) |
+| [4](https://github.com/epics-base/epics-base/pull/886#discussion_r3337609190) | `asLib.h:323` | Move this value into `asLibRoutines.c` (if it can't be removed entirely). | [`29ab2d5`](https://github.com/slac-epics/epics-base-tls/commit/29ab2d510b2f86b220d4f021a6e19b6e5aeb77be) |
+| [5](https://github.com/epics-base/epics-base/pull/886#discussion_r3337654548) | `asLibRoutines.c:645` | The length limit is only used in `asDumpFP()`, which prints a non-re-parseable ` -> ` syntax. Output must be in the same (re-parseable) syntax; see if the arbitrary limit can then be dropped. | [`041d1ed`](https://github.com/slac-epics/epics-base-tls/commit/041d1ed3ba3742d29e898ac9fce6c837e7e3acda) |
+| [6](https://github.com/epics-base/epics-base/pull/886#discussion_r3337687342) | `asLibRoutines.c:1205` | This would be the only case-insensitive keyword in ACF syntax - just use `strcmp()`. | [`8037d2d`](https://github.com/slac-epics/epics-base-tls/commit/8037d2dbf32d00e4671eec8e43dff7cb1384cb2e) |
+| [7](https://github.com/epics-base/epics-base/pull/886#discussion_r3337708993) | `asLibRoutines.c:1224` | Is `asGetAuthority()` still needed now that every authority node has a simple name? | [`041d1ed`](https://github.com/slac-epics/epics-base-tls/commit/041d1ed3ba3742d29e898ac9fce6c837e7e3acda), [`1472168`](https://github.com/slac-epics/epics-base-tls/commit/1472168aee38cf64ee6c79cd80b105d7645a7516) (kept, reworked to walk the tree) |
+| [8](https://github.com/epics-base/epics-base/pull/886#discussion_r3337732166) | `asLib.h:234` | `ASGAUTHORITY` should track names as a **tree** (node keyword, cert common name, parent) - sketch provided. | [`384de2d`](https://github.com/slac-epics/epics-base-tls/commit/384de2dafa5e6a569f2c3c1d9bdf961f8ce7a413), [`89f9b93`](https://github.com/slac-epics/epics-base-tls/commit/89f9b93b8ede2374cb2456c55d4d72d38954d699), [`041d1ed`](https://github.com/slac-epics/epics-base-tls/commit/041d1ed3ba3742d29e898ac9fce6c837e7e3acda) (`struct authority { ...parent }`) |
+| [9](https://github.com/epics-base/epics-base/pull/886#discussion_r3337754467) | `asTrapWrite.h:39` | Doc comments must state value ranges: can `method`/`authority` be NULL? what values can `protocol` take? | [`9a9582f`](https://github.com/slac-epics/epics-base-tls/commit/9a9582f069d8fda2d4e6c8d4edacd6386170a731) |
+| [10](https://github.com/epics-base/epics-base/pull/886#discussion_r3337758918) | `aslibtest.c:165` | How does this test condition differ from `METHOD("x509") METHOD("ignored") METHOD("ignored_to")`? | [`8854875`](https://github.com/slac-epics/epics-base-tls/commit/8854875585fd425575f7056de31e6d8e21425390) |
+
+**Theme:** simplify the data model (drop indirection, `const char*`, authority-as-tree), keep ACF output re-parseable, tighten docs, and justify/trim helpers. Structural rework requested, not just cosmetic. **Status:** all 10 replied-to and resolved on #886; fixes carried by PR #1 (remaining action is to land PR #1).
 
 ### 3.2 `epics-base/pvxs` #171 - "Secure PVAccess with certificate status monitoring support" (age 79d / ~2mo, REVIEW_REQUIRED)
 
-**All 51 comments resolved** (replied to on the PR; 44 fixed by commits, 7 answered reply-only). Fixes land via the SLAC PRs to `main`: [pvxs-tls #28](https://github.com/slac-epics/pvxs-tls/pull/28), [pvxs-cms #36](https://github.com/slac-epics/pvxs-cms/pull/36), [pvxs-docs #6](https://github.com/slac-epics/pvxs-docs/pull/6). Grouped by theme below, full list follows.
+**All 51 comments resolved** 
+- replied to on the PR; 44 fixed by commits
+- 7 answered reply-only)
+- Fixes land via the SLAC PRs to `main`:
+	- [pvxs-tls #28](https://github.com/slac-epics/pvxs-tls/pull/28)
+	- [pvxs-cms #36](https://github.com/slac-epics/pvxs-cms/pull/36)
+	- [pvxs-docs #6](https://github.com/slac-epics/pvxs-docs/pull/6) 
+- Grouped by theme below, full list follows.
 
 **Recurring themes:**
 - **Revert incidental / mis-merge changes** (most comments): comments 1, 8-11, 18-20, 22, 28, 31-36, 38 - many files (`client.h`, `nt.h`, `server.h`, `sharedArray.h`, `sharedpv.h`, `source.h`, `unittest.h`, whitespace) changed by mis-merge or unnecessarily; revert.
@@ -185,5 +197,5 @@ Working branch addressing these: [`slac-epics/epics-base-tls` #1](https://github
 ### Notes
 
 - **Assignees:** GitHub shows almost everything unassigned; the "Author" column is the best proxy for ownership. mdavidsaver-authored issues are review requests; george-mcintyre-authored issues are tracked development work; ernestow-authored issues are field/deployment bug reports (bare-metal/systemd testing).
-- **Resolved status:** all 51 #171 review threads have been replied to and are addressed (44 by commit, 7 reply-only) via [pvxs-tls #28](https://github.com/slac-epics/pvxs-tls/pull/28), [pvxs-cms #36](https://github.com/slac-epics/pvxs-cms/pull/36), [pvxs-docs #6](https://github.com/slac-epics/pvxs-docs/pull/6); see the "Resolved by" column above. The #886 threads remain reported by GitHub as unresolved ([epics-base-tls #1](https://github.com/slac-epics/epics-base-tls/pull/1)).
+- **Resolved status:** all 51 #171 review threads have been replied to and are addressed (44 by commit, 7 reply-only) via [pvxs-tls #28](https://github.com/slac-epics/pvxs-tls/pull/28), [pvxs-cms #36](https://github.com/slac-epics/pvxs-cms/pull/36), [pvxs-docs #6](https://github.com/slac-epics/pvxs-docs/pull/6); see the "Resolved by" column above. All 10 #886 threads have been **replied to and marked resolved**, fixed by 9 commits on branch `work` (see the "Fixed by" column in §3.1) and carried by [epics-base-tls #1](https://github.com/slac-epics/epics-base-tls/pull/1). Remaining action: land PR #1.
 - `epics-base-tls` has no open issues - only the one review-response PR (#1).
