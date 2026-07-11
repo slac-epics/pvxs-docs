@@ -368,10 +368,9 @@ Example status output:
    Subject        : CN=ioc01, O=SLAC, C=US
    Issuer         : CN=EPICS Root Certificate Authority, O=certs.epics.org
    Serial         : 07246297371190731775
-   Not Before     : Sat Feb  1 00:00:00 2026 UTC
-   Not After      : Mon Feb  1 00:00:00 2027 UTC
-   Config URI     : pva://CERT:CONFIG:27975e6b:07246297371190731775
-   --------------------------------------------
+    Not Before     : Sat Feb  1 00:00:00 2026 UTC
+    Not After      : Mon Feb  1 00:00:00 2027 UTC
+    --------------------------------------------
 
    Online Certificate Status:
    ============================================
