@@ -117,7 +117,23 @@ Working branch addressing these: [`slac-epics/epics-base-tls` #1](https://github
 | [9](https://github.com/epics-base/epics-base/pull/886#discussion_r3337754467) | `asTrapWrite.h:39` | Doc comments must state value ranges: can `method`/`authority` be NULL? what values can `protocol` take? | [`9a9582f`](https://github.com/slac-epics/epics-base-tls/commit/9a9582f069d8fda2d4e6c8d4edacd6386170a731) |
 | [10](https://github.com/epics-base/epics-base/pull/886#discussion_r3337758918) | `aslibtest.c:165` | How does this test condition differ from `METHOD("x509") METHOD("ignored") METHOD("ignored_to")`? | [`8854875`](https://github.com/slac-epics/epics-base-tls/commit/8854875585fd425575f7056de31e6d8e21425390) |
 
-**Theme:** simplify the data model (drop indirection, `const char*`, authority-as-tree), keep ACF output re-parseable, tighten docs, and justify/trim helpers. Structural rework requested, not just cosmetic. **Status:** all 10 replied-to and resolved on #886; fixes carried by PR #1 (remaining action is to land PR #1).
+**Theme:** simplify the data model (drop indirection, `const char*`, authority-as-tree), keep ACF output re-parseable, tighten docs, and justify/trim helpers. Structural rework requested, not just cosmetic. **Status:** all 10 replied-to and resolved on #886; fixes carried by PR #1, which has since had a **second review round** (see §3.1a) — all 5 new threads resolved, one design point (list-vs-tree) open.
+
+#### 3.1a `slac-epics/epics-base-tls` #1 - the PR carrying the #886 fixes (head `work` → base `7.0-secure-pvaccess`, OPEN)
+
+This is the SLAC PR that lands the §3.1 work; when merged it feeds the fixes back up to #886. mdavidsaver left a **second review round** here (2026-06-30, CHANGES_REQUESTED) reacting to the #886 fix commits — **5 threads + 1 top-level design comment**.
+
+**All 5 threads replied-to and resolved.** C1–C3 fixed by commit [`37f52d5`](https://github.com/slac-epics/epics-base-tls/commit/37f52d527a3ffda90eb78c9b00c139d302272c8e); C4/C5 answered (no code change needed).
+
+| # | Location | Comment | Resolution |
+|---|----------|---------|------------|
+| [1](https://github.com/slac-epics/epics-base-tls/pull/1#discussion_r3495816121) | `aslibtest.c:27` | `MAX_AUTH_CHAIN_STRING`/`certAuthChainPvtId` complexity — is it warranted (optimizing `calloc`)? | **Fixed** [`37f52d5`](https://github.com/slac-epics/epics-base-tls/commit/37f52d527a3ffda90eb78c9b00c139d302272c8e) — dropped thread-private buffer + per-call `calloc`; local buffer; removed unused includes |
+| [2](https://github.com/slac-epics/epics-base-tls/pull/1#discussion_r3495834940) | `aslibtest.c:1790` | No OS-specific temp names; fixed name is race-free and RTEMS-safe | **Fixed** [`37f52d5`](https://github.com/slac-epics/epics-base-tls/commit/37f52d527a3ffda90eb78c9b00c139d302272c8e) — fixed `aslib_test_dump.tmp`, no `mkstemp`/`_mktemp` |
+| [3](https://github.com/slac-epics/epics-base-tls/pull/1#discussion_r3495837415) | `aslibtest.c:1796` | Missing error handling | **Fixed** [`37f52d5`](https://github.com/slac-epics/epics-base-tls/commit/37f52d527a3ffda90eb78c9b00c139d302272c8e) — `fopen`/`fflush` checked, returns NULL on failure |
+| [4](https://github.com/slac-epics/epics-base-tls/pull/1#discussion_r3495855038) | `asLibRoutines.c:1536` | Are duplicate Common Names allowed? | **Answered** — yes; nodes keyed only by `id`, `commonName` never compared |
+| [5](https://github.com/slac-epics/epics-base-tls/pull/1#discussion_r3495875847) | `asLibRoutines.c:1243` | Can `asGetAuthority()` return a multi-line string (ACF lexer forbids)? | **Answered** — not a bug; chain is synthesised at match time from `parent` links, never an ACF literal |
+
+**Top-level review (CHANGES_REQUESTED):** mdavidsaver questions the list→tree switch ("single list of IDs with an embedded tree") and suggests updating #886 directly. Replied. **Deferred:** an attempt to flatten to a single `authList` + `parent` links regressed 43 `aslibtest` tests and was reverted; the nested tree passes 172/172. The flat-list rework is to be landed as a separate, tested change. **Remaining action on PR #1:** land it (still OPEN / CHANGES_REQUESTED pending the design point).
 
 ### 3.2 `epics-base/pvxs` #171 - "Secure PVAccess with certificate status monitoring support" (age 79d / ~2mo, REVIEW_REQUIRED)
 
@@ -197,5 +213,5 @@ Working branch addressing these: [`slac-epics/epics-base-tls` #1](https://github
 ### Notes
 
 - **Assignees:** GitHub shows almost everything unassigned; the "Author" column is the best proxy for ownership. mdavidsaver-authored issues are review requests; george-mcintyre-authored issues are tracked development work; ernestow-authored issues are field/deployment bug reports (bare-metal/systemd testing).
-- **Resolved status:** all 51 #171 review threads have been replied to and are addressed (44 by commit, 7 reply-only) via [pvxs-tls #28](https://github.com/slac-epics/pvxs-tls/pull/28), [pvxs-cms #36](https://github.com/slac-epics/pvxs-cms/pull/36), [pvxs-docs #6](https://github.com/slac-epics/pvxs-docs/pull/6); see the "Resolved by" column above. All 10 #886 threads have been **replied to and marked resolved**, fixed by 9 commits on branch `work` (see the "Fixed by" column in §3.1) and carried by [epics-base-tls #1](https://github.com/slac-epics/epics-base-tls/pull/1). Remaining action: land PR #1.
+- **Resolved status:** all 51 #171 review threads have been replied to and are addressed (44 by commit, 7 reply-only) via [pvxs-tls #28](https://github.com/slac-epics/pvxs-tls/pull/28), [pvxs-cms #36](https://github.com/slac-epics/pvxs-cms/pull/36), [pvxs-docs #6](https://github.com/slac-epics/pvxs-docs/pull/6); see the "Resolved by" column above. All 10 #886 threads have been **replied to and marked resolved**, fixed by 9 commits on branch `work` (see the "Fixed by" column in §3.1) and carried by [epics-base-tls #1](https://github.com/slac-epics/epics-base-tls/pull/1). PR #1 then drew a **second review round** (§3.1a): all 5 new threads replied-to and resolved (C1–C3 fixed by [`37f52d5`](https://github.com/slac-epics/epics-base-tls/commit/37f52d527a3ffda90eb78c9b00c139d302272c8e); C4/C5 answered). Remaining action: resolve the list-vs-tree design point, then land PR #1.
 - `epics-base-tls` has no open issues - only the one review-response PR (#1).
