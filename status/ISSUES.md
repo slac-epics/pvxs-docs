@@ -245,7 +245,7 @@ The `slac-epics` org enforced a policy (between **2026-07-05 18:09** and **2026-
 | pvxs-docs | [#8](https://github.com/slac-epics/pvxs-docs/issues/8) | [#9](https://github.com/slac-epics/pvxs-docs/pull/9) | `main` | Pin actions + bump `upload-pages-artifact`→v4. (`gh-pages.yml` runs only on push to `main`, so PR #9 has no CI checks — verifiable on merge.) |
 | p4p-tls | [#1](https://github.com/slac-epics/p4p-tls/issues/1) | [#2](https://github.com/slac-epics/p4p-tls/pull/2) | `master` | Pin actions + `windows-2022` for `vs2022` make jobs (runner now ships VS18) + drop dead `manylinux2014` `cp38`/`cp313t` wheels. **56/56 green.** |
 
-**Note:** phoebus is a personal fork (`george-mcintyre/phoebus`), not under the `slac-epics` org policy — not affected. After each PR merges, in-progress branches must cherry-pick the pin commit or rebase onto the default branch to go green.
+**Note:** After each PR merges, in-progress branches must cherry-pick the pin commit or rebase onto the default branch to go green.
 
 ---
 
