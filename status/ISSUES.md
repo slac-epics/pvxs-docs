@@ -22,6 +22,8 @@
 
 ## 1. Open Issues
 
+> CI-infrastructure issues (the SHA-pinning break, one per repo) are tracked separately in [§4](#4-ci--infrastructure).
+
 ### `slac-epics/epics-base-tls`
 
 **No open issues.**
@@ -71,6 +73,8 @@
 ## 2. Open PRs in the SLAC repos (fixes-for-issues)
 
 These PRs are, in effect, the in-flight fixes for the issues above.
+
+> CI-infrastructure PRs (the SHA-pinning fixes, one per repo) are tracked separately in [§4](#4-ci--infrastructure).
 
 ### `slac-epics/epics-base-tls`
 
