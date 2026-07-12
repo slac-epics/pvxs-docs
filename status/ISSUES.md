@@ -226,6 +226,17 @@ This is the SLAC PR that lands the §3.1 work; when merged it feeds the fixes ba
 
 The `slac-epics` org enforced a policy (between **2026-07-05 18:09** and **2026-07-10 15:58 PDT**) requiring **all GitHub Actions pinned to full commit SHAs**. Every repo using tag-referenced actions began failing at "Set up job". One issue + one PR opened per affected repo (all OPEN, awaiting review/merge):
 
+### The policy
+
+- **Name:** **Require actions to be pinned to a full-length commit SHA** (a GitHub Actions *Action permissions* policy, added 2025-08-15). When enabled, every `uses:` action must reference a full 40-character commit SHA; tag (`@v4`) or branch (`@master`) references are rejected and the workflow fails.
+- **Reusable workflows are exempt** — they may still be referenced by tag.
+- **Where it is set** (checkbox under *Action permissions* → "Allowed actions and reusable workflows"), enforceable at three levels:
+  - **Enterprise:** Enterprise → Policies → Actions — [docs](https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-github-actions-in-your-enterprise)
+  - **Organization:** Org → Settings → Actions → General → Action permissions — [docs](https://docs.github.com/en/organizations/managing-organization-settings/disabling-or-limiting-github-actions-for-your-organization)
+  - **Repository:** Repo → Settings → Actions → General → Action permissions — [docs](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository)
+- A fleet-wide change across many repos at once points to the **enterprise** or **organization** level.
+- Feature announcement: [GitHub Actions policy now supports blocking and SHA pinning actions](https://github.blog/changelog/2025-08-15-github-actions-policy-now-supports-blocking-and-sha-pinning-actions/).
+
 | Repo | Issue | PR | Base | Scope |
 |---|---|---|---|---|
 | pvxs-cms | [#38](https://github.com/slac-epics/pvxs-cms/issues/38) | [#39](https://github.com/slac-epics/pvxs-cms/pull/39) | `main` | Pin actions + point pvxs dep at `main` (renamed from `tls`) + fix `pvxs-tls`→`pvxs-main` checkout-dir. |
