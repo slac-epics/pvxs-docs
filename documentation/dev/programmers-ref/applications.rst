@@ -459,8 +459,8 @@ The pattern used by PVACMS:
 3. **Per request, on the handler stack**, map the operation's
    credentials (``op->credentials()``) to an asLib identity with
    ``asAddClientIdentity()`` (or ``asAddClient()`` on older base), then
-   call ``asCheckPut()`` to test write permission.  Remove the client
-   handle with ``asRemoveClient()`` when done.
+   call ``asCheckPut()`` to test write permission.  Release the client
+   handle with ``asRemoveClient()`` on scope exit (via an RAII guard).
 
 .. note::
 
@@ -470,6 +470,7 @@ The pattern used by PVACMS:
 
 .. code-block:: c++
 
+   #include <memory>
    #include <asLib.h>
    #include <pvxs/server.h>
    #include <pvxs/sharedpv.h>
@@ -509,19 +510,21 @@ The pattern used by PVACMS:
        if (colon != std::string::npos)
            host.resize(colon);
 
-       ASCLIENTPVT client{};
        ASIDENTITY id{};
        id.user      = cred.account.c_str();
        id.host      = const_cast<char*>(host.c_str());
        id.method    = cred.method.c_str();
        id.authority = cred.authority.c_str();
        id.protocol  = cred.isTLS ? AS_PROTOCOL_TLS : AS_PROTOCOL_TCP;
+
+       // RAII: tie the asLib client handle to the enclosing scope so
+       // asRemoveClient() runs on every exit path (including exceptions).
+       ASCLIENTPVT client{};
        asAddClientIdentity(&client, as_member, ASL1, id);
+       std::unique_ptr<void, void(*)(void*)> client_guard(
+           &client, [](void* c) { asRemoveClient(static_cast<ASCLIENTPVT*>(c)); });
 
-       const bool allowed = asCheckPut(client); // calls the asLib check
-       asRemoveClient(&client);
-
-       if (!allowed) {
+       if (!asCheckPut(client)) {
            op->error("access denied");
            return;
        }
