@@ -8,7 +8,6 @@
 | pvxs-cms [#19](https://github.com/slac-epics/pvxs-cms/issues/19) Scriptability                            | pvxs-cms [#21](https://github.com/slac-epics/pvxs-cms/pull/21)                                                         | OPEN                   | **design decision** | **semantic conflict with merged #29** (`pvxcert.cpp` CLI contract) | ⚠️ body ref, no "Closes" | **Partial** - implements `--run-while`, `pvxcert --status-pv`, `pvxcert <status:pv>`. Rebase onto post-#29 `main` deliberately NOT done: #21 redefines the positional arg as a full status PV (`cert_id` = arg verbatim) and drops the `<issuer>:<serial>` form, whereas merged #29 keeps `<issuer>:<serial>` + adds `--cert-pv-prefix`. Mutually exclusive CLI contracts - left for a design decision. **Add explicit issue link.** |
 | pvxs-tls [#21](https://github.com/slac-epics/pvxs-tls/issues/21) prefix cleanup (end-to-end)              | pvxs-tls [#22](https://github.com/slac-epics/pvxs-tls/pull/22) (CMS side pvxs-cms #29 **merged**)                                                         | OPEN                   | **needs review** | **needs review / merge** (pvxs side)                        | ✅ "Fixes #21"            | pvxs side in PR #22 (29-char slice removed with #26) still open; CMS side landed via pvxs-cms #29 (merged), incl. the pvxcert `--cert-pv-prefix` option (commit [`9b41c87`](https://github.com/slac-epics/pvxs-cms/commit/9b41c871b9bba37866d1f3657dde6889186b5812)). Issue closes once pvxs #22 merges.                    |
 | pvxs-tls [#26](https://github.com/slac-epics/pvxs-tls/issues/26) cert-status PV fails insecure            | pvxs-tls [#22](https://github.com/slac-epics/pvxs-tls/pull/22) (commit [`7d3c213`](https://github.com/slac-epics/pvxs-tls/commit/7d3c213a3d1f6a0fa84eee5d18531b60cf5c9b38)) | OPEN                   | **needs review** | **needs review** (fix in PR #22)                            | ✅ reply on #22's review  | Fix folded into PR #22 (the review that spawned #26): use the status-PV name verbatim, derive cert id from the cert, and fail secure on a malformed/undecodable extension (new `CertStatusExtensionDecodeException` / `CertStatusIdException`). `testcertstatuspv` covers it.                                              |
-| pvxs-docs [#5](https://github.com/slac-epics/pvxs-docs/issues/5) Remove duplicate PVA/CA protocol specs   | pvxs-docs [#7](https://github.com/slac-epics/pvxs-docs/pull/7)                                                         | OPEN                   | **needs review** | **needs review** (first review)                             | ✅ "Fixes #5"             | Replaced the PVA/CA spec bodies with pointer stubs to the canonical epics-controls docs (both `release/` + `dev/` variants); build-verified, no new Sphinx warnings. Awaiting review/merge.                                                                                                                               |
 
 **No fixing PR exists yet** (genuinely open / unstarted): 
 - pvxs-tls #27, #20;
@@ -55,7 +54,6 @@
 
 | # | Issue | Author | Assignee | Age | What it is |
 |---|-------|--------|----------|-----|------------|
-| [#5](https://github.com/slac-epics/pvxs-docs/issues/5) | Remove PVA and CA "specification" documents | mdavidsaver `bug` | george-mcintyre | 14d | Objection that two spec docs duplicate the canonical community docs at epics-docs; requests removal in favour of docs.epics-controls.org. **Aligns with agreed direction:** `pvxs-docs` is a staging area for SPVA docs bound for `epics-docs`; the CA and PVA Protocol specs are removed as duplicates, and the remaining SPVA docs stay the reference until a final home is found. **Fix written:** PR [#7](https://github.com/slac-epics/pvxs-docs/pull/7) replaces `protocol-spec/pva.rst` + `ca.rst` (both variants) with pointer stubs to the canonical epics-controls docs; OPEN, awaiting review. |
 
 ---
 
@@ -90,7 +88,6 @@ These PRs are, in effect, the in-flight fixes for the issues above.
 
 | # | PR | Author | Age | Review | Fixes / relates to |
 |---|----|--------|-----|--------|--------------------|
-| [#7](https://github.com/slac-epics/pvxs-docs/pull/7) | docs: replace duplicate PVA/CA protocol specs with pointers to canonical community docs | george-mcintyre | new | **needs review** | Fixes [#5](https://github.com/slac-epics/pvxs-docs/issues/5): removes the duplicate PVA/CA spec bodies, replacing them with pointer stubs to docs.epics-controls.org (both `release/` + `dev/` variants). |
 
 ---
 
