@@ -225,35 +225,8 @@ Three comments:
 
 ---
 
-## 4. CI / infrastructure
-
-The `slac-epics` org enforced a policy (between **2026-07-05 18:09** and **2026-07-10 15:58 PDT**) requiring **all GitHub Actions pinned to full commit SHAs**. Every repo using tag-referenced actions began failing at "Set up job". One issue + one PR opened per affected repo (all OPEN, awaiting review/merge):
-
-### The policy
-
-- **Name:** **Require actions to be pinned to a full-length commit SHA** (a GitHub Actions *Action permissions* policy, added 2025-08-15). When enabled, every `uses:` action must reference a full 40-character commit SHA; tag (`@v4`) or branch (`@master`) references are rejected and the workflow fails.
-- **Reusable workflows are exempt** — they may still be referenced by tag.
-- **Where it is set** (checkbox under *Action permissions* → "Allowed actions and reusable workflows"), enforceable at three levels:
-  - **Enterprise:** Enterprise → Policies → Actions — [docs](https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-github-actions-in-your-enterprise)
-  - **Organization:** Org → Settings → Actions → General → Action permissions — [docs](https://docs.github.com/en/organizations/managing-organization-settings/disabling-or-limiting-github-actions-for-your-organization)
-  - **Repository:** Repo → Settings → Actions → General → Action permissions — [docs](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository)
-- A fleet-wide change across many repos at once points to the **enterprise** or **organization** level.
-- Feature announcement: [GitHub Actions policy now supports blocking and SHA pinning actions](https://github.blog/changelog/2025-08-15-github-actions-policy-now-supports-blocking-and-sha-pinning-actions/).
-
-| Repo | Issue | PR | Base | Scope |
-|---|---|---|---|---|
-| pvxs-cms | [#38](https://github.com/slac-epics/pvxs-cms/issues/38) | [#39](https://github.com/slac-epics/pvxs-cms/pull/39) | `main` | Pin actions + point pvxs dep at `main` (renamed from `tls`) + fix `pvxs-tls`→`pvxs-main` checkout-dir. |
-| pvxs-tls | [#29](https://github.com/slac-epics/pvxs-tls/issues/29) | [#30](https://github.com/slac-epics/pvxs-tls/pull/30) | `main` | Pin actions + bump `upload-pages-artifact`→v4 (transitive pin) + drop dead `manylinux2014` `cp38`/`cp313t` wheels. |
-| epics-base-tls | [#2](https://github.com/slac-epics/epics-base-tls/issues/2) | [#3](https://github.com/slac-epics/epics-base-tls/pull/3) | `7.0-secure-pvaccess` | Pin actions (checkout, upload-artifact, codeql, eclint, ci-core-dumper). |
-| pvxs-docs | [#8](https://github.com/slac-epics/pvxs-docs/issues/8) | [#9](https://github.com/slac-epics/pvxs-docs/pull/9) | `main` | Pin actions + bump `upload-pages-artifact`→v4. (`gh-pages.yml` runs only on push to `main`, so PR #9 has no CI checks — verifiable on merge.) |
-| p4p-tls | [#1](https://github.com/slac-epics/p4p-tls/issues/1) | [#2](https://github.com/slac-epics/p4p-tls/pull/2) | `master` | Pin actions + `windows-2022` for `vs2022` make jobs (runner now ships VS18) + drop dead `manylinux2014` `cp38`/`cp313t` wheels. **56/56 green.** |
-
-**Note:** After each PR merges, in-progress branches must cherry-pick the pin commit or rebase onto the default branch to go green.
-
----
-
 ### Notes
 
 - **Assignees:** GitHub shows almost everything unassigned; the "Author" column is the best proxy for ownership. mdavidsaver-authored issues are review requests; george-mcintyre-authored issues are tracked development work; ernestow-authored issues are field/deployment bug reports (bare-metal/systemd testing).
 - **Resolved status:** all 51 #171 review threads have been replied to and are addressed (44 by commit, 7 reply-only) via [pvxs-tls #28](https://github.com/slac-epics/pvxs-tls/pull/28), [pvxs-cms #36](https://github.com/slac-epics/pvxs-cms/pull/36), [pvxs-docs #6](https://github.com/slac-epics/pvxs-docs/pull/6); see the "Resolved by" column above. All 10 #886 threads were replied to and fixed by 9 commits on branch `work` and carried by [epics-base-tls #1](https://github.com/slac-epics/epics-base-tls/pull/1); mdavidsaver has since **un-resolved** them on #886 because the fixes are not yet on #886 itself — they land there when #1 merges (#1's base `7.0-secure-pvaccess` is #886's head). PR #1 also drew a **second review round** (§3.1a, all 5 resolved) and a **third** (§3.1b): 2 of 3 fixed in [`e3b5e0d`](https://github.com/slac-epics/epics-base-tls/commit/e3b5e0d5a), the duplicate-common-name design point left open. Remaining action: resolve the design points, then land PR #1.
-- `epics-base-tls` open items: the review-response PR (#1) plus the CI-pinning issue/PR (#2/#3, see §4).
+- `epics-base-tls` open items: the review-response PR (#1). (The CI-pinning issue/PR #2/#3 merged and are closed.)
