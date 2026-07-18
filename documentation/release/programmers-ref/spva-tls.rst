@@ -99,6 +99,9 @@ semicolon:
 - ``EPICS_PVA_TLS_KEYCHAIN=/path/to/client.p12;password``
 - ``EPICS_PVAS_TLS_KEYCHAIN=/path/to/server.p12;password``
 
+The first semicolon separates the keychain path from the password; all later characters remain
+part of the password.  Separate keychain password-file environment variables are not supported.
+
 To set the password from code, use ``ConfigCommon::setKeychainPassword()`` from the EXPERT API
 (see :doc:`expert-api`).
 
