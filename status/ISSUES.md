@@ -42,7 +42,7 @@
 
 ## 2. Open PRs without a tracking issue
 
-Standalone `slac-epics/pvxs-tls` fix PRs opened directly (no filed issue). The upstream review-response PRs (epics-base-tls #1, pvxs-tls #28, pvxs-cms #36, pvxs-docs #6) are tracked in §3.
+Standalone `slac-epics/pvxs-tls` fix PRs opened directly (no filed issue).
 
 | # | PR | Author | Age | Review | Relates to |
 |---|----|--------|-----|--------|------------|
