@@ -2,8 +2,6 @@
 
 ## 1. Open Issues
 
-> CI-infrastructure issues (the SHA-pinning break, one per repo) are tracked separately in [§4](#4-ci--infrastructure).
->
 > **Fixed column:** ✅ = fix written with no un-responded review comments · ⚠️ = fix in progress but has un-responded review comments (e.g. CHANGES_REQUESTED) · · = no fix yet.
 
 ### `slac-epics/epics-base-tls`
@@ -46,8 +44,6 @@
 
 These PRs are, in effect, the in-flight fixes for the issues above.
 
-> CI-infrastructure PRs (the SHA-pinning fixes, one per repo) are tracked separately in [§4](#4-ci--infrastructure).
-
 ### `slac-epics/epics-base-tls`
 
 | # | PR | Author | Age | Review | Fixes / relates to |
@@ -81,7 +77,6 @@ These PRs are, in effect, the in-flight fixes for the issues above.
 | # | PR | Author | Age | Review | Fixes / relates to |
 |---|----|--------|-----|--------|--------------------|
 | [#6](https://github.com/slac-epics/pvxs-docs/pull/6) | Address epics-base/pvxs PR #171 review comments (docs side) | george-mcintyre | new | **CHANGES_REQUESTED** (rev: mdavidsaver) | Docs-side #171 fixes (see §3.2). Standalone-server authorization example reworked to apply RAII uniformly per review; rebased onto post-#7 `main`. |
-| [#9](https://github.com/slac-epics/pvxs-docs/pull/9) | ci: pin GitHub Actions to full commit SHAs (#8) | george-mcintyre | new | REVIEW_REQUIRED | CI-pinning fix (see §4). mdavidsaver prefers dropping untrusted third-party actions over SHA-pinning; may revert the pinning on merge once org policy lifts. |
 
 ---
 
