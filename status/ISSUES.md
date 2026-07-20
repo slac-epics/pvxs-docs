@@ -40,9 +40,9 @@
 
 ---
 
-## 2. Open PRs in the SLAC repos (fixes-for-issues)
+## 2. Open PRs without a tracking issue
 
-These PRs are, in effect, the in-flight fixes for the issues above.
+Open PRs that are not already listed against an issue in §1: upstream review-response PRs (tracked in §3) and standalone fixes opened directly.
 
 ### `slac-epics/epics-base-tls`
 
@@ -54,23 +54,17 @@ These PRs are, in effect, the in-flight fixes for the issues above.
 
 | # | PR | Author | Age | Review | Fixes / relates to |
 |---|----|--------|-----|--------|--------------------|
-| [#22](https://github.com/slac-epics/pvxs-tls/pull/22) | fix: derive cert ID from status PV structurally, not by fixed 29-char slice | george-mcintyre | 7d | REVIEW_REQUIRED (rev: mdavidsaver) | Fixes part of [#21](https://github.com/slac-epics/pvxs-tls/issues/21) (prefix-aware naming). Also now fixes [#26](https://github.com/slac-epics/pvxs-tls/issues/26) (fail-insecure), which its review spawned: commit [`7d3c213`](https://github.com/slac-epics/pvxs-tls/commit/7d3c213a3d1f6a0fa84eee5d18531b60cf5c9b38) uses the status-PV name verbatim and fails secure on a malformed extension. |
 | [#18](https://github.com/slac-epics/pvxs-tls/pull/18) | fix(client): copy monitor callback before invoking to survive re-entrant cancel | george-mcintyre | 33d (~4w) | - (no decision yet) | Monitor-callback copy fix (on `dev`); also unblocks pvxs-cms #16. (The broader ASan callback-lifetime audit is now handled upstream: epics-base/pvxs#188, commits `0b3fcca1` + `39cc6fa2`.) |
 | [#17](https://github.com/slac-epics/pvxs-tls/pull/17) | feat: tls-only transport mode (`EPICS_PVAS_TLS_OPTIONS=no_tcp`) | george-mcintyre | 35d (~5w) | **CHANGES_REQUESTED** | New feature: allow a TLS-only server (no TCP fallback). Relates to pvxs-cms [#23](https://github.com/slac-epics/pvxs-cms/issues/23) (CMS tools blocked in TLS-only env). |
 | [#13](https://github.com/slac-epics/pvxs-tls/pull/13) | fix: demote benign loopback echo of own UDP search to Debug | george-mcintyre | 56d (~8w) | **CHANGES_REQUESTED** | Log-noise fix: own broadcast search echoed back is logged too loudly. |
 | [#7](https://github.com/slac-epics/pvxs-tls/pull/7) | fix: tear down live TLS connections when local cert goes BAD | george-mcintyre | 71d (~2mo) | REVIEW_REQUIRED | Security-relevant: drop established TLS connections when the local cert transitions to BAD. Relates to fail-secure theme ([#26](https://github.com/slac-epics/pvxs-tls/issues/26)). |
-| [#32](https://github.com/slac-epics/pvxs-tls/pull/32) | fix(time): route SPVA "now" through internal `pvxs::impl::timeNow()` | george-mcintyre | new | REVIEW_REQUIRED | Fixes [#20](https://github.com/slac-epics/pvxs-tls/issues/20). Companion to pvxs-cms #26/#40. |
 | [#28](https://github.com/slac-epics/pvxs-tls/pull/28) | Address epics-base/pvxs PR #171 review comments (pvxs side) | george-mcintyre | new | REVIEW_REQUIRED | Carries the pvxs-side #171 fixes (see §3.2). |
 
 ### `slac-epics/pvxs-cms`
 
 | # | PR | Author | Age | Review | Fixes / relates to |
 |---|----|--------|-----|--------|--------------------|
-| [#25](https://github.com/slac-epics/pvxs-cms/pull/25) | fix: authenticator logger use-after-free + clearer validity error | george-mcintyre | new | REVIEW_REQUIRED (rev: mdavidsaver) | `Closes` [#24](https://github.com/slac-epics/pvxs-cms/issues/24), [#33](https://github.com/slac-epics/pvxs-cms/issues/33), [#34](https://github.com/slac-epics/pvxs-cms/issues/34): logger use-after-free fix, clearer validity-exceeds-issuer error, `--cert-auth-validity`, and clamp of generated-cert validity to the CA's remaining lifetime. Header-logger review comment addressed. |
-| [#50](https://github.com/slac-epics/pvxs-cms/pull/50) | fix(pvacms): allow -c/--cert-auth-keychain and flags with --admin-keychain-new | george-mcintyre | new | REVIEW_REQUIRED | `Fixes` [#49](https://github.com/slac-epics/pvxs-cms/issues/49): `--admin-keychain-new` accepts `-c/--cert-auth-keychain` (+`-pwd`) and `-v`; splits value-options from flags; `--help` updated. |
-| [#40](https://github.com/slac-epics/pvxs-cms/pull/40) | fix(time): NT timeStamp fields carry POSIX seconds; drop EPICS_EPOCH | george-mcintyre | new | **CHANGES_REQUESTED** (rev: mdavidsaver) | Fixes [#26](https://github.com/slac-epics/pvxs-cms/issues/26). Review comments addressed (throw on time-source failure, drop dead code, fix test cast); re-review requested. |
 | [#36](https://github.com/slac-epics/pvxs-cms/pull/36) | Address epics-base/pvxs PR #171 review comments (CMS side) | george-mcintyre | new | REVIEW_REQUIRED | Carries the pvxs-cms-side #171 fixes (see §3.2). Rebased onto post-#29/#31/#37 `main`. |
-| [#43](https://github.com/slac-epics/pvxs-cms/pull/43) | fix(authn): verify delivered CA against expected issuer; require issuer to bootstrap trust | george-mcintyre | new | REVIEW_REQUIRED | `Closes` [#18](https://github.com/slac-epics/pvxs-cms/issues/18): require `--issuer`/`EPICS_PVA_AUTH_ISSUER` (or a pinned trust anchor) and verify the delivered certificate authority matches it before trusting/storing, closing the untrusted-authority man-in-the-middle gap. |
 
 ### `slac-epics/pvxs-docs`
 
