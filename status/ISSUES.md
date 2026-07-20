@@ -42,35 +42,14 @@
 
 ## 2. Open PRs without a tracking issue
 
-Open PRs that are not already listed against an issue in §1: upstream review-response PRs (tracked in §3) and standalone fixes opened directly.
+Standalone `slac-epics/pvxs-tls` fix PRs opened directly (no filed issue). The upstream review-response PRs (epics-base-tls #1, pvxs-tls #28, pvxs-cms #36, pvxs-docs #6) are tracked in §3.
 
-### `slac-epics/epics-base-tls`
-
-| # | PR | Author | Age | Review | Fixes / relates to |
-|---|----|--------|-----|--------|--------------------|
-| [#1](https://github.com/slac-epics/epics-base-tls/pull/1) | Address PR #886 access-security review comments | george-mcintyre | 7d | **CHANGES_REQUESTED** | Working branch that applies mdavidsaver's review feedback from upstream [epics-base #886](https://github.com/epics-base/epics-base/pull/886) (METHOD/AUTHORITY/PROTOCOL access-security). See §3.1 for the open points. |
-
-### `slac-epics/pvxs-tls`
-
-| # | PR | Author | Age | Review | Fixes / relates to |
-|---|----|--------|-----|--------|--------------------|
+| # | PR | Author | Age | Review | Relates to |
+|---|----|--------|-----|--------|------------|
 | [#18](https://github.com/slac-epics/pvxs-tls/pull/18) | fix(client): copy monitor callback before invoking to survive re-entrant cancel | george-mcintyre | 33d (~4w) | - (no decision yet) | Monitor-callback copy fix (on `dev`); also unblocks pvxs-cms #16. (The broader ASan callback-lifetime audit is now handled upstream: epics-base/pvxs#188, commits `0b3fcca1` + `39cc6fa2`.) |
 | [#17](https://github.com/slac-epics/pvxs-tls/pull/17) | feat: tls-only transport mode (`EPICS_PVAS_TLS_OPTIONS=no_tcp`) | george-mcintyre | 35d (~5w) | **CHANGES_REQUESTED** | New feature: allow a TLS-only server (no TCP fallback). Relates to pvxs-cms [#23](https://github.com/slac-epics/pvxs-cms/issues/23) (CMS tools blocked in TLS-only env). |
 | [#13](https://github.com/slac-epics/pvxs-tls/pull/13) | fix: demote benign loopback echo of own UDP search to Debug | george-mcintyre | 56d (~8w) | **CHANGES_REQUESTED** | Log-noise fix: own broadcast search echoed back is logged too loudly. |
 | [#7](https://github.com/slac-epics/pvxs-tls/pull/7) | fix: tear down live TLS connections when local cert goes BAD | george-mcintyre | 71d (~2mo) | REVIEW_REQUIRED | Security-relevant: drop established TLS connections when the local cert transitions to BAD. Relates to fail-secure theme ([#26](https://github.com/slac-epics/pvxs-tls/issues/26)). |
-| [#28](https://github.com/slac-epics/pvxs-tls/pull/28) | Address epics-base/pvxs PR #171 review comments (pvxs side) | george-mcintyre | new | REVIEW_REQUIRED | Carries the pvxs-side #171 fixes (see §3.2). |
-
-### `slac-epics/pvxs-cms`
-
-| # | PR | Author | Age | Review | Fixes / relates to |
-|---|----|--------|-----|--------|--------------------|
-| [#36](https://github.com/slac-epics/pvxs-cms/pull/36) | Address epics-base/pvxs PR #171 review comments (CMS side) | george-mcintyre | new | REVIEW_REQUIRED | Carries the pvxs-cms-side #171 fixes (see §3.2). Rebased onto post-#29/#31/#37 `main`. |
-
-### `slac-epics/pvxs-docs`
-
-| # | PR | Author | Age | Review | Fixes / relates to |
-|---|----|--------|-----|--------|--------------------|
-| [#6](https://github.com/slac-epics/pvxs-docs/pull/6) | Address epics-base/pvxs PR #171 review comments (docs side) | george-mcintyre | new | **CHANGES_REQUESTED** (rev: mdavidsaver) | Docs-side #171 fixes (see §3.2). Standalone-server authorization example reworked to apply RAII uniformly per review; rebased onto post-#7 `main`. |
 
 ---
 
