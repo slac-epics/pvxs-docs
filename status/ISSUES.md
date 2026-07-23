@@ -1,5 +1,48 @@
 # ISSUES Report
 
+## Closed issues and pull requests: July 13-23, 2026
+
+This section lists every issue and pull request closed in the tracked repositories during the
+period from July 13 through July 23, 2026. The report was re-audited against GitHub on July 23,
+2026.
+
+### `slac-epics/pvxs-tls`
+
+| Issue | PR | Title | Closed | Outcome |
+|---:|---:|---|---|---|
+| [#29](https://github.com/slac-epics/pvxs-tls/issues/29) | [#30](https://github.com/slac-epics/pvxs-tls/pull/30) | CI blocked: GitHub Actions must be pinned to full commit SHAs | Jul 17 | Merged |
+| [#25](https://github.com/slac-epics/pvxs-tls/issues/25) |  | Audit: async callback-lifetime bugs across client/library (ASan-surfaced family) | Jul 13 | Closed |
+| [#23](https://github.com/slac-epics/pvxs-tls/issues/23) | [#24](https://github.com/slac-epics/pvxs-tls/pull/24) | pvxlist: stack-use-after-scope in RPC result callback (ASan abort) | Jul 13 | Closed without merging |
+| [#19](https://github.com/slac-epics/pvxs-tls/issues/19) | [#31](https://github.com/slac-epics/pvxs-tls/pull/31) | invalidMutex on exit | Jul 13 | Merged |
+
+### `slac-epics/epics-base-tls`
+
+| Issue | PR | Title | Closed | Outcome |
+|---:|---:|---|---|---|
+| [#2](https://github.com/slac-epics/epics-base-tls/issues/2) | [#3](https://github.com/slac-epics/epics-base-tls/pull/3) | CI blocked: GitHub Actions must be pinned to full commit SHAs | Jul 17 | Merged |
+
+### `slac-epics/pvxs-cms`
+
+| Issue | PR | Title | Closed | Outcome |
+|---:|---:|---|---|---|
+| [#46](https://github.com/slac-epics/pvxs-cms/issues/46) |  | When creating pvacms' server certificate with a validity period less than the root CA which is created at the same time an error is thrown instead of clamping the validity to the root CA | Jul 14 | Closed |
+| [#44](https://github.com/slac-epics/pvxs-cms/issues/44) |  | "Use '--time <time>' to limit the requested certificate validity" Error message emitted incorrectly when creating root CA refers to authnXXX | Jul 14 | Closed |
+| [#38](https://github.com/slac-epics/pvxs-cms/issues/38) | [#39](https://github.com/slac-epics/pvxs-cms/pull/39) | CI blocked: GitHub Actions must be pinned to full commit SHAs | Jul 17 | Merged |
+| [#35](https://github.com/slac-epics/pvxs-cms/issues/35) | [#37](https://github.com/slac-epics/pvxs-cms/pull/37) | `authnstd -D` Automatic Certificate Renewal Fails with "Duplicate Certificate Subject" | Jul 13 | Merged |
+| [#34](https://github.com/slac-epics/pvxs-cms/issues/34) |  | Automatically Clamp Bootstrap Certificate Validity to the Remaining Lifetime of the Issuing Certificate Authority | Jul 14 | Closed |
+| [#30](https://github.com/slac-epics/pvxs-cms/issues/30) | [#31](https://github.com/slac-epics/pvxs-cms/pull/31) | CMS executables omit pvxs-cms version from -V output | Jul 13 | Merged |
+| [#27](https://github.com/slac-epics/pvxs-cms/issues/27) | [#29](https://github.com/slac-epics/pvxs-cms/pull/29) | Remove hardcoded "CERT:STATUS:" prefixes and the 29-char status-PV slice; make cert-status PV naming prefix-aware end-to-end #21 | Jul 13 | Merged |
+| [#22](https://github.com/slac-epics/pvxs-cms/issues/22) |  | GHA jobs broken | Jul 13 | Closed |
+| [#17](https://github.com/slac-epics/pvxs-cms/issues/17) |  | Hard coded PV prefix prevents federated environment | Jul 13 | Closed |
+| [#7](https://github.com/slac-epics/pvxs-cms/issues/7) | [#10](https://github.com/slac-epics/pvxs-cms/pull/10), [#11](https://github.com/slac-epics/pvxs-cms/pull/11) | authnkrb -D does not reuse cert, issues new cert, and monitors wrong CERT:STATUS PV | Jul 13 | Both pull requests closed without merging |
+
+### `slac-epics/pvxs-docs`
+
+| Issue | PR | Title | Closed | Outcome |
+|---:|---:|---|---|---|
+| [#8](https://github.com/slac-epics/pvxs-docs/issues/8) | [#9](https://github.com/slac-epics/pvxs-docs/pull/9) | CI blocked: GitHub Actions must be pinned to full commit SHAs | Jul 17 | Merged |
+| [#5](https://github.com/slac-epics/pvxs-docs/issues/5) | [#7](https://github.com/slac-epics/pvxs-docs/pull/7) | Remove PVA and CA "specification" documents. | Jul 13 | Merged |
+
 ## 1. Open Issues
 
 > **Fixed column:** ✅ = fix written with no un-responded review comments · ⚠️ = fix in progress but has un-responded review comments (e.g. CHANGES_REQUESTED) · · = no fix yet.
@@ -12,9 +55,9 @@
 
 | Fixed | #                                                       | Issue                                                                                          | Author            | Age        | Fix / PR                                                                                                                         | Details                                                                                                                                                                                                                                                                            |
 | :---: | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ✅ | [#26](https://github.com/slac-epics/pvxs-tls/issues/26) | Mishandling of cert-status PV fails insecure                                                   | mdavidsaver `bug` | 7d         | **PR [#22](https://github.com/slac-epics/pvxs-tls/pull/22) · needs review** | Fix in commit [`7d3c213`](https://github.com/slac-epics/pvxs-tls/commit/7d3c213a3d1f6a0fa84eee5d18531b60cf5c9b38). `CertStatusNoExtensionException` was overused; a cert that *has* a status extension could end up trusted when status can't be checked. **Fixed** (in PR #22, which its review spawned): PV name used verbatim, cert id derived from the cert, and a present-but-undecodable extension throws `CertStatusExtensionDecodeException` / `CertStatusIdException` to fail secure (own cert to DegradedMode, peer disconnected). |
-| ✅ | [#20](https://github.com/slac-epics/pvxs-tls/issues/20) | Use POSIX time everywhere - eliminate EPICS_EPOCH                                              | george-mcintyre   | 7d         | **PR [#32](https://github.com/slac-epics/pvxs-tls/pull/32) · needs-review** | SPVA "now" now routes through one internal `pvxs::impl::timeNow()` wrapper (POSIX seconds via `epicsTimeGetCurrent()`), so the clock is globally test-overridable. Pure refactor - pvxs had no epoch-offset bug (its NT timeStamp was already correct POSIX). Companion to pvxs-cms #26/#40. |
-| ✅ | [#21](https://github.com/slac-epics/pvxs-tls/issues/21) | Remove hardcoded `CERT:STATUS:` prefixes and 29-char status-PV slice; make naming prefix-aware | george-mcintyre   | 7d         | **PR [#22](https://github.com/slac-epics/pvxs-tls/pull/22) · needs review** | pvxs side. Sites assumed literal `CERT:STATUS:` / fixed serial width instead of the full status-PV URI in the cert. **Fixed** end-to-end: pvxs no longer parses/slices the PV (the 29-char slice went with #26); pvxs-cms de-hardcodes `wildcardpv.cpp`, and `pvxcert` gains `--cert-pv-prefix` (default `CERT:STATUS:`) for the `<issuer>:<serial>` form. The CMS side already landed (pvxs-cms #29, merged), so only the pvxs side (PR #22) remains before this issue closes. |
+| ✅ | [#26](https://github.com/slac-epics/pvxs-tls/issues/26) | Mishandling of cert-status PV fails insecure                                                   | mdavidsaver `bug` | 24d        | **PR [#22](https://github.com/slac-epics/pvxs-tls/pull/22) · needs review** | Fix in commit [`7d3c213`](https://github.com/slac-epics/pvxs-tls/commit/7d3c213a3d1f6a0fa84eee5d18531b60cf5c9b38). `CertStatusNoExtensionException` was overused; a cert that *has* a status extension could end up trusted when status can't be checked. **Fixed** (in PR #22, which its review spawned): PV name used verbatim, cert id derived from the cert, and a present-but-undecodable extension throws `CertStatusExtensionDecodeException` / `CertStatusIdException` to fail secure (own cert to DegradedMode, peer disconnected). |
+| ✅ | [#20](https://github.com/slac-epics/pvxs-tls/issues/20) | Use POSIX time everywhere - eliminate EPICS_EPOCH                                              | george-mcintyre   | 23d        | **PR [#32](https://github.com/slac-epics/pvxs-tls/pull/32) · needs-review** | SPVA "now" now routes through one internal `pvxs::impl::timeNow()` wrapper (POSIX seconds via `epicsTimeGetCurrent()`), so the clock is globally test-overridable. Pure refactor - pvxs had no epoch-offset bug (its NT timeStamp was already correct POSIX). Companion to pvxs-cms #26/#40. |
+| ✅ | [#21](https://github.com/slac-epics/pvxs-tls/issues/21) | Remove hardcoded `CERT:STATUS:` prefixes and 29-char status-PV slice; make naming prefix-aware | george-mcintyre   | 24d        | **PR [#22](https://github.com/slac-epics/pvxs-tls/pull/22) · needs review** | pvxs side. Sites assumed literal `CERT:STATUS:` / fixed serial width instead of the full status-PV URI in the cert. **Fixed** end-to-end: pvxs no longer parses/slices the PV (the 29-char slice went with #26); pvxs-cms de-hardcodes `wildcardpv.cpp`, and `pvxcert` gains `--cert-pv-prefix` (default `CERT:STATUS:`) for the `<issuer>:<serial>` form. The CMS side already landed (pvxs-cms #29, merged), so only the pvxs side (PR #22) remains before this issue closes. |
 | · | [#27](https://github.com/slac-epics/pvxs-tls/issues/27) | Track SPVA version independently from PVXS; own the shared SPVA version number                 | george-mcintyre   | 6d         | not-started                                                                                                                           | Give SPVA its own release cadence/version (not borrowed from PVXS `major.minor`). Owned here, consumed by pvxs-cms. Also moves default config/data dirs `~/.config/pva/1.5` → `~/.config/spva/<n.n.n>`. Paired with pvxs-cms [#32](https://github.com/slac-epics/pvxs-cms/issues/32). |
 
 ### `slac-epics/pvxs-cms`
@@ -31,7 +74,8 @@
 | ✅ | [#33](https://github.com/slac-epics/pvxs-cms/issues/33) | Self-signed CA: bootstrap requirements & cert-validity config for `cert_auth.p12` | ernestow                     | 5d        | **PR [#25](https://github.com/slac-epics/pvxs-cms/pull/25) · needs review** | `Closes #33`. CA lifetime was hard-coded to ~4 years with no runtime override. #25 adds `--cert-auth-validity` + `EPICS_PVACMS_CERT_AUTH_VALIDITY` (default `4y`).                                                                                                                                                                                                                                                                                                              |
 | · | [#28](https://github.com/slac-epics/pvxs-cms/issues/28) | Add `--issuer` scope option to `pvxcert`                                          | george-mcintyre              | 7d        | not-started                                                                                                                                                             | Client-side only: let `--health`/`--metrics`/planned `list` target a specific issuer's PVACMS (issuer-qualified PVs already registered server-side). **Convenience improvement to the already-complete FEDERATED multi-CMS model** - other `pvxcert` actions already carry the issuer in the `<issuer>:<serial>` cert ID, and the query commands still work today against any responding PVACMS; `--issuer` just makes targeting explicit in multi-issuer setups. |
 | · | [#32](https://github.com/slac-epics/pvxs-cms/issues/32) | Consume shared SPVA version from pvxs; show SPVA line & `spva` config dirs        | george-mcintyre              | 6d        | not-started                                                                                                                                   | Blocked on pvxs-tls #27. CMS side of pvxs-tls [#27](https://github.com/slac-epics/pvxs-tls/issues/27): reference the pvxs-owned SPVA version, print `PVXS-CMS (…spva…)`/`SPVA <n.n.n>` in `-V`, move defaults to `spva/<n.n.n>` with migration.                                                                                                                                                                                                                                            |
-| · | [#41](https://github.com/slac-epics/pvxs-cms/issues/41) | authn daemon renewal monitor: harden RenewalManager status-update callback (from PR #11 review) | george-mcintyre `bug` | 0d | not-started | Three on-`main` concerns from mdavidsaver's PR #11 review: (1) `onStatusUpdate` must drain the subscription queue outside the try or it can wedge; (2) renewal runs blocking client calls on the Context worker thread (deadlock risk); (3) `CertStatusNoExtensionException` is swallowed, leaving the daemon un-monitored (cf. pvxs-tls #26). |
+| · | [#41](https://github.com/slac-epics/pvxs-cms/issues/41) | authn daemon renewal monitor: harden RenewalManager status-update callback (from PR #11 review) | george-mcintyre `bug` | 10d | not-started | Three on-`main` concerns from mdavidsaver's PR #11 review: (1) `onStatusUpdate` must drain the subscription queue outside the try or it can wedge; (2) renewal runs blocking client calls on the Context worker thread (deadlock risk); (3) `CertStatusNoExtensionException` is swallowed, leaving the daemon un-monitored (cf. pvxs-tls #26). |
+| · | [#48](https://github.com/slac-epics/pvxs-cms/issues/48) | `pvacms`: `--cert_validity-server` and `--cert_validity-ioc` update client validity | ernestow | 3d | not-started | The server and IOC certificate-validity options update the client validity setting instead. |
 
 ### `slac-epics/pvxs-docs`
 
@@ -57,7 +101,7 @@ Standalone `slac-epics/pvxs-tls` fix PRs opened directly (no filed issue).
 
 These are the reviewer comments (all from **mdavidsaver**) on the two PRs that merge SLAC SPVA work into the upstream community repos. #171's 51 threads are all replied-to and resolved. #886's 10 threads were replied-to and fixed on the SLAC working PR (epics-base-tls #1); mdavidsaver has since **un-resolved** them on #886 because the fixes are not yet visible on #886 itself — they will appear (and can be re-resolved) when #1 merges, since #1's base branch `7.0-secure-pvaccess` is #886's head branch.
 
-### 3.1 `epics-base/epics-base` #886 - "Add support for METHOD, AUTHORITY, and PROTOCOL in Access Security" (age 36d / ~5w, CHANGES_REQUESTED)
+### 3.1 `epics-base/epics-base` #886 - "Add support for METHOD, AUTHORITY, and PROTOCOL in Access Security" (age 53d / ~8w, CHANGES_REQUESTED)
 
 Working branch addressing these: [`slac-epics/epics-base-tls` #1](https://github.com/slac-epics/epics-base-tls/pull/1) (head branch `work`, base `7.0-secure-pvaccess`).
 
@@ -107,7 +151,7 @@ Three comments:
 | 2 | [`aslibtest.c:1783`](https://github.com/slac-epics/epics-base-tls/pull/1#discussion_r3567540021) | `fclose()` and `unlink()` too please | **Fixed** [`e3b5e0d`](https://github.com/slac-epics/epics-base-tls/commit/e3b5e0d5a) — unified the temp-file helpers on the fixed-filename + error-checked pattern; `testPlan` 172→171 |
 | 3 | [`asLibRoutines.c:1536`](https://github.com/slac-epics/epics-base-tls/pull/1#discussion_r3567542834) | duplicate common names allowed — needs further discussion | **Open** — design point, to be discussed |
 
-### 3.2 `epics-base/pvxs` #171 - "Secure PVAccess with certificate status monitoring support" (age 79d / ~2mo, REVIEW_REQUIRED)
+### 3.2 `epics-base/pvxs` #171 - "Secure PVAccess with certificate status monitoring support" (age 96d / ~3mo, CHANGES_REQUESTED)
 
 **All 51 comments resolved** 
 - replied to on the PR; 44 fixed by commits
