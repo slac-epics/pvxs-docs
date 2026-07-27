@@ -30,14 +30,14 @@ PVACMS Usage
     options:
       (-c | --cert-auth-keychain) <cert_auth_keychain>
                                                   Specify Certificate Authority keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.4/cert_auth.p12
-            --cert-auth-keychain-pwd <file>       Specify location of file containing Certificate Authority keychain file's password
+            --cert-auth-keychain-pwd <password>   Specify Certificate Authority keychain password
             --cert-auth-name <name>              Specify name (CN) to be used for certificate authority certificate. Default ``EPICS Root Certificate Authority``
             --cert-auth-org <name>               Specify organisation (O) to be used for certificate authority certificate. Default ``certs.epics.org``
             --cert-auth-org-unit <name>          Specify organisational unit (OU) to be used for certificate authority certificate. Default ``EPICS Certificate Authority``
             --cert-auth-country <name>           Specify country (C) to be used for certificate authority certificate. Default `US`
       (-d | --cert-db) <db_name>                 Specify cert db file location. Default ${XDG_DATA_HOME}/pva/1.4/certs.db
       (-p | --pvacms-keychain) <pvacms_keychain> Specify PVACMS keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.4/pvacms.p12
-            --pvacms-keychain-pwd <file>         Specify location of file containing PVACMS keychain file's password
+            --pvacms-keychain-pwd <password>     Specify PVACMS keychain password
             --pvacms-name <name>                  Specify name (CN) to be used for PVACMS certificate. Default `PVACMS Service`
             --pvacms-org <name>                   Specify organisation (O) to be used for PVACMS certificate. Default ``certs.epics.org``
             --pvacms-org-unit <name>              Specify organisational unit (OU) to be used for PVACMS certificate. Default ``EPICS PVA Certificate Management Service``
@@ -92,7 +92,7 @@ PVACMS Usage
     admin options:
             --acf <acf_file>                      Specify Admin Security Configuration File. Default ${XDG_CONFIG_HOME}/pva/1.4/pvacms.acf
       (-a | --admin-keychain) <admin_keychain>    Specify Admin User's keychain file location. Default ${XDG_CONFIG_HOME}/pva/1.4/admin.p12
-            --admin-keychain-pwd <file>           Specify location of file containing Admin User's keychain file password
+            --admin-keychain-pwd <password>       Specify Admin User's keychain password
 
 
 .. _pvacms_configuration:
@@ -113,11 +113,8 @@ The environment variables in the following table configure the PVACMS at runtime
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 | Name                                          | Keys and Values                            | Description                                                              |
 +===============================================+============================================+==========================================================================+
-|| EPICS_ADMIN_TLS_KEYCHAIN                     || <path to ADMIN user keychain file>        || The location of the PVACMS ADMIN user keychain file.                    |
-||                                              || e.g. ``~/.config/pva/1.4/admin.p12``      ||                                                                         |
-+-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_ADMIN_TLS_KEYCHAIN_PWD_FILE            || <path to ADMIN user password text file>   || Location of a password file for PVACMS ADMIN user keychain file.        |
-||                                              || e.g. ``~/.config/pva/1.4/admin.pass``     ||                                                                         |
+|| EPICS_ADMIN_TLS_KEYCHAIN                     || <path to ADMIN user keychain file>        || The location of the PVACMS ADMIN user keychain file. If encrypted,      |
+||                                              || e.g. ``~/.config/pva/1.4/admin.p12``      || append the password after a semicolon, e.g. ``admin.p12;password``.     |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_CERT_AUTH_NAME                         || <name of the certificate authority>       || To provide the name (CN) to be used in the subject of the               |
 ||                                              || e.g. ``Epics Root Certificate Authority`` || certificate authority's Certificate if PVACMS creates it.               |
@@ -132,11 +129,8 @@ The environment variables in the following table configure the PVACMS at runtime
 ||                                              ||                                           || default: "EPICS Certificate Authority"                                  |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_CERT_AUTH_TLS_KEYCHAIN                 || <certificate authority keychain file>     || fully qualified path to a file that will be used as the                 |
-||                                              || e.g.                                      || certificate authority keychain file.                                    |
-||                                              || ``~/.config/pva/1.4/cert_auth.p12``       ||                                                                         |
-+-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_CERT_AUTH_TLS_KEYCHAIN_PWD_FILE        || <certificate authority password file>     || fully qualified path to a file that will be used as the                 |
-||                                              || e.g. ``~/.config/pva/1.4/cert_auth.pass`` || certificate authority keychain password file.                           |
+||                                              || e.g.                                      || certificate authority keychain file. If encrypted, append the           |
+||                                              || ``~/.config/pva/1.4/cert_auth.p12``       || password after a semicolon, e.g. ``cert_auth.p12;password``.            |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_ACF                             || <path to ACF file>                        || fully qualified path to a file that will be used as the                 |
 ||                                              || e.g. ``~/.config/pva/1.4/pvacms.acf``     || ACF file that configures the permissions of PVACMS peers.               |
@@ -187,11 +181,8 @@ The environment variables in the following table configure the PVACMS at runtime
 || EPICS_PVACMS_CERT_VALIDITY_SERVER            || <duration string>                         || Default certificate duration for Server certificates; see               |
 ||                                              || e.g. ``30``, ``1d``, ``1y6M``             || :ref:`duration_strings`.                                                |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS_KEYCHAIN                    || <path to keychain file>                   || The location of the PVACMS keychain file.                               |
-||                                              || e.g. ``~/.config/pva/1.4/pvacms.p12``     ||                                                                         |
-+-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
-|| EPICS_PVACMS_TLS_KEYCHAIN_PWD_FILE           || <path to password text file>              || Location of a password file for PVACMS keychain file.                   |
-||                                              || e.g. ``~/.config/pva/1.4/pvacms.pass``    ||                                                                         |
+|| EPICS_PVACMS_TLS_KEYCHAIN                    || <path to keychain file>                   || The location of the PVACMS keychain file. If encrypted, append the      |
+||                                              || e.g. ``~/.config/pva/1.4/pvacms.p12``     || password after a semicolon, e.g. ``pvacms.p12;password``.               |
 +-----------------------------------------------+--------------------------------------------+--------------------------------------------------------------------------+
 || EPICS_PVACMS_CLUSTER_PV_PREFIX               || <PV name prefix string>                   || Prefix for cluster PV names.                                            |
 ||                                              || e.g. ``CERT:CLUSTER``                     || default: ``CERT:CLUSTER``                                               |
@@ -788,9 +779,9 @@ The default ACF file restricts cluster PV access via ``UAG(CMS_CLUSTER)``:
 - ``ASG(CLUSTER)`` requires ``UAG(CMS_CLUSTER)``, ``METHOD(x509)``,
   ``AUTHORITY(CMS_AUTH)``, and ``PROTOCOL(TLS)`` for both READ and WRITE.
 
-The CTRL PV RPC handler enforces CLUSTER ASG rules at runtime using
-``SecurityClient.update(as_cluster_mem, ASL1, credentials)`` and rejects join
-requests from clients that do not satisfy ``canWrite()``.
+The CTRL PV RPC handler enforces CLUSTER ASG rules at runtime by mapping
+the caller's credentials to an asLib identity and calling ``asCheckPut()``,
+rejecting join requests from clients that are not permitted to write.
 
 **Sync Loop Prevention**
 

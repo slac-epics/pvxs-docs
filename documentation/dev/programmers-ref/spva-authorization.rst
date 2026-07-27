@@ -610,33 +610,29 @@ Legacy ``PeerInfo`` Structure
 
 .. _peer_credentials:
 
-``Credentials`` Structure (pvxsIoc API)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+``ClientCredentials`` Structure
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :doc:`pvxs::ioc::Credentials </maintainer-docs/api-reference-pvxs-ioc-credentials>`
-class provides the authenticated peer identity to IOC-side access
-security. It is constructed from the
-:doc:`pvxs::server::ClientCredentials </maintainer-docs/api-reference-pvxs-server-clientcredentials>`
-delivered by pvxs on each connection:
+The :doc:`pvxs::server::ClientCredentials </maintainer-docs/api-reference-pvxs-server-clientcredentials>`
+delivered by pvxs on each connection provides the authenticated peer
+identity used to build an asLib access-security check.  Its
+authentication-relevant fields are:
 
 .. code-block:: c++
 
-    class Credentials {
-     public:
-        std::vector<std::string> cred; // credentials list: e.g. {"ca/username"}, {"x509/CN=greg"}
-        std::string method;            // "anonymous", "ca", or "x509"
-        std::string authority;         // CA common name (x509 mode); empty otherwise
-        std::string host;              // peer network address
-        std::string issuer_id;         // 8-hex-digit issuer SKID prefix (x509 mode)
-        std::string serial;            // zero-padded certificate serial number (x509 mode)
-        bool isTLS = false;            // true if the connection is over TLS (Mutual or Server-Only)
+    struct PeerCredentials {
+        std::string peer;       // peer network address ("host:port")
+        std::string method;     // "anonymous", "ca", or "x509"
+        std::string authority;  // CA common name (x509 mode); empty otherwise
+        std::string account;    // remote user account name
+        bool isTLS = false;     // true if the connection is over TLS (Mutual or Server-Only)
+        std::set<std::string> roles() const; // locally-resolved groups for account
     };
 
 In mTLS (Mutual) mode, ``method`` is ``"x509"``, ``authority`` is the CA CN,
-``issuer_id`` and ``serial`` identify the specific certificate, and ``isTLS`` is
-``true``. In server-only TLS, ``isTLS`` is ``true`` but ``method`` is ``"ca"`` or
-``"anonymous"`` and the certificate fields are empty. In legacy TCP mode, ``isTLS``
-is ``false``.
+and ``isTLS`` is ``true``. In server-only TLS, ``isTLS`` is ``true`` but
+``method`` is ``"ca"`` or ``"anonymous"`` and ``authority`` is empty. In legacy
+TCP mode, ``isTLS`` is ``false``.
 
 
 Enhanced Client Management

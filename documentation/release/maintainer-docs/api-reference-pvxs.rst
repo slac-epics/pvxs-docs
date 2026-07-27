@@ -17,7 +17,6 @@ Public API
 
    api-reference-pvxs-client-context
    api-reference-pvxs-client-config
-   api-reference-pvxs-ioc-credentials
    api-reference-pvxs-client-connectbuilder
    api-reference-pvxs-client-discoverbuilder
    api-reference-pvxs-client-getbuilder

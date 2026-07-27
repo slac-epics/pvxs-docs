@@ -136,10 +136,9 @@ set to the CN from the peer's certificate.  ``creds.isTLS == true``.
 In server-only TLS, ``creds.isTLS == true`` but ``creds.method`` is
 ``"ca"`` or ``"anonymous"``.  In plain TCP, ``creds.isTLS == false``.
 
-The ``ioc::Credentials`` class (see :ref:`peer_credentials` below)
-wraps ``pvxs::server::ClientCredentials`` for IOC-side access security
-and adds the ``authority`` and ``issuer_id`` fields used in ``AUTHORITY``
-ACF rules.
+The ``pvxs::server::ClientCredentials`` structure (see
+:ref:`peer_credentials` below) carries the ``authority`` field used in
+``AUTHORITY`` ACF rules.
 
 Configuring the authentication mode
 -------------------------------------
@@ -322,7 +321,7 @@ same subject still inherits the prior approval. If the prior certificate was **d
 
 **usage**
 
-Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain and password file locations.
+Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain location (with an optional ``;password`` postfix).
 
 .. code-block:: shell
 
@@ -344,7 +343,6 @@ Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine th
       (-c | --country) <country>                 Specify country for the certificate. Default locale setting if detectable otherwise `US`
       (-t | --time) <duration>                   Duration of the certificate. e.g. 30 or 1d or 1y3M2d4m
             --cert-pv-prefix <cert_pv_prefix>     Specifies the pv prefix to use to contact PVACMS.  Default `CERT`
-            --add-config-uri                      Add a config uri to the generated certificate
             --force                               Force overwrite if certificate exists
       (-a | --trust-anchor)                       Download Trust Anchor into keychain file.  Do not create a certificate
       (-s | --no-status)                          Request that status checking not be required for this certificate
@@ -416,7 +414,7 @@ authkrb Configuration and Usage
 
 **usage**
 
-Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain and password file locations.
+Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain location (with an optional ``;password`` postfix).
 
 .. code-block::
 
@@ -435,7 +433,6 @@ Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine th
             --krb-validator <service-name>       Specify kerberos validator name.  Default ``pvacms``
             --krb-realm <krb-realm>              Specify the kerberos realm.  If not specified we'll take it from the ticket
             --cert-pv-prefix <cert_pv_prefix>    Specifies the pv prefix to use to contact PVACMS.  Default `CERT`
-            --add-config-uri                     Add a config uri to the generated certificate
             --force                              Force overwrite if certificate exists
       (-s | --no-status)                         Request that status checking not be required for this certificate
       (-i | --issuer) <issuer_id>                The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening
@@ -501,7 +498,7 @@ authldap Configuration and Usage
 
 **usage**
 
-Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain and password file locations.
+Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine the keychain location (with an optional ``;password`` postfix).
 
 .. code-block:: shell
 
@@ -526,7 +523,6 @@ Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine th
             --ldap-host <hostname>               LDAP server host
             --ldap-port <port>                   LDAP serever port
             --cert-pv-prefix <cert_pv_prefix>    Specifies the pv prefix to use to contact PVACMS.  Default `CERT`
-            --add-config-uri                     Add a config uri to the generated certificate
             --force                              Force overwrite if certificate exists
       (-s | --no-status)                         Request that status checking not be required for this certificate
       (-i | --issuer) <issuer_id>                The issuer ID of the PVACMS service to contact.  If not specified (default) broadcast to any that are listening
@@ -551,9 +547,6 @@ Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine th
 +--------------------+--------------------------+--------------------------+--------------------------+---------------------------------------+------------------------------------------------------------+
 | Env. *authnldap*   | Env. *pvacms*            | Params. *authldap*       | Params. *pvacms*         | Keys and Values                       | Description                                                |
 +====================+==========================+==========================+==========================+=======================================+============================================================+
-|| EPICS_AUTH_LDAP   ||                         ||                         ||                         || {location of password file}          || file containing password for the given LDAP user account  |
-|| _ACCOUNT_PWD_FILE ||                         ||                         ||                         || e.g. ``~/.config/pva/1.5/ldap.pass`` ||                                                           |
-+--------------------+--------------------------+--------------------------+--------------------------+---------------------------------------+------------------------------------------------------------+
 ||                   ||                         || ``-p``                  ||                         || {LDAP account password}              || password for the given LDAP user account                  |
 ||                   ||                         || ``--password``          ||                         || e.g. ``secret``                      ||                                                           |
 +--------------------+--------------------------+--------------------------+--------------------------+---------------------------------------+------------------------------------------------------------+
