@@ -411,9 +411,18 @@ it is worth checking.
 
 This matters because an access rule may name a unit rather than a person.  A rule naming the
 beamline admits anyone whose certificate places them at or below the beamline, so somebody
-joining the staff group needs a certificate saying so and no rule has to be edited.  Order is
-what makes that work: ``OU=staff,OU=beamline`` is admitted by a rule naming the beamline, while
-``OU=beamline,OU=staff`` is not, because it claims a beamline inside a staff group.
+joining the staff group needs a certificate saying so and no rule has to be edited.
+
+A rule entry places a condition only on the fields it names, and its units must appear among the
+holder's units in the same relative order, though not necessarily next to one another.  So an
+entry naming one unit is a test for that unit anywhere in the path: ``OU=beamline`` admits both
+``OU=beamline`` and ``OU=staff,OU=beamline``.  Position starts to matter once the entry names
+more than one unit: ``OU=staff,OU=beamline`` admits a holder whose units are
+``OU=staff,OU=beamline`` and refuses one whose units are ``OU=beamline,OU=staff``, because that
+claims a beamline inside a staff group.
+
+Note that this is not the same question the certificate manager asks when it decides whether two
+subjects are the same holder, which is described below.
 
 Three consequences worth stating plainly:
 
