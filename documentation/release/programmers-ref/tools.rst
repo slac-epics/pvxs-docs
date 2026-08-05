@@ -454,6 +454,14 @@ The columns are the certificate identifier, what the certificate is for, its
 subject, its status, when it expires, when it was issued, when its status last
 changed, when it must be renewed by, and the request identifier.
 
+The subject is rendered in one canonical order, ``CN``, then the organisational
+units, then ``O``, then ``C``, whatever order the certificate itself carries,
+so the same identity always reads the same way and the text can be pasted into
+an access security file. A certificate naming a unit inside another unit shows
+each of them, innermost first, as in
+``CN=visitor,OU=staff,OU=beamline,O=lbnl,C=US``. Parts the certificate does not
+carry are left out rather than shown empty.
+
 The request identifier is shown only to an administrator, and is empty for
 everyone else. It is a search key: an administrator who has been sent one uses
 it to find the row, reads the subject and the dates, and then decides. It is
@@ -492,6 +500,13 @@ are also shell metacharacters.
 A value containing a space is quoted. ``*`` matches any run of characters and
 ``\*`` is a literal asterisk. A value wrapped in slashes is a regular
 expression.
+
+A certificate may name more than one organisational unit, so ``unit:`` matches
+when any one of them does. Since the units are read innermost first and each
+encloses the one before it, ``unit:beamline`` finds a certificate for
+``OU=staff,OU=beamline`` as well as one for ``OU=beamline`` alone: naming an
+outer unit finds everyone under it. ``not unit:beamline`` means none of the
+certificate's units is the beamline. See :ref:`naming a unit inside another unit <nested_organizational_units>`.
 
 Dates are ``YYYY-MM-DD`` or ``YYYY-MM-DD HH:MM:SS`` in Coordinated Universal
 Time, and a bare date matches that whole day. A period is a number and a unit

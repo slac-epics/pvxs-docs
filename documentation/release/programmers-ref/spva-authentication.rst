@@ -194,7 +194,8 @@ TYPE ``0`` - Basic Credentials
 
   - OU: Organisational Unit
 
-    - Commandline flag: ``--ou``
+    - Commandline flag: ``--ou``, which may be given more than once
+    - Supplied innermost first: see :ref:`naming a unit inside another unit <nested_organizational_units>`
 
   - C: Country
 
@@ -252,10 +253,10 @@ Common Environment Variables for all Authenticators
 ||                                           || e.g. ``centos07``                 ||                                                                      |
 +--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
 || EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT        || {organization unit to use}        || Organization Unit to use in new certificates                         |
-||                                           || e.g. ``data center``              ||                                                                      |
-+--------------------------------------------+  e.g. ``ops``                      ||                                                                      |
-|| EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT       || e.g. ``prod``                     ||                                                                      |
-||                                           || e.g. ``remote``                   ||                                                                      |
+||                                           || e.g. ``data center``              || Several units are separated by ``;``, read innermost first, so       |
++--------------------------------------------+  e.g. ``ops``                      || ``staff;beamline`` means staff sits inside beamline.  See            |
+|| EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT       || e.g. ``prod``                     || "Naming a unit inside another unit" below.                           |
+||                                           || e.g. ``staff;beamline``           ||                                                                      |
 +--------------------------------------------+------------------------------------+-----------------------------------------------------------------------+
 || EPICS_PVA_AUTH_COUNTRY                    || {country to use}                  || Country to use in new certificates.                                  |
 ||                                           || e.g. ``US``                       || Must be a two digit country code                                     |
@@ -292,7 +293,8 @@ authstd Configuration and Usage
 
 - ``CN``: logged-in username, overridden by ``-n``/``--name`` or ``EPICS_PVA_AUTH_NAME``/``EPICS_PVAS_AUTH_NAME``
 - ``O``: hostname or IP address, overridden by ``-o``/``--organization`` or ``EPICS_PVA_AUTH_ORGANIZATION``/``EPICS_PVAS_AUTH_ORGANIZATION``
-- ``OU``: not set by default, overridden by ``--ou`` or ``EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT``/``EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT``
+- ``OU``: not set by default, overridden by ``--ou`` or ``EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT``/``EPICS_PVAS_AUTH_ORGANIZATIONAL_UNIT``.
+  A certificate may name more than one, innermost first: see :ref:`naming a unit inside another unit <nested_organizational_units>`
 - ``C``: local country code, overridden by ``-c``/``--country`` or ``EPICS_PVA_AUTH_COUNTRY``/``EPICS_PVAS_AUTH_COUNTRY``
 
 .. _authnstd_prior_approval:
@@ -341,6 +343,8 @@ Uses the standard ``EPICS_PVA_TLS_<name>`` environment variables to determine th
       (-n | --name) <name>                       Specify common name of the certificate. Default <logged-in-username>
       (-o | --organization) <organization>       Specify organisation name for the certificate. Default <hostname>
             --ou <org-unit>                      Specify organisational unit for the certificate. Default <blank>
+                                                 May be given more than once to name a nested unit.  Give the innermost
+                                                 unit first: `--ou staff --ou beamline` means staff is inside beamline
       (-c | --country) <country>                 Specify country for the certificate. Default locale setting if detectable otherwise `US`
       (-t | --time) <duration>                   Duration of the certificate. e.g. 30 or 1d or 1y3M2d4m
             --cert-pv-prefix <cert_pv_prefix>     Specifies the pv prefix to use to contact PVACMS.  Default `CERT`
@@ -381,8 +385,58 @@ The ``-t`` / ``--time`` value accepts :ref:`duration_strings`.
 
 .. code-block:: shell
 
+    # create a client certificate for someone in the staff group of the beamline:
+    # innermost unit first, so this says staff sits inside beamline
+    authnstd -u client -n visitor -o lbnl --ou staff --ou beamline
+
+
+.. code-block:: shell
+
     # Download the Trust Anchor into your keychain file for server-only authenticated connections
     authnstd --trust-anchor
+
+.. _nested_organizational_units:
+
+**Naming a unit inside another unit**
+
+A certificate may name more than one organisational unit, and the order says which unit
+encloses which.  Values are supplied **innermost first**, so
+``--ou staff --ou beamline`` produces the subject
+``CN=visitor,OU=staff,OU=beamline,O=lbnl,C=US``, which reads left to right as: the holder is in
+staff, staff is in beamline, beamline is in lbnl.  Every unit is an ancestor of the common name.
+
+Getting the order backwards does not fail.  It produces a certificate asserting the opposite
+containment, which every access rule written against it will then read the other way round, so
+it is worth checking.
+
+This matters because an access rule may name a unit rather than a person.  A rule naming the
+beamline admits anyone whose certificate places them at or below the beamline, so somebody
+joining the staff group needs a certificate saying so and no rule has to be edited.  Order is
+what makes that work: ``OU=staff,OU=beamline`` is admitted by a rule naming the beamline, while
+``OU=beamline,OU=staff`` is not, because it claims a beamline inside a staff group.
+
+Three consequences worth stating plainly:
+
+- **A value cannot repeat.**  ``--ou beamline --ou beamline`` would say the beamline sits inside
+  itself, which nothing can satisfy, so it is refused.
+- **Two sibling units are two certificates, not one certificate with two units.**  Somebody who
+  belongs to both the beamline and the workshop holds one certificate for each.  A single
+  subject naming both would be read as one enclosing the other.
+- **Order is part of who you are.**  A certificate for ``OU=staff,OU=beamline`` and one for
+  ``OU=beamline,OU=staff`` are different holders and both may exist.  So are
+  ``OU=beamline`` and ``OU=staff,OU=beamline``: a shorter path is a different holder, not the
+  same one described less fully.
+
+Through the environment the values share one variable and are separated by ``;``, again
+innermost first:
+
+.. code-block:: shell
+
+    export EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT="staff;beamline"
+
+A unit name containing a ``;`` cannot be expressed that way, and is refused rather than guessed
+at.  Use the repeatable command line option, which places no restriction on the value.
+
 
 **Setup of standard authenticator in Docker Container for testing**
 
