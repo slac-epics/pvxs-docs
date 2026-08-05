@@ -336,6 +336,16 @@ Options
        ``csv`` and ``json`` are for a spreadsheet or a program. The table
        goes to standard output and everything else to standard error, so it
        can be piped.
+   * - ``--where`` ``<expression>``
+     - Narrow what ``--list`` returns. A test is written ``field:value`` and tests
+       join with ``and``, ``or`` and ``not``, grouped with brackets. Several
+       values for one field are separated by ``|`` and mean any of them.
+   * - ``--pending``
+     - Short for ``--where "state:PENDING_APPROVAL"``. Cannot be combined with
+       ``--where``.
+   * - ``--expiring`` ``<period>``
+     - Short for ``--where "expires_before:<period> and state:VALID"``. Cannot be
+       combined with ``--where``.
    * - ``--cert-list-pv-prefix`` ``<prefix>``
      - The prefix the listing operation is served under (default ``CERT``)
    * - ``-X``,``--dump``

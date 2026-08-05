@@ -462,6 +462,65 @@ not a token that approves anything by itself.
 Rows come back with the most recently created certificate first. That order is
 the server's, and ``pvxcert`` prints it unchanged.
 
+Narrowing the list
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``--where`` takes an expression meant to be read aloud:
+
+.. code-block:: shell
+
+   pvxcert --list --where "state:PENDING_APPROVAL"
+   pvxcert --list --where "state:VALID|PENDING and org:SLAC"
+   pvxcert --list --where "not state:REVOKED and expires_before:'2026-07-31 10:31:21'"
+   pvxcert --list --where "(org:SLAC or org:LBNL) and unit:beamline and expires_before:30d"
+
+A test is ``field:value``, split at the first colon so a value may contain
+colons - a certificate identifier and a clock time both do. Several values for
+one field are separated by ``|`` and mean any of them. Tests join with ``and``,
+``or`` and ``not``, and group with brackets; ``not`` binds tightest, then
+``and``, then ``or``, which is how the words group when the expression is read
+aloud. The joining words, the field names and the status names ignore case.
+
+The fields are ``id``, ``serial``, ``issuer``, ``name``, ``org``, ``unit``,
+``country``, ``state``, ``issued``, ``expires``, ``renew_by``, ``changed``, and
+the ``_before`` and ``_after`` forms of each date field.
+
+Comparisons are separate field names rather than operators inside a test.
+``expires_before:`` reads better than a symbol, and the symbols one would use
+are also shell metacharacters.
+
+A value containing a space is quoted. ``*`` matches any run of characters and
+``\*`` is a literal asterisk. A value wrapped in slashes is a regular
+expression.
+
+Dates are ``YYYY-MM-DD`` or ``YYYY-MM-DD HH:MM:SS`` in Coordinated Universal
+Time, and a bare date matches that whole day. A period is a number and a unit
+letter, and its direction follows the field, so ``expires_before:30d`` means
+thirty days from now and ``issued_after:7d`` means seven days ago. A period
+without a unit letter is refused, because a bare number would otherwise be read
+as minutes. Note that ``M`` is months and ``m`` is minutes.
+
+``--pending`` stands for ``state:PENDING_APPROVAL``, and ``--expiring 30d`` for
+``expires_before:30d and state:VALID``. Combining either with ``--where`` is
+refused rather than guessed at.
+
+The expression is read before ``pvxcert`` opens a connection, so a typing
+mistake costs no round trip. Every message says what is wrong, shows the
+expression with a caret under the place, and says what to do:
+
+.. code-block:: text
+
+   I cannot understand the filter at position 16:
+
+     state:VALID and orgg:SLAC
+                     ^
+
+   There is no field called "orgg".
+   Did you mean "org"?
+
+The expression applies to ``--list`` only. The standing views below take no
+arguments.
+
 Standing views for a display
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
