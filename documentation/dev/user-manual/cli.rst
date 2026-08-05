@@ -272,6 +272,8 @@ Usage
    pvxcert [options] (-R | --revoke) [<cert_id>]
                                               REVOKE certificate; if cert_id omitted, reads from
                                               -f <file> or $EPICS_PVA_TLS_KEYCHAIN
+   pvxcert [options] --review-pending         Review certificates awaiting a decision, one at a time
+   pvxcert [options] --review-issued          Review issued certificates for revocation, one at a time
    pvxcert (-h | --help)                      Show this help message and exit
    pvxcert (-V | --version)                   Print version and exit
 
@@ -323,6 +325,15 @@ Options
      - Revoke an active certificate. Admin or certificate owner.
        If ``<cert_id>`` is omitted, the certificate is read from ``-f <file>`` or
        ``$EPICS_PVA_TLS_KEYCHAIN``.
+   * - ``--review-pending``
+     - Ask about each certificate awaiting a decision in turn (**admin only**)
+   * - ``--review-issued``
+     - Ask about each issued certificate in turn, narrowed by ``--where`` (**admin only**)
+   * - ``--all`` ``[approve|deny]``
+     - Decide every listed certificate without being asked. Takes ``approve`` or ``deny``
+       with ``--review-pending``, and no value with ``--review-issued``
+   * - ``--yes``
+     - Answer the final confirmation
    * - ``-X``,``--dump``
      - Print verbose X.509 certificate details, decoded extensions,
        and the full certificate chain (end-entity + intermediate CAs). Use with ``-f``.
@@ -420,6 +431,66 @@ Under the hood, ``pvxcert`` sends a ``PUT`` to the :ref:`pvacms` on the PV assoc
 
     Structure
         string     state    # APPROVE, DENY, REVOKE
+
+Reviewing several certificates at a time
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``-A``, ``-D`` and ``-R`` each act on one certificate identifier you already know. To work
+through a set, ``--review-pending`` and ``--review-issued`` list the certificates and ask about
+each one in turn.
+
+``--review-pending`` shows every certificate waiting for a decision. ``--review-issued`` shows
+issued certificates, narrowed by the same ``--where`` filter the listing mode uses, and is for
+revoking them.
+
+Answer each question with ``approve``, ``deny`` or ``revoke`` as the mode allows, or:
+
+.. list-table::
+   :widths: 20 80
+   :header-rows: 1
+
+   * - Answer
+     - Meaning
+   * - ``skip``
+     - Leave this certificate alone and move to the next
+   * - ``stop``
+     - Leave this certificate and all the remaining ones alone, and go to the final review
+   * - ``cancel``
+     - Abandon the run, including the decisions already made, without changing anything
+
+``s`` is not accepted, because it could mean either ``skip`` or ``stop``. ``a``, ``d``, ``r``
+and ``c`` are accepted.
+
+Nothing is written until a single confirmation at the end, which defaults to no. Just before it,
+the status of every decided certificate is read again, and any that has changed since the
+listing is dropped and reported rather than written over.
+
+Certificates the certificate manager will not accept a revocation for are listed with the reason
+and never asked about: a status other than ``PENDING_APPROVAL``, ``PENDING`` or ``VALID``, and
+your own certificate, which you may not revoke.
+
+.. code-block:: shell
+
+   # Work through the certificates waiting for a decision
+   pvxcert --review-pending
+
+   # Work through the certificates issued to one host
+   pvxcert --review-issued --where "host:cage.epics.org and state:VALID"
+
+The request identifier is shown for each certificate waiting for a decision, in the same form
+:ref:`authnstd_tool` gave the person who asked for it. The certificate creation request travels
+in clear text, so compare the identifier on screen against the one the requester sent you before
+approving.
+
+.. warning::
+
+   ``--all`` decides every listed certificate without asking, and with ``--yes`` it also answers
+   the final confirmation. Together they approve or revoke the whole list without showing you a
+   single certificate, and without any opportunity to check a request identifier. Revocation
+   cannot be undone.
+
+With no terminal to read answers from and no ``--all``, the listing is printed, nothing is
+written, and the exit code is 3.
 
 .. _authnstd_tool:
 
