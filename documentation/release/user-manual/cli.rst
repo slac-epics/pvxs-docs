@@ -466,11 +466,26 @@ for full details, including prior-approval inheritance behaviour.
    # Create a server certificate for IOC1 at KLYS LI01
    authnstd -u server -n IOC1 -o "KLYS:LI01:10" --ou "FACET"
 
+   # Name a unit inside another unit: innermost first, so staff is inside beamline
+   authnstd -u client -n visitor -o lbnl --ou staff --ou beamline
+
    # Download the Trust Anchor only (no entity certificate)
    authnstd --trust-anchor
 
    # Force overwrite of an existing certificate
    authnstd --force
+
+.. note::
+
+   ``--ou`` may be given more than once and the order says which unit encloses which, read
+   **innermost first**.  The example above produces the subject
+   ``CN=visitor,OU=staff,OU=beamline,O=lbnl,C=US``: the holder is in staff, staff is in
+   beamline.  Through the environment the values share
+   ``EPICS_PVA_AUTH_ORGANIZATIONAL_UNIT`` and are separated by ``;``, in the same order.
+
+   Getting the order backwards produces a certificate asserting the opposite containment, which
+   is accepted, so it is worth checking.  Belonging to two sibling units is two certificates,
+   not one certificate naming both.  See :ref:`naming a unit inside another unit <nested_organizational_units>`.
 
 .. _authnkrb_tool:
 
