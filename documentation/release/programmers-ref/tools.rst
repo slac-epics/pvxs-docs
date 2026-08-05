@@ -52,9 +52,10 @@ Tools provided
        instance.  See :doc:`/user-manual/pvacms` for full configuration
        reference.
    * - ``pvxcert``
-     - **Certificate management client** — query the live status of a
-       certificate, approve or deny pending requests, and revoke active
-       ones.  See :doc:`/user-manual/cli` for the full option set.
+     - **Certificate management client** — list the certificates that
+       exist, query the live status of one, approve or deny pending
+       requests, and revoke active ones.  See :doc:`/user-manual/cli`
+       for the full option set.
    * - ``authnstd``
      - **Standard authenticator** — requests a certificate from PVACMS
        using self-declared credentials (username and hostname).
@@ -429,6 +430,79 @@ starting your processes:
 
    # Revoke a certificate
    pvxcert --revoke 27975e6b:07246297371190731775
+
+Listing certificates
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``pvxcert --list`` prints every certificate the certificate manager holds.
+Without it you would have to know a certificate's identifier before you could
+ask about it, which leaves no way to find one you have not been told about.
+
+.. code-block:: shell
+
+   # Every certificate, as an aligned table
+   pvxcert --list
+
+   # For a spreadsheet or a script
+   pvxcert --list --format=csv
+   pvxcert --list --format=json
+
+The table is written to standard output and everything else to standard error,
+so ``pvxcert --list | ...`` carries only the table.
+
+The columns are the certificate identifier, what the certificate is for, its
+subject, its status, when it expires, when it was issued, when its status last
+changed, when it must be renewed by, and the request identifier.
+
+The request identifier is shown only to an administrator, and is empty for
+everyone else. It is a search key: an administrator who has been sent one uses
+it to find the row, reads the subject and the dates, and then decides. It is
+not a token that approves anything by itself.
+
+Rows come back with the most recently created certificate first. That order is
+the server's, and ``pvxcert`` prints it unchanged.
+
+Standing views for a display
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A display that keeps a list open all day wants it to update itself, which a
+command that runs once cannot do. Three channels carry the same table and
+re-send it whenever it changes, so a display tool can subscribe to one and
+needs no support written for it:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 20 50
+
+   * - Channel
+     - Who may read it
+     - What it shows
+   * - ``CERT:LIST:ALL``
+     - everyone
+     - every certificate
+   * - ``CERT:LIST:PENDING_APPROVAL``
+     - administrators only
+     - certificates awaiting a decision, including the request identifier
+   * - ``CERT:LIST:EXPIRING``
+     - everyone
+     - certificates expiring inside the server's window
+
+``CERT`` above is the configured prefix. The window the expiring view uses is a
+server setting, thirty days by default, and is stated in that view's column
+labels so a reader can see what they are looking at.
+
+The channels take no arguments. A display tool can parse only a field clause
+out of a channel name, so there is nowhere to put one; anything needing a
+parameter goes to the one-shot call that ``--list`` uses.
+
+Each view sends every matching row rather than a page at a time, because a
+display filters in a script over the table it already holds and a page would
+let a search see one page only. A burst of changes is collapsed into one or two
+posts rather than one per change; a change is delayed by that, never dropped.
+
+The certificate identifier column is exactly the form a status channel name
+accepts, so a display can build ``CERT:STATUS:`` plus that column and write a
+decision to it.
 
 Once processes have ``VALID`` certificates and PVACMS is reachable,
 TLS connections are established automatically by the library.  No
