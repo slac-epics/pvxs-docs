@@ -272,6 +272,7 @@ Usage
    pvxcert [options] (-R | --revoke) [<cert_id>]
                                               REVOKE certificate; if cert_id omitted, reads from
                                               -f <file> or $EPICS_PVA_TLS_KEYCHAIN
+   pvxcert [options] (-l | --list)            List certificates
    pvxcert (-h | --help)                      Show this help message and exit
    pvxcert (-V | --version)                   Print version and exit
 
@@ -280,6 +281,8 @@ Usage
 
  options:
    (-w | --timeout) <timout_secs>             Operation timeout in seconds.  Default 5.0s
+   (--cert-list-pv-prefix) <prefix>           Prefix the listing is served under.  Default CERT
+   (--format) <columns|csv|json>              How --list writes its table.  Default columns
    (-d | --debug)                             Debug mode: Shorthand for $PVXS_LOG="pvxs.*=DEBUG"
    (-v | --verbose)                           Verbose mode
    (-X | --dump)                              Dump all available certificate and status details
@@ -323,6 +326,18 @@ Options
      - Revoke an active certificate. Admin or certificate owner.
        If ``<cert_id>`` is omitted, the certificate is read from ``-f <file>`` or
        ``$EPICS_PVA_TLS_KEYCHAIN``.
+   * - ``-l``, ``--list``
+     - List the certificates the certificate manager holds, newest first.
+       The request identifier column carries a value only for an
+       administrator; it is present and empty for everyone else. Cannot be
+       combined with ``-f``, ``-A``, ``-D``, ``-R`` or a certificate ID.
+   * - ``--format`` ``<columns|csv|json>``
+     - How ``--list`` writes its table. ``columns`` aligns it for reading,
+       ``csv`` and ``json`` are for a spreadsheet or a program. The table
+       goes to standard output and everything else to standard error, so it
+       can be piped.
+   * - ``--cert-list-pv-prefix`` ``<prefix>``
+     - The prefix the listing operation is served under (default ``CERT``)
    * - ``-X``,``--dump``
      - Print verbose X.509 certificate details, decoded extensions,
        and the full certificate chain (end-entity + intermediate CAs). Use with ``-f``.
