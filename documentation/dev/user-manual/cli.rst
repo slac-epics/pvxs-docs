@@ -406,7 +406,6 @@ Example status output:
    Serial         : 07246297371190731775
    Not Before     : Sat Feb  1 00:00:00 2026 UTC
    Not After      : Mon Feb  1 00:00:00 2027 UTC
-   Config URI     : pva://CERT:CONFIG:27975e6b:07246297371190731775
    --------------------------------------------
    Primary Root CA : CN=Facility Root,O=EPICS Org
    Trusted Root CA : CN=Department A Root,O=EPICS Org

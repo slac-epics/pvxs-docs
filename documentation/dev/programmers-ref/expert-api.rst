@@ -79,40 +79,6 @@ status from servers.
     auto conf = pvxs::server::Config::fromEnv();
     conf.disableStapling();  // disable stapling
 
-Request Timeout
-~~~~~~~~~~~~~~~
-
-.. code-block:: c++
-
-    void setRequestTimeout(const double timeout);
-    double getRequestTimeout() const;
-
-Set or query the request timeout in seconds (default: 5.0). This timeout applies to
-operations like certificate status queries. Cannot be set via environment variables —
-only programmatically or via command line tool arguments.
-
-.. code-block:: c++
-
-    auto conf = pvxs::client::Config::fromEnv();
-    conf.setRequestTimeout(10.0);  // 10 second timeout
-
-Certificate PV Prefix
-~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: c++
-
-    void setCertPvPrefix(const std::string &prefix);
-    std::string getCertPvPrefix() const;
-
-Set or query the prefix used for certificate management PV names (default: ``"CERT"``).
-The prefix is prepended to ``:STATUS:...``, ``:ROOT``, and ``:CREATE`` to form the
-full PV names used for PVACMS communication.
-
-.. code-block:: c++
-
-    auto conf = pvxs::client::Config::fromEnv();
-    conf.setCertPvPrefix("ORNL_CERTS");  // use site-specific prefix
-
 Keychain Password
 ~~~~~~~~~~~~~~~~~
 
@@ -122,7 +88,7 @@ Keychain Password
     std::string getKeychainPassword() const;
 
 Set or query the password used to decrypt the PKCS#12 keychain file. This provides
-a programmatic alternative to the ``EPICS_PVA_TLS_KEYCHAIN_PWD_FILE`` environment variable.
+a programmatic alternative to the ``;password`` postfix on ``EPICS_PVA_TLS_KEYCHAIN``.
 
 .. code-block:: c++
 

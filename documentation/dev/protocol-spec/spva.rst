@@ -615,8 +615,6 @@ Neither sub-arc is currently IANA-registered.
    +=====================+============================+
    | SPvaCertStatusURI   | ``1.3.6.1.4.1.37427.1``    |
    +---------------------+----------------------------+
-   | SPvaCertConfigURI   | ``1.3.6.1.4.1.72473.1``    |
-   +---------------------+----------------------------+
 
 **SPvaCertStatusURI** (``1.3.6.1.4.1.37427.1``):
 
@@ -633,16 +631,8 @@ Connections involving such a certificate proceed without
 certificate-status monitoring; the revocation mechanism does not
 apply to that certificate.
 
-**SPvaCertConfigURI** (``1.3.6.1.4.1.72473.1``):
-
-Value: the PV name where certificate-configuration updates for this
-certificate are published. Presence is optional and opt-in
-(corresponding to the ``--add-config-uri`` flag on ``authnxxx``
-tools). An implementation that does not recognise this extension MUST
-ignore it.
-
-A non-SPVA-aware verifier MAY ignore both extensions. A certificate
-carrying them remains a fully-conformant X.509 v3 certificate per
+A non-SPVA-aware verifier MAY ignore this extension. A certificate
+carrying it remains a fully-conformant X.509 v3 certificate per
 :rfc:`5280` and is usable by non-SPVA software, provided the
 Extended Key Usage and Subject Alternative Name fields are
 appropriate for the non-SPVA use.

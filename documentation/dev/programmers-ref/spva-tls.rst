@@ -93,10 +93,14 @@ The keychain path is controlled by:
 - ``EPICS_PVAS_TLS_KEYCHAIN`` — server-side keychain path (overrides the client variable for
   server processes)
 
-If a password was set when writing the P12 file, point to a file containing that password:
+If a password was set when writing the P12 file, append it to the keychain path after a
+semicolon:
 
-- ``EPICS_PVA_TLS_KEYCHAIN_PWD_FILE`` — path to a file containing the client keychain password
-- ``EPICS_PVAS_TLS_KEYCHAIN_PWD_FILE`` — path to a file containing the server keychain password
+- ``EPICS_PVA_TLS_KEYCHAIN=/path/to/client.p12;password``
+- ``EPICS_PVAS_TLS_KEYCHAIN=/path/to/server.p12;password``
+
+The first semicolon separates the keychain path from the password; all later characters remain
+part of the password.  Separate keychain password-file environment variables are not supported.
 
 To set the password from code, use ``ConfigCommon::setKeychainPassword()`` from the EXPERT API
 (see :doc:`expert-api`).
@@ -149,10 +153,9 @@ when you cannot or do not want to use the shell environment.
              'EPICS_PVA_TLS_KEYCHAIN': '/path/to/client.p12',
          }, useenv=False)
 
-       The ``p4p`` package does **not** have a Python-level password API;
-       embed the password in the path as ``/path/to/file.p12;password``
-       (the same format accepted by the C++ library and Phoebus), or
-       point ``EPICS_PVA_TLS_KEYCHAIN_PWD_FILE`` at a password file.
+        The ``p4p`` package does **not** have a Python-level password API;
+        embed the password in the path as ``/path/to/file.p12;password``
+        (the same format accepted by the C++ library and Phoebus).
 
    * - **Java (Phoebus)**
      - Set Java system properties before constructing ``PVAClient`` or
@@ -164,8 +167,7 @@ when you cannot or do not want to use the shell environment.
          System.setProperty("EPICS_PVAS_TLS_KEYCHAIN",
                             "/path/to/server.p12");
 
-       Embed the password in the path as ``/path/to/file.p12;password``
-       or point the ``*_PWD_FILE`` property at a password file.
+        Embed the password in the path as ``/path/to/file.p12;password``.
 
 .. note::
 

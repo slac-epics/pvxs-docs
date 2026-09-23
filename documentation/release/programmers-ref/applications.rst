@@ -456,37 +456,25 @@ The pattern used by PVACMS:
    local inside the handler lambda so it is created on first call and
    lives for the process lifetime.
 
-3. **Per request, on the handler stack**, build ``Credentials`` from
-   ``op->credentials()``, construct a ``SecurityClient``, call
-   ``SecurityClient::update()`` to register the client with asLib, then
-   call ``SecurityClient::canWrite()`` which invokes ``asCheckPut()``
-   under the hood.
+3. **Per request, on the handler stack**, map the operation's
+   credentials (``op->credentials()``) to an asLib identity with
+   ``asAddClientIdentity()`` (or ``asAddClient()`` on older base), then
+   call ``asCheckPut()`` to test write permission.  Release the client
+   handle with ``asRemoveClient()`` on scope exit (via an RAII guard).
 
 .. note::
 
-   ``pvxs::ioc::Credentials`` and ``pvxs::ioc::SecurityClient`` are
-   declared in ``pvxs/credentials.h`` with ``PVXS_IOC_API`` — they are
-   part of the **pvxsIoc** library, not the core pvxs library.  A
-   standalone server that uses this pattern must link against
-   ``pvxsIoc`` in addition to ``pvxs`` and ``Com``, exactly as PVACMS
-   does.  In your Makefile:
-
-   .. code-block:: make
-
-      myprog_LIBS += pvxsIoc pvxs $(EPICS_BASE_IOC_LIBS)
-
-   The IOC shell and record layer are not initialised by simply linking
-   ``pvxsIoc`` — that only pulls in the library symbols.  No
-   ``iocInit()`` call is required.
+   This pattern uses only the access-security API from epics-base
+   (``asLib.h`` in ``Com``); it does not require the pvxsIoc library or
+   ``iocInit()``.
 
 .. code-block:: c++
 
+   #include <memory>
    #include <asLib.h>
    #include <pvxs/server.h>
    #include <pvxs/sharedpv.h>
    #include <pvxs/nt.h>
-   #include <pvxs/credentials.h>   // pvxs::ioc::Credentials  (in pvxsIoc)
-   #include <pvxs/security.h>      // pvxs::ioc::SecurityClient (in pvxsIoc)
 
    // --- At process startup, before building the server: ---
 
@@ -511,12 +499,32 @@ The pattern used by PVACMS:
            return m;
        }();
 
-       // Per-request: map pvxs credentials to asLib identity.
-       pvxs::ioc::Credentials creds(*op->credentials());
-       pvxs::ioc::SecurityClient sc;
-       sc.update(as_member, ASL1, creds); // calls asAddClientIdentity or asAddClient
+       // Per-request: map pvxs credentials to an asLib identity and check.
+       const auto& cred = *op->credentials();
 
-       if (!sc.canWrite()) {             // calls asCheckPut internally
+       // asLib wants the peer host without the port; cred.peer is
+       // "address:port", so strip the trailing ":port" (the last colon,
+       // which leaves bracketed IPv6 literals like "[::1]" intact).
+       std::string host = cred.peer;
+       const auto colon = host.find_last_of(':');
+       if (colon != std::string::npos)
+           host.resize(colon);
+
+       ASIDENTITY id{};
+       id.user      = cred.account.c_str();
+       id.host      = const_cast<char*>(host.c_str());
+       id.method    = cred.method.c_str();
+       id.authority = cred.authority.c_str();
+       id.protocol  = cred.isTLS ? AS_PROTOCOL_TLS : AS_PROTOCOL_TCP;
+
+       // RAII: tie the asLib client handle to the enclosing scope so
+       // asRemoveClient() runs on every exit path (including exceptions).
+       ASCLIENTPVT client{};
+       asAddClientIdentity(&client, as_member, ASL1, id);
+       std::unique_ptr<void, void(*)(void*)> client_guard(
+           &client, [](void* c) { asRemoveClient(static_cast<ASCLIENTPVT*>(c)); });
+
+       if (!asCheckPut(client)) {
            op->error("access denied");
            return;
        }
@@ -527,11 +535,14 @@ The pattern used by PVACMS:
 
    pvxs::server::Server::fromEnv().addPV("MY:PV", pv).run();
 
-``SecurityClient::update(ASMEMBERPVT, int asl, Credentials&)`` is the
-key overload — it bypasses the ``dbChannel`` path entirely and calls
-``asAddClientIdentity()`` (or ``asAddClient()`` on older base) directly.
-The ``ASCLIENTPVT`` handles are cleaned up automatically when
-``SecurityClient`` goes out of scope at the end of the handler.
+``asAddClientIdentity()`` (or ``asAddClient()`` on older base) registers
+the client's identity with asLib, and ``asCheckPut()`` tests write
+permission; ``asRemoveClient()`` releases the client handle.
+
+The example checks the account identity only.  To also honour ACF
+``UAG`` groups, repeat the add/check for each role returned by
+``cred.roles()`` (as the ``role/<group>`` identity) and allow the write
+if any of them passes.
 
 A minimal two-group ACF to allow ``x509``-authenticated administrators
 to write while giving everyone read-only access:
