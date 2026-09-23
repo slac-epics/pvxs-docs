@@ -379,8 +379,10 @@ This is controlled by one admin option:
     intended to be run as a one-shot command.  It fails if the keychain file
     already exists, or if the certificate database already has a cert with
     the same subject.  When using this option, the only other options
-    accepted are ``-a``/``--admin-keychain``, ``--admin-keychain-pwd``, and
-    ``--acf``.
+    accepted are ``-a``/``--admin-keychain``, ``--admin-keychain-pwd``,
+    ``--acf``, ``-c``/``--cert-auth-keychain``, ``--cert-auth-keychain-pwd``,
+    ``--cert-pv-prefix``, and ``-v``/``--verbose``.  Any other option exits
+    with status 11.
 
 .. code-block:: shell
 
