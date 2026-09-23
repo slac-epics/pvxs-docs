@@ -517,6 +517,28 @@ approving.
 With no terminal to read answers from and no ``--all``, the listing is printed, nothing is
 written, and the exit code is 3.
 
+What ``pvxcert`` exits with
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. list-table::
+   :widths: 10 90
+   :header-rows: 1
+
+   * - Code
+     - Meaning
+   * - ``0``
+     - Did what was asked. A query that matched nothing is also ``0``.
+   * - ``1``
+     - Failed.
+   * - ``2``
+     - Interrupted before it finished.
+   * - ``3``
+     - The command line was wrong.
+   * - ``4``
+     - Timed out.
+   * - ``5``
+     - Some operations in a batch failed while others succeeded.
+
 .. _authnstd_tool:
 
 |terminal| authnstd — Standard Authenticator
