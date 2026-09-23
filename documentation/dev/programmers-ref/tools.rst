@@ -52,9 +52,10 @@ Tools provided
        instance.  See :doc:`/user-manual/pvacms` for full configuration
        reference.
    * - ``pvxcert``
-     - **Certificate management client** — query the live status of a
-       certificate, approve or deny pending requests, and revoke active
-       ones.  See :doc:`/user-manual/cli` for the full option set.
+     - **Certificate management client** — list the certificates that
+       exist, query the live status of one, approve or deny pending
+       requests, and revoke active ones.  See :doc:`/user-manual/cli`
+       for the full option set.
    * - ``authnstd``
      - **Standard authenticator** — requests a certificate from PVACMS
        using self-declared credentials (username and hostname).
@@ -429,6 +430,153 @@ starting your processes:
 
    # Revoke a certificate
    pvxcert --revoke 27975e6b:07246297371190731775
+
+Listing certificates
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``pvxcert --list`` prints every certificate the certificate manager holds.
+Without it you would have to know a certificate's identifier before you could
+ask about it, which leaves no way to find one you have not been told about.
+
+.. code-block:: shell
+
+   # Every certificate, as an aligned table
+   pvxcert --list
+
+   # For a spreadsheet or a script
+   pvxcert --list --format=csv
+   pvxcert --list --format=json
+
+The table is written to standard output and everything else to standard error,
+so ``pvxcert --list | ...`` carries only the table.
+
+The columns are the certificate identifier, what the certificate is for, its
+subject, its status, when it expires, when it was issued, when its status last
+changed, when it must be renewed by, and the request identifier.
+
+The subject is rendered in one canonical order, ``CN``, then the organisational
+units, then ``O``, then ``C``, whatever order the certificate itself carries,
+so the same identity always reads the same way and the text can be pasted into
+an access security file. A certificate naming a unit inside another unit shows
+each of them, innermost first, as in
+``CN=visitor,OU=staff,OU=beamline,O=lbnl,C=US``. Parts the certificate does not
+carry are left out rather than shown empty.
+
+The request identifier is shown only to an administrator, and is empty for
+everyone else. It is a search key: an administrator who has been sent one uses
+it to find the row, reads the subject and the dates, and then decides. It is
+not a token that approves anything by itself.
+
+Rows come back with the most recently created certificate first. That order is
+the server's, and ``pvxcert`` prints it unchanged.
+
+Narrowing the list
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``--where`` takes an expression meant to be read aloud:
+
+.. code-block:: shell
+
+   pvxcert --list --where "state:PENDING_APPROVAL"
+   pvxcert --list --where "state:VALID|PENDING and org:SLAC"
+   pvxcert --list --where "not state:REVOKED and expires_before:'2026-07-31 10:31:21'"
+   pvxcert --list --where "(org:SLAC or org:LBNL) and unit:beamline and expires_before:30d"
+
+A test is ``field:value``, split at the first colon so a value may contain
+colons - a certificate identifier and a clock time both do. Several values for
+one field are separated by ``|`` and mean any of them. Tests join with ``and``,
+``or`` and ``not``, and group with brackets; ``not`` binds tightest, then
+``and``, then ``or``, which is how the words group when the expression is read
+aloud. The joining words, the field names and the status names ignore case.
+
+The fields are ``id``, ``serial``, ``issuer``, ``name``, ``org``, ``unit``,
+``country``, ``state``, ``issued``, ``expires``, ``renew_by``, ``changed``, and
+the ``_before`` and ``_after`` forms of each date field.
+
+Comparisons are separate field names rather than operators inside a test.
+``expires_before:`` reads better than a symbol, and the symbols one would use
+are also shell metacharacters.
+
+A value containing a space is quoted. ``*`` matches any run of characters and
+``\*`` is a literal asterisk. A value wrapped in slashes is a regular
+expression.
+
+A certificate may name more than one organisational unit, so ``unit:`` matches
+when any one of them does. Since the units are read innermost first and each
+encloses the one before it, ``unit:beamline`` finds a certificate for
+``OU=staff,OU=beamline`` as well as one for ``OU=beamline`` alone: naming an
+outer unit finds everyone under it. ``not unit:beamline`` means none of the
+certificate's units is the beamline. See :ref:`naming a unit inside another unit <nested_organizational_units>`.
+
+Dates are ``YYYY-MM-DD`` or ``YYYY-MM-DD HH:MM:SS`` in Coordinated Universal
+Time, and a bare date matches that whole day. A period is a number and a unit
+letter, and its direction follows the field, so ``expires_before:30d`` means
+thirty days from now and ``issued_after:7d`` means seven days ago. A period
+without a unit letter is refused, because a bare number would otherwise be read
+as minutes. Note that ``M`` is months and ``m`` is minutes.
+
+``--pending`` stands for ``state:PENDING_APPROVAL``, and ``--expiring 30d`` for
+``expires_before:30d and state:VALID``. Combining either with ``--where`` is
+refused rather than guessed at.
+
+The expression is read before ``pvxcert`` opens a connection, so a typing
+mistake costs no round trip. Every message says what is wrong, shows the
+expression with a caret under the place, and says what to do:
+
+.. code-block:: text
+
+   I cannot understand the filter at position 16:
+
+     state:VALID and orgg:SLAC
+                     ^
+
+   There is no field called "orgg".
+   Did you mean "org"?
+
+The expression applies to ``--list`` only. The standing views below take no
+arguments.
+
+Standing views for a display
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A display that keeps a list open all day wants it to update itself, which a
+command that runs once cannot do. Three channels carry the same table and
+re-send it whenever it changes, so a display tool can subscribe to one and
+needs no support written for it:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 20 50
+
+   * - Channel
+     - Who may read it
+     - What it shows
+   * - ``CERT:LIST:ALL``
+     - everyone
+     - every certificate
+   * - ``CERT:LIST:PENDING_APPROVAL``
+     - administrators only
+     - certificates awaiting a decision, including the request identifier
+   * - ``CERT:LIST:EXPIRING``
+     - everyone
+     - certificates expiring inside the server's window
+
+``CERT`` above is the configured prefix. The window the expiring view uses is a
+server setting, thirty days by default, and is stated in that view's column
+labels so a reader can see what they are looking at.
+
+The channels take no arguments. A display tool can parse only a field clause
+out of a channel name, so there is nowhere to put one; anything needing a
+parameter goes to the one-shot call that ``--list`` uses.
+
+Each view sends every matching row rather than a page at a time, because a
+display filters in a script over the table it already holds and a page would
+let a search see one page only. A burst of changes is collapsed into one or two
+posts rather than one per change; a change is delayed by that, never dropped.
+
+The certificate identifier column is exactly the form a status channel name
+accepts, so a display can build ``CERT:STATUS:`` plus that column and write a
+decision to it.
 
 Once processes have ``VALID`` certificates and PVACMS is reachable,
 TLS connections are established automatically by the library.  No
