@@ -790,6 +790,14 @@ End-entity SPVA certificates MAY use:
 CA certificates SHOULD use 4096-bit RSA or P-384 ECDSA for added
 security margin.
 
+An implementation MUST NOT assume that a peer, or a Certification
+Authority presented to it, meets these recommendations. Nothing in
+the protocol carries a minimum key strength, and an endpoint has no
+means of establishing that one was applied by the party that issued
+a certificate to it. An endpoint that requires a particular key
+strength MUST verify it locally, from the certificate, and reject
+what does not meet it. It is RECOMMENDED that an endpoint do so.
+
 ----
 
 5. Connection Validation with TLS
@@ -913,7 +921,10 @@ where:
   ``CERT``); set via ``EPICS_PVAS_CERT_PV_PREFIX``.
 - ``<issuer-skid>`` is the first 8 hexadecimal characters of the
   Subject Key Identifier of the certificate's issuer (the issuing
-  Certification Authority).
+  Certification Authority). This truncated form identifies an
+  issuer for naming purposes only; it is not sufficient to
+  establish which Certification Authority is meant. See
+  Section 17.5.
 - ``<cert-serial>`` is the certificate serial number rendered in
   decimal and left-padded with leading zeroes to a width of 20
   characters.
@@ -1942,14 +1953,64 @@ access to enumerate live certificates. Sites with stricter privacy
 needs SHOULD restrict cert-status PV access via authorization rules
 (Section 11).
 
-17.5. Side-Channel Considerations
+17.5. Truncated Issuer Identifiers
+----------------------------------
+
+The ``<issuer-skid>`` component of a PV name (Section 7.1), and the
+``<issuer_id>`` selector of Section 9.1, are the first 8 hexadecimal
+characters, that is 32 bits, of an issuer's Subject Key Identifier.
+Their length is bounded by what a PV name is required to carry. Two
+distinct Certification Authorities sharing one truncated identifier
+is therefore not only possible but inexpensive to arrange.
+
+Producing a Certification Authority with a chosen truncated
+identifier requires neither the key of the authority the identifier
+belongs to, nor a second preimage of the whole Subject Key
+Identifier. It is enough to generate key pairs, retaining the private
+key of each, until one is found whose Subject Key Identifier begins
+with the same 32 bits. The remaining 128 bits are unconstrained.
+
+The expected work is 2^32, approximately 4.3 x 10^9 key generations
+and digest computations. Measured on a single
+general-purpose processor core generating P-256 key pairs, this is
+of the order of 5 core-hours; it parallelises without interaction
+and is lower on a graphics processor. The search is performed
+offline and in advance, since issuer identifiers are published
+before use. Comparing the whole 160-bit Subject Key Identifier
+raises the expected work by a factor of 2^128.
+
+The adversary is not constrained to the key algorithm an
+implementation uses for its own keys, because the identifier is
+computed from the public key of whatever certificate is presented
+and a Certification Authority's key algorithm is independent of the
+certificates it signs. The cost above therefore reflects the
+cheapest algorithm the adversary may choose, not the algorithm in
+use at the site.
+
+This specification uses the truncated form for naming only: as a
+component of a cert-status PV name (Section 7.1) and as the optional
+issuer selector on the creation endpoint (Section 9.1). Neither is a
+security control. Selecting an issuer by ``:<issuer_id>`` narrows
+which Certificate Management Service answers; it does not establish
+which Certification Authority is on the other end, and an endpoint
+MUST still path-validate the certificate it is issued against its
+configured trust anchors (Section 4.6). Trust in a Certification
+Authority is established by configuration, out of band, and the
+truncated identifier plays no part in it.
+
+It follows that any procedure which decides to trust a Certification
+Authority on the strength of its identifier MUST compare the whole
+Subject Key Identifier. The truncated form is not sufficient for that
+purpose. No such procedure is defined in this specification.
+
+17.6. Side-Channel Considerations
 ---------------------------------
 
 SPVA's cryptographic operations are subject to standard
 side-channel considerations (timing, cache, power). Implementations
 SHOULD use constant-time crypto libraries.
 
-17.6. Downgrade via Search-Reply Suppression
+17.7. Downgrade via Search-Reply Suppression
 --------------------------------------------
 
 A client whose search ``protocols`` list is ``["tls", "tcp"]``
