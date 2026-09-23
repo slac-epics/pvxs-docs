@@ -145,10 +145,20 @@ Status response structure:
         string     state                # String representation of status
         enum_t     ocsp_status          # GOOD, REVOKED, UNKNOWN
         string     ocsp_state           # OCSP state string
-        string     ocsp_status_date     # Status timestamp
-        string     ocsp_certified_until # Validity period end
+        string     ocsp_status_date     # Status timestamp, informational
+        string     ocsp_certified_until # Validity period end, informational
         string     ocsp_revocation_date # Revocation date if applicable
         UInt8A     ocsp_response        # Signed PKCS#7 encoded OCSP response
+
+The three date strings in this structure are plain text copies of dates the signed
+certificate status response already carries, and the signature does not cover them. The
+signed response is the authority: a reader takes the status date, the validity end and any
+revocation date from it and never makes a trust decision from these fields. A message whose
+plain text dates disagree with the signed response is accepted, and the signed dates are used.
+
+The enumerated status is checked against the signed status, because it is not covered by the
+signature either, and a message where the two contradict each other is refused with
+``Certificate status does not match certified OCSP status``.
 
 .. _certificate_creation_request_CCR:
 

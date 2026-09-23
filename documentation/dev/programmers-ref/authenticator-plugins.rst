@@ -137,6 +137,43 @@ This file must be listed in both ``authnsite_SRCS`` and ``pvacms_SRCS``
 in the Makefile so the registrar fires in both the tool process and the
 PVACMS process.
 
+Adding to the creation reply
+----------------------------
+
+An authenticator may put its own members into the reply PVACMS sends back, for
+anything the requester has to be handed at issue time. Three virtual functions
+carry it, all with do-nothing defaults, so an authenticator that wants none of
+this writes none of them and the reply is unchanged.
+
+.. code-block:: c++
+
+   // What to add. Returning nothing leaves the reply exactly as it was.
+   std::vector<Member> responseFields() const override;
+
+   // Runs in PVACMS, after the fixed reply fields are set and before it is sent.
+   void fillCreateResponse(const Value &ccr, Value &reply,
+                           const CreateResponseContext &context) const override;
+
+   // Runs in the requesting process, and only when the reply carries the member.
+   void handleCreateResponse(const Value &reply,
+                             const std::shared_ptr<KeyPair> &key_pair,
+                             const CertData &held_before_request,
+                             const std::string &expected_issuer_id) const override;
+
+The members are placed under an ``authenticator`` member beside the fixed ones,
+so a client that knows nothing of them sees a reply it still understands.
+
+``CreateResponseContext`` carries the request identifier and the certificate
+authority's private key, and deliberately not the certificate database. What to
+record is PVACMS's decision, so an authenticator compiled into a client tool
+never has to link it.
+
+The standard authenticator is the only one using this today. It adds
+``request_id`` and ``signature``, both byte arrays, to hand a requester the
+verifiable request identifier described in :ref:`pvxcert`. Declaring the
+members does not mean every reply fills them: a request that is not waiting for
+approval leaves both empty, and the requesting side treats that as nothing to do.
+
 Type 0 — self-declared identity (no external verification)
 -----------------------------------------------------------
 
