@@ -1277,7 +1277,66 @@ not wait indefinitely for a cert-status that cannot become
 9. Certificate Creation Request (CCR)
 ======================================
 
-9.1. CCR PVStructure Schema
+9.1. Establishing the Issuing Authority
+---------------------------------------
+
+A Certificate Creation Request is submitted before the requester holds
+any certificate, so the exchange cannot itself be authenticated. The
+Certification Authority is returned in the reply, over that same
+unauthenticated exchange. An endpoint that accepted whatever authority
+arrived would be trusting a party it has no prior knowledge of, and an
+adversary able to answer the request could substitute its own authority
+and thereby compromise every operation that followed.
+
+An endpoint therefore MUST determine, before it submits a CCR, which
+Certification Authority it requires, and MUST reject a reply carrying
+any other. It does so in one of two ways:
+
+- **A pinned authority.** The keychain file already holds a
+  Certification Authority, placed there out of band or by an earlier
+  trust-anchor retrieval (Section 9.2). The endpoint requires the
+  authority in the reply to be that one.
+- **An expected issuer identifier**, supplied out of band by an
+  operator. The endpoint requires the Subject Key Identifier of the
+  authority in the reply to begin with the identifier supplied.
+
+An endpoint with neither MUST refuse to proceed rather than accept the
+authority it is offered.
+
+Where both are present they MUST agree, and the pinned authority
+governs. An endpoint MUST NOT replace an authority it already trusts
+on the strength of an identifier supplied for a single request.
+
+The comparison is made over as much of the Subject Key Identifier as
+was supplied, and is not case sensitive. Supplying more of it is a
+stronger statement about which authority is meant: an identifier of
+the truncated length used for naming (Section 7.1) constrains only
+32 bits, which is not sufficient to identify an authority
+(Section 17.5). An endpoint establishing trust this way SHOULD be
+given the Subject Key Identifier in full.
+
+The identifier of the authority in a reply MUST be computed from its
+public key, as :rfc:`5280` Section 4.2.1.2 method (1) describes, and
+MUST NOT be read from the ``id-ce-subjectKeyIdentifier`` extension of
+the certificate presented. That extension is written by whoever issued
+the certificate and may carry any value; computing the identifier from
+the key means a substituted authority must be generated to match
+rather than merely assert a match.
+
+9.2. Trust Anchor Retrieval
+---------------------------
+
+An endpoint MAY obtain a Certification Authority without requesting a
+certificate of its own, so that trust is established once and every
+later request is verified against the pinned authority.
+
+The requirements of Section 9.1 apply unchanged. With no keychain to
+pin from, they reduce to the second of them: an endpoint performing
+trust-anchor retrieval MUST be given an expected issuer identifier,
+MUST verify the delivered authority against it, and MUST refuse the
+exchange if no identifier was supplied.
+
+9.3. CCR PVStructure Schema
 ---------------------------
 
 A Certificate Creation Request is submitted via PVA RPC
@@ -1343,7 +1402,7 @@ signature against it. A successful verification proves that the CCR
 sender both authenticated to LDAP as that user when registering the
 key and currently holds the matching private key.
 
-9.2. CCR Submission
+9.4. CCR Submission
 -------------------
 
 A CCR is submitted via:
@@ -1358,7 +1417,7 @@ On success, the response contains the PEM-encoded issued
 certificate in ``cert``. On failure, the response Status is ERROR
 or FATAL with a descriptive message.
 
-9.3. CCR Authorization
+9.5. CCR Authorization
 ----------------------
 
 The Certificate Management Service applies site-defined policy to
@@ -1957,7 +2016,7 @@ needs SHOULD restrict cert-status PV access via authorization rules
 ----------------------------------
 
 The ``<issuer-skid>`` component of a PV name (Section 7.1), and the
-``<issuer_id>`` selector of Section 9.1, are the first 8 hexadecimal
+``<issuer_id>`` selector of Section 9.3, are the first 8 hexadecimal
 characters, that is 32 bits, of an issuer's Subject Key Identifier.
 Their length is bounded by what a PV name is required to carry. Two
 distinct Certification Authorities sharing one truncated identifier
@@ -1987,21 +2046,22 @@ certificates it signs. The cost above therefore reflects the
 cheapest algorithm the adversary may choose, not the algorithm in
 use at the site.
 
-This specification uses the truncated form for naming only: as a
-component of a cert-status PV name (Section 7.1) and as the optional
-issuer selector on the creation endpoint (Section 9.1). Neither is a
-security control. Selecting an issuer by ``:<issuer_id>`` narrows
-which Certificate Management Service answers; it does not establish
-which Certification Authority is on the other end, and an endpoint
-MUST still path-validate the certificate it is issued against its
-configured trust anchors (Section 4.6). Trust in a Certification
-Authority is established by configuration, out of band, and the
-truncated identifier plays no part in it.
+The truncated form names an issuer in two places: as a component of a
+cert-status PV name (Section 7.1) and as the optional issuer selector
+on the creation endpoint (Section 9.3). Neither is a security control.
+Selecting an issuer by ``:<issuer_id>`` narrows which Certificate
+Management Service answers; it does not establish which Certification
+Authority is on the other end, and an endpoint MUST still path-validate
+against its configured trust anchors (Section 4.6).
 
-It follows that any procedure which decides to trust a Certification
-Authority on the strength of its identifier MUST compare the whole
-Subject Key Identifier. The truncated form is not sufficient for that
-purpose. No such procedure is defined in this specification.
+Establishing the issuing authority (Section 9.1) is the one procedure
+in this specification that decides to trust a Certification Authority
+on the strength of an identifier. Where it is used with an identifier
+rather than a pinned authority, the identifier SHOULD be the Subject
+Key Identifier in full. An identifier of the truncated length used for
+naming constrains only the 32 bits above, and an operator supplying
+one should understand that it narrows the authority to a set an
+adversary can join for the work stated, not to a single authority.
 
 17.6. Side-Channel Considerations
 ---------------------------------
