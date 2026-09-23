@@ -196,7 +196,9 @@ States: ``Init``, ``DegradedMode``, ``TcpReady``, ``TlsReady``.
   status becomes ``UNKNOWN`` (e.g. PVACMS momentarily unreachable).
 - ``TlsReady``: certificate status is ``GOOD``; both TCP and TLS protocol requests are served.
 - ``DegradedMode``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Only TCP
-  is permitted. The certificate monitor is stopped.
+  is permitted, live TLS connections are torn down, and the certificate monitor is stopped.
+  Recovery needs ``reconfigure()`` with a ``GOOD`` certificate. No callback reports the
+  teardown to the application; it observes its TLS connections dropping.
 
 Transitions are driven by certificate validity, status monitoring results, and :ref:`configuration` options.
 
@@ -384,6 +386,9 @@ standard. When ``XDG_CONFIG_HOME`` is unset, it defaults to ``~/.config``. The f
 ``~/.config/pva/1.4/``, with ``client.p12`` for clients and ``server.p12`` for servers.
 
 Each keychain file contains the certificate, private key, and CA chain including the root certificate.
+A keychain may hold more than one root, so one identity can be trusted by peers under
+authorities that share nothing. One of them is the primary, the authority that issued the
+identity; the rest are trusted only. ``pvxcert`` lists them all.
 Files are protected with mode ``400``. The agent reconfigures automatically on certificate updates.
 
 Trust Establishment

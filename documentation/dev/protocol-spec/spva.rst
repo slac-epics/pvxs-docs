@@ -780,6 +780,14 @@ End-entity SPVA certificates MAY use:
 CA certificates SHOULD use 4096-bit RSA or P-384 ECDSA for added
 security margin.
 
+An implementation MUST NOT assume that a peer, or a Certification
+Authority presented to it, meets these recommendations. Nothing in
+the protocol carries a minimum key strength, and an endpoint has no
+means of establishing that one was applied by the party that issued
+a certificate to it. An endpoint that requires a particular key
+strength MUST verify it locally, from the certificate, and reject
+what does not meet it. It is RECOMMENDED that an endpoint do so.
+
 ----
 
 5. Connection Validation with TLS
@@ -903,7 +911,10 @@ where:
   ``CERT``); set via ``EPICS_PVAS_CERT_PV_PREFIX``.
 - ``<issuer-skid>`` is the first 8 hexadecimal characters of the
   Subject Key Identifier of the certificate's issuer (the issuing
-  Certification Authority).
+  Certification Authority). This truncated form identifies an
+  issuer for naming purposes only; it is not sufficient to
+  establish which Certification Authority is meant. See
+  Section 17.5.
 - ``<cert-serial>`` is the certificate serial number rendered in
   decimal and left-padded with leading zeroes to a width of 20
   characters.
@@ -1256,7 +1267,66 @@ not wait indefinitely for a cert-status that cannot become
 9. Certificate Creation Request (CCR)
 ======================================
 
-9.1. CCR PVStructure Schema
+9.1. Establishing the Issuing Authority
+---------------------------------------
+
+A Certificate Creation Request is submitted before the requester holds
+any certificate, so the exchange cannot itself be authenticated. The
+Certification Authority is returned in the reply, over that same
+unauthenticated exchange. An endpoint that accepted whatever authority
+arrived would be trusting a party it has no prior knowledge of, and an
+adversary able to answer the request could substitute its own authority
+and thereby compromise every operation that followed.
+
+An endpoint therefore MUST determine, before it submits a CCR, which
+Certification Authority it requires, and MUST reject a reply carrying
+any other. It does so in one of two ways:
+
+- **A pinned authority.** The keychain file already holds a
+  Certification Authority, placed there out of band or by an earlier
+  trust-anchor retrieval (Section 9.2). The endpoint requires the
+  authority in the reply to be that one.
+- **An expected issuer identifier**, supplied out of band by an
+  operator. The endpoint requires the Subject Key Identifier of the
+  authority in the reply to begin with the identifier supplied.
+
+An endpoint with neither MUST refuse to proceed rather than accept the
+authority it is offered.
+
+Where both are present they MUST agree, and the pinned authority
+governs. An endpoint MUST NOT replace an authority it already trusts
+on the strength of an identifier supplied for a single request.
+
+The comparison is made over as much of the Subject Key Identifier as
+was supplied, and is not case sensitive. Supplying more of it is a
+stronger statement about which authority is meant: an identifier of
+the truncated length used for naming (Section 7.1) constrains only
+32 bits, which is not sufficient to identify an authority
+(Section 17.5). An endpoint establishing trust this way SHOULD be
+given the Subject Key Identifier in full.
+
+The identifier of the authority in a reply MUST be computed from its
+public key, as :rfc:`5280` Section 4.2.1.2 method (1) describes, and
+MUST NOT be read from the ``id-ce-subjectKeyIdentifier`` extension of
+the certificate presented. That extension is written by whoever issued
+the certificate and may carry any value; computing the identifier from
+the key means a substituted authority must be generated to match
+rather than merely assert a match.
+
+9.2. Trust Anchor Retrieval
+---------------------------
+
+An endpoint MAY obtain a Certification Authority without requesting a
+certificate of its own, so that trust is established once and every
+later request is verified against the pinned authority.
+
+The requirements of Section 9.1 apply unchanged. With no keychain to
+pin from, they reduce to the second of them: an endpoint performing
+trust-anchor retrieval MUST be given an expected issuer identifier,
+MUST verify the delivered authority against it, and MUST refuse the
+exchange if no identifier was supplied.
+
+9.3. CCR PVStructure Schema
 ---------------------------
 
 A Certificate Creation Request is submitted via PVA RPC
@@ -1322,7 +1392,7 @@ signature against it. A successful verification proves that the CCR
 sender both authenticated to LDAP as that user when registering the
 key and currently holds the matching private key.
 
-9.2. CCR Submission
+9.4. CCR Submission
 -------------------
 
 A CCR is submitted via:
@@ -1337,7 +1407,7 @@ On success, the response contains the PEM-encoded issued
 certificate in ``cert``. On failure, the response Status is ERROR
 or FATAL with a descriptive message.
 
-9.3. CCR Authorization
+9.5. CCR Authorization
 ----------------------
 
 The Certificate Management Service applies site-defined policy to
@@ -1932,14 +2002,65 @@ access to enumerate live certificates. Sites with stricter privacy
 needs SHOULD restrict cert-status PV access via authorization rules
 (Section 11).
 
-17.5. Side-Channel Considerations
+17.5. Truncated Issuer Identifiers
+----------------------------------
+
+The ``<issuer-skid>`` component of a PV name (Section 7.1), and the
+``<issuer_id>`` selector of Section 9.3, are the first 8 hexadecimal
+characters, that is 32 bits, of an issuer's Subject Key Identifier.
+Their length is bounded by what a PV name is required to carry. Two
+distinct Certification Authorities sharing one truncated identifier
+is therefore not only possible but inexpensive to arrange.
+
+Producing a Certification Authority with a chosen truncated
+identifier requires neither the key of the authority the identifier
+belongs to, nor a second preimage of the whole Subject Key
+Identifier. It is enough to generate key pairs, retaining the private
+key of each, until one is found whose Subject Key Identifier begins
+with the same 32 bits. The remaining 128 bits are unconstrained.
+
+The expected work is 2^32, approximately 4.3 x 10^9 key generations
+and digest computations. Measured on a single
+general-purpose processor core generating P-256 key pairs, this is
+of the order of 5 core-hours; it parallelises without interaction
+and is lower on a graphics processor. The search is performed
+offline and in advance, since issuer identifiers are published
+before use. Comparing the whole 160-bit Subject Key Identifier
+raises the expected work by a factor of 2^128.
+
+The adversary is not constrained to the key algorithm an
+implementation uses for its own keys, because the identifier is
+computed from the public key of whatever certificate is presented
+and a Certification Authority's key algorithm is independent of the
+certificates it signs. The cost above therefore reflects the
+cheapest algorithm the adversary may choose, not the algorithm in
+use at the site.
+
+The truncated form names an issuer in two places: as a component of a
+cert-status PV name (Section 7.1) and as the optional issuer selector
+on the creation endpoint (Section 9.3). Neither is a security control.
+Selecting an issuer by ``:<issuer_id>`` narrows which Certificate
+Management Service answers; it does not establish which Certification
+Authority is on the other end, and an endpoint MUST still path-validate
+against its configured trust anchors (Section 4.6).
+
+Establishing the issuing authority (Section 9.1) is the one procedure
+in this specification that decides to trust a Certification Authority
+on the strength of an identifier. Where it is used with an identifier
+rather than a pinned authority, the identifier SHOULD be the Subject
+Key Identifier in full. An identifier of the truncated length used for
+naming constrains only the 32 bits above, and an operator supplying
+one should understand that it narrows the authority to a set an
+adversary can join for the work stated, not to a single authority.
+
+17.6. Side-Channel Considerations
 ---------------------------------
 
 SPVA's cryptographic operations are subject to standard
 side-channel considerations (timing, cache, power). Implementations
 SHOULD use constant-time crypto libraries.
 
-17.6. Downgrade via Search-Reply Suppression
+17.7. Downgrade via Search-Reply Suppression
 --------------------------------------------
 
 A client whose search ``protocols`` list is ``["tls", "tcp"]``
