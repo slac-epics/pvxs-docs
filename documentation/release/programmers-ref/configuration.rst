@@ -94,6 +94,19 @@ The following environment variables control SPVA behavior.
    or unavailable: no transport left to serve``. A build without OpenSSL has the TLS
    listener off already, so disabling the plaintext listener there throws as well.
 
+.. note::
+
+   A client can skip the check on its own certificate with the
+   ``no_own_cert_status_check`` token in ``EPICS_PVA_TLS_OPTIONS``, or
+   ``Config::disableOwnCertStatusCheck()`` in code. The check runs by default.
+
+   The skip applies to a connection only when it is TLS and at least one configured name server
+   is ``pvas://``. One TLS name server is enough, and the setting is per context, so a plain
+   name server alongside a TLS one is relaxed as well. The client then treats its own
+   certificate as settled when the context is created and is ready over TLS at once, rather than
+   holding on plain TCP for a status answer that cannot arrive when the only route to the
+   certificate manager is TLS only. The token appears in the printed TLS options when set.
+
 .. _configuration:
 
 API Configuration Options
