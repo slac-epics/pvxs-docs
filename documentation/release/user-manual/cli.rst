@@ -551,6 +551,52 @@ What ``pvxcert`` exits with
    * - ``5``
      - Some operations in a batch failed while others succeeded.
 
+
+Asking for status from outside the laboratory
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A status query reads public information, so it normally runs over plain TCP.
+That fails where the only route out is a TLS name server. When at least one
+name server in ``EPICS_PVA_NAME_SERVERS`` begins ``pvas://`` and a keychain is
+configured, ``pvxcert`` keeps TLS and stops checking its own certificate's
+status instead, which is the check it could not complete anyway. With no TLS
+route or no keychain it turns TLS off.
+
+One ``pvas://`` entry is enough; the rest of the list may be plain. The prefix
+is matched literally, so it must be lower case.
+
+This applies to the default query only. ``--approve``, ``--deny`` and
+``--revoke`` keep whatever the configuration gives them.
+
+How an authority identifier is written
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Wherever an authority identifier is given, it is hexadecimal digits with colons,
+hyphens, spaces and tabs ignored and capitals folded, so all of these name the
+same authority:
+
+.. code-block:: text
+
+   807feda5
+   807feda5e03690086b8d04be73a7ca68495afaee
+   807FEDA5E03690086B8D04BE73A7CA68495AFAEE
+   80:7F:ED:A5:E0:36:90:08:6B:8D:04:BE:73:A7:CA:68:49:5A:FA:EE
+
+Nothing is shortened on the way in. What you write is what is compared, and
+comparison runs over the digits you gave, so giving more of the identifier is a
+stronger statement about which authority you mean. A PV name always carries the
+first 8 digits, so the short and the whole form address the same service.
+
+At least 8 digits are required. Fewer is refused with ``'<text>' is too short to
+name a certificate authority: at least 8 hexadecimal digits are needed``, and
+anything that is not a hexadecimal digit or one of the ignored separators is
+refused with ``'<text>' is not an issuer identifier: it is written as
+hexadecimal digits, optionally separated by colons``.
+
+Eight digits is 32 bits. That is enough to say which certificate manager to ask
+and not enough to decide which authority to trust, so establishing trust for the
+first time needs the identifier in full. See :doc:`/protocol-spec/spva` §9.1.
+
 .. _authnstd_tool:
 
 |terminal| authnstd — Standard Authenticator

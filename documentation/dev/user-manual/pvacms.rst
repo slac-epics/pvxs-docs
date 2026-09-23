@@ -99,6 +99,24 @@ PVACMS Usage
                                                   PVACMS. Mutually exclusive with --admin-keychain-new.
 
 
+Handing out the root
+--------------------
+
+On every start PVACMS writes the trust anchor it signs with to
+``trust_anchor.p12``, beside the certificate authority keychain file, and prints
+the path as ``Trust anchor file``. The file holds that one certificate and
+nothing else: no private key, no identity, and no password, because what it
+carries is public and meant to be handed out. It is rewritten only when it would
+say something different.
+
+It is written with owner-only permissions like every other keychain file, so
+copying it to another account means widening the mode or copying it as the owner.
+
+Where departments sit under one facility root this is the root worth handing out.
+A laboratory whose departments share no root has more than one, and no single
+file stands for all of them.
+
+
 .. _pvacms_configuration:
 
 PVACMS Configuration
