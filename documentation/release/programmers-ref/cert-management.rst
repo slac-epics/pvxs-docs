@@ -125,6 +125,9 @@ Certificate States
   renewal.
 - ``EXPIRED``: Past ``notAfter`` date; permanently non-operational.
 - ``REVOKED``: Permanently revoked by an administrator.
+- ``AUTHORITY_REVOKED``: An authority in the certificate's chain was revoked.
+  The certificate itself was not, and the distinction says who to go to.
+- ``AUTHORITY_EXPIRED``: An authority in the certificate's chain expired.
 
 .. _certificate_status_message:
 
@@ -136,7 +139,8 @@ Status response structure:
 .. code-block:: console
 
     Structure
-        enum_t     status               # PENDING_APPROVAL, PENDING, VALID, PENDING_RENEWAL, EXPIRED, REVOKED
+        enum_t     status               # PENDING_APPROVAL, PENDING, VALID, PENDING_RENEWAL, EXPIRED, REVOKED,
+                                        # AUTHORITY_REVOKED, AUTHORITY_EXPIRED
         UInt64     serial               # Certificate serial number
         string     state                # String representation of status
         enum_t     ocsp_status          # GOOD, REVOKED, UNKNOWN

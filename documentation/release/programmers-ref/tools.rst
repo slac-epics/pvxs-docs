@@ -454,6 +454,36 @@ The columns are the certificate identifier, what the certificate is for, its
 subject, its status, when it expires, when it was issued, when its status last
 changed, when it must be renewed by, and the request identifier.
 
+What the certificate is for is one word:
+
+.. list-table::
+   :widths: 18 82
+   :header-rows: 1
+
+   * - Value
+     - Meaning
+   * - ``ROOT_AUTH``
+     - The facility root, an authority that issued itself.
+   * - ``CERT_AUTH``
+     - An authority: the certificate may sign other certificates.
+   * - ``IOC``
+     - Serves and connects.
+   * - ``SERVER``
+     - Serves only.
+   * - ``CLIENT``
+     - Connects only.
+   * - ``UNKNOWN``
+     - None of the above, including a certificate issued before the kind was
+       recorded.
+
+Signing is decided before serving, so an authority that is also allowed to
+serve and to connect still reads as an authority.
+
+A root has no request identifier to show, so that column says where the root
+came from instead: ``SELF`` for one this manager holds and issued, ``EXTERN``
+for one it only trusts, and ``EXTERN OCSP`` when that root names a responder to
+answer for its standing.
+
 The subject is rendered in one canonical order, ``CN``, then the organisational
 units, then ``O``, then ``C``, whatever order the certificate itself carries,
 so the same identity always reads the same way and the text can be pasted into
