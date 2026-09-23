@@ -349,20 +349,40 @@ Debug Logging
 
     export PVXS_LOG="pvxs.stapling*=DEBUG"
 
-Debug log categories:
+Debug log categories.
 
-- ``pvxs.certs.auth``          - Authenticators
-- ``pvxs.auth.cfg``            - Authn configuration
-- ``pvxs.auth.cms``            - CMS
-- ``pvxs.auth.krb``            - Kerberos Authenticator
-- ``pvxs.auth.mon``            - Certificate Status Monitoring
-- ``pvxs.auth.stat``           - Certificate Status
-- ``pvxs.auth.std``            - Standard Authenticator
-- ``pvxs.auth.tool``           - Certificate Management Tools (``pvacert``)
-- ``pvxs.certs.status``        - Certificate Status Management
-- ``pvxs.ossl.init``           - TLS initialization
-- ``pvxs.ossl.io``             - TLS I/O
+In the library:
+
+- ``pvxs.ossl.init``           - TLS setup
+- ``pvxs.ossl.io``             - TLS input and output
 - ``pvxs.stapling``            - OCSP stapling
+- ``pvxs.certs.con``           - what a connection decides about a certificate
+- ``pvxs.certs.mon``           - certificate status monitoring
+- ``pvxs.certs.status``        - certificate status
+- ``pvxs.certs.status.setup``  - certificate status subscription setup
+- ``pvxs.certs.time``          - certificate date handling
+
+In the certificate manager and its tools:
+
+- ``pvxs.auth.std``            - standard authenticator
+- ``pvxs.auth.krb``            - Kerberos authenticator
+- ``pvxs.auth.ldap``           - LDAP authenticator
+- ``pvxs.auth.common``         - what the authenticators share
+- ``pvxs.auth.config``         - authenticator configuration
+- ``pvxs.auth.ccr``            - making a certificate creation request
+- ``pvxs.certs``               - PVACMS itself
+- ``pvxs.certs.cms``           - issuing and signing
+- ``pvxs.certs.cfg``           - PVACMS configuration
+- ``pvxs.certs.cluster``       - cluster discovery and synchronisation
+- ``pvxs.certs.file``          - reading and writing keychain files
+- ``pvxs.p12``                 - PKCS#12 handling
+- ``pvxs.certs.date``          - certificate date handling
+- ``pvxs.certs.tool``          - ``pvxcert``
+- ``cms.certs.status.ocsp``    - the OCSP status monitor
+- ``cms.db.hardening``         - certificate database hardening
+
+Each authenticator logs under its own name, so
+``PVXS_LOG="pvxs.auth.ldap=DEBUG"`` raises the LDAP authenticator alone.
 
 .. _network_deployment:
 
