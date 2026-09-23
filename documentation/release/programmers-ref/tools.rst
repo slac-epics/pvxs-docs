@@ -497,8 +497,35 @@ everyone else. It is a search key: an administrator who has been sent one uses
 it to find the row, reads the subject and the dates, and then decides. It is
 not a token that approves anything by itself.
 
+Only a request waiting for approval has one. A request that site configuration
+sends straight to valid has none, and neither has one made by any authenticator
+other than the standard one. Asking again for a request that is still waiting
+returns the identifier already issued rather than a new one.
+
+The identifier is 16 characters drawn from the digits and the letters less
+``I``, ``L``, ``O`` and ``U``, the four a reader mistakes for ``1``, ``1``,
+``0`` and ``V``. It is shown to the requester in four groups of four and stored
+whole; either form is accepted wherever one is typed, and case is ignored.
+
+It reaches the requester encrypted to the key that asked and signed by the
+certificate authority, and the requesting tool checks the signature against an
+authority the keychain already held before it decrypts anything. What that
+establishes is narrow: an identifier arrives only if the key in the request was
+the key the authority answered, so a key substituted in transit produces no
+identifier and no approval request rather than a silent success. It does not
+make the rest of the exchange confidential, it is not a secret once it has been
+emailed, and it cannot make an administrator compare it.
+
 Rows come back with the most recently created certificate first. That order is
-the server's, and ``pvxcert`` prints it unchanged.
+the server's, and ``pvxcert`` prints it unchanged. The time a row was created is
+recorded once and never updated, so an update does not move a row out from under
+someone about to act on it. A certificate loaded from a keychain file rather than
+issued here has no knowable creation time, so its start of validity is used.
+
+Every date is written year first and in UTC, as ``2026-08-01 10:31:21 UTC``,
+always 23 characters. Written that way a date sorts chronologically as plain
+text and can be compared without being parsed. A date the certificate manager
+does not hold is left blank rather than shown as an epoch.
 
 Narrowing the list
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
