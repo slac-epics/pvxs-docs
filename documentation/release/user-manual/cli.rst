@@ -408,6 +408,8 @@ Example status output:
    Not After      : Mon Feb  1 00:00:00 2027 UTC
    Config URI     : pva://CERT:CONFIG:27975e6b:07246297371190731775
    --------------------------------------------
+   Primary Root CA : CN=Facility Root,O=EPICS Org
+   Trusted Root CA : CN=Department A Root,O=EPICS Org
 
    Online Certificate Status:
    ============================================
@@ -423,6 +425,17 @@ Example status output:
    PVACMS Node ID  : 2dc74177:a3f2e1b0c9d4...
    Local Interface : 127.0.0.1
    Response Size   : 842 bytes
+
+The ``Root CA`` lines list the trust anchors the keychain holds, one per line, the primary
+first. Nothing in the file marks which anchor is the primary one, so these lines are where you
+see which it is, and catch the wrong one before anything is built on the file. A keychain
+holding no anchors prints none of them.
+
+A keychain may hold an anchor and no identity certificate at all. ``pvxcert`` then prints
+``No identity certificate; trust anchors only:`` followed by the same listing.
+
+The anchor lines go to standard output and the headings and separators to standard error, so
+``pvxcert -f <file> | ...`` carries the anchors without them.
 
 **Administrative operations:**
 

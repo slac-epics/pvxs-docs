@@ -384,6 +384,9 @@ standard. When ``XDG_CONFIG_HOME`` is unset, it defaults to ``~/.config``. The f
 ``~/.config/pva/1.4/``, with ``client.p12`` for clients and ``server.p12`` for servers.
 
 Each keychain file contains the certificate, private key, and CA chain including the root certificate.
+A keychain may hold more than one root, so one identity can be trusted by peers under
+authorities that share nothing. One of them is the primary, the authority that issued the
+identity; the rest are trusted only. ``pvxcert`` lists them all.
 Files are protected with mode ``400``. The agent reconfigures automatically on certificate updates.
 
 Trust Establishment
