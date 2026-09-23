@@ -194,7 +194,9 @@ States: ``Init``, ``DegradedMode``, ``TcpReady``, ``TlsReady``.
   status becomes ``UNKNOWN`` (e.g. PVACMS momentarily unreachable).
 - ``TlsReady``: certificate status is ``GOOD``; both TCP and TLS protocol requests are served.
 - ``DegradedMode``: certificate is permanently invalid (``REVOKED`` or ``EXPIRED``). Only TCP
-  is permitted. The certificate monitor is stopped.
+  is permitted, live TLS connections are torn down, and the certificate monitor is stopped.
+  Recovery needs ``reconfigure()`` with a ``GOOD`` certificate. No callback reports the
+  teardown to the application; it observes its TLS connections dropping.
 
 Transitions are driven by certificate validity, status monitoring results, and :ref:`configuration` options.
 

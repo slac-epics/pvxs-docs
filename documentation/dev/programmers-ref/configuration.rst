@@ -71,9 +71,26 @@ The following environment variables control SPVA behavior.
 |                          |                            |                                     | the process lifetime.                                         |
 +--------------------------+----------------------------+-------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_TLS_PORT       | {port number} default ``5076``                                   | Port number for Secure PVAccess. For clients, the server port |
-|                          |                                                                  | to connect to (PVA). For servers, the local port to listen on |
-+--------------------------+ e.g. ``8076``                                                    | (PVAS).                                                       |
-| EPICS_PVAS_TLS_PORT      |                                                                  |                                                               |
++--------------------------+                                                                  | to connect to (PVA). For servers, the local port to listen on |
+| EPICS_PVAS_TLS_PORT      | e.g. ``8076``                                                    | (PVAS).                                                       |
+|                          |                                                                  |                                                               |
+|                          | ``NO``, ``FALSE``, ``OFF``,                                      | On a server a disable token stops the TLS listener. A client  |
+|                          | ``DISABLED`` (case ignored)                                      | ignores a disable token and keeps the default port.           |
++--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
+| EPICS_PVA_SERVER_PORT    | {port number} default ``5075``                                   | Port number for plaintext PVAccess. For clients, the server   |
++--------------------------+                                                                  | port to connect to (PVA). For servers, the local port to      |
+| EPICS_PVAS_SERVER_PORT   | e.g. ``8075``                                                    | listen on (PVAS).                                             |
+|                          |                                                                  |                                                               |
+|                          | ``NO``, ``FALSE``, ``OFF``,                                      | On a server a disable token stops the plaintext TCP listener. |
+|                          | ``DISABLED`` (case ignored)                                      | A client ignores a disable token and keeps the default port.  |
++--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
+| EPICS_PVA_BROADCAST      | {port number} default ``5076``                                   | UDP port for search requests and beacons.                     |
+| _PORT                    |                                                                  |                                                               |
++--------------------------+ e.g. ``5077``                                                    | On a server a disable token stops the UDP search listeners    |
+| EPICS_PVAS_BROADCAST     |                                                                  | and the beacons, so no client finds the server by UDP         |
+| _PORT                    | ``NO``, ``FALSE``, ``OFF``,                                      | broadcast: it must be reached through a name server or an     |
+|                          | ``DISABLED`` (case ignored)                                      | explicit address. A client reads only                         |
+|                          |                                                                  | ``EPICS_PVA_BROADCAST_PORT`` and ignores a disable token.     |
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
 | EPICS_PVA_STATUS         | {fully qualified path to status cache directory}                 | Override the default OCSP status cache directory.             |
 | _CACHE_DIR               |                                                                  | When TLS is enabled, pvxs caches signed OCSP responses to     |
@@ -95,6 +112,14 @@ The following environment variables control SPVA behavior.
 |                          | e.g. ``~/.config/keylog``                                        | session keys are written to this file.                        |
 |                          |                                                                  |                                                               |
 +--------------------------+------------------------------------------------------------------+---------------------------------------------------------------+
+
+.. note::
+
+   Disabling both the plaintext TCP listener and the TLS listener leaves a server with no
+   transport. ``Server`` construction throws ``std::runtime_error`` and ``reconfigure()``
+   throws ``std::invalid_argument``, both with the message ``TCP disabled with TLS disabled
+   or unavailable: no transport left to serve``. A build without OpenSSL has the TLS
+   listener off already, so disabling the plaintext listener there throws as well.
 
 .. _configuration:
 
